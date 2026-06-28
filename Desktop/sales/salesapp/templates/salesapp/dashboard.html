@@ -1,0 +1,535 @@
+{% extends "salesapp/base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}لوحة القيادة - {{ current_branch.name }}{% endblock %}
+
+{% block extra_css %}
+<style>    /* ========================================= */
+    /* 🔒 تأثيرات التشويق والحجب للباقة العادية 🔒 */
+    /* ========================================= */
+     .pro-locked-wrapper {
+        position: relative;
+        height: 100%;
+    }
+    .pro-locked-content {
+        filter: blur(5px) grayscale(50%);
+        opacity: 0.6;
+        pointer-events: none; /* يمنع التفاعل */
+        user-select: none;
+        height: 100%;
+    }
+    .pro-overlay {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.1);
+        z-index: 10;
+        cursor: pointer;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+    .pro-overlay:hover {
+        background: rgba(255, 255, 255, 0.4);
+    }
+    .pro-overlay-icon {
+        background: #fff;
+        padding: 15px 25px;
+        border-radius: 50px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        color: #ffc107;
+        font-weight: bold;
+        font-size: 1.1rem;
+    }
+    
+    /* ========================================= */
+    /* ✨ تأثيرات بصرية (Micro-animations) ✨ */
+    /* ========================================= */
+    .hover-elevate {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .hover-elevate:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.12) !important;
+    }
+    
+    .empty-state-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        color: #6c757d;
+        animation: fadeIn 0.5s ease;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <!-- شريط العنوان والفلتر -->
+    <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded shadow-sm border">
+        <div>
+            <h4 class="fw-bold text-dark mb-0"><i class="bi bi-speedometer2"></i> لوحة القيادة</h4>
+            <span class="text-muted small">تحليل شهر: <span class="fw-bold text-primary">{{ selected_month }} / {{ selected_year }}</span></span>
+        </div>
+
+        <form class="d-flex align-items-center gap-2">
+            <select name="month" class="form-select form-select-sm fw-bold"
+                style="width: 100px;">
+                {% for m in months_range %}
+                <option value="{{ m }}" {% if selected_month == m %}selected{% endif %}>شهر {{ m }}</option>
+                {% endfor %}
+            </select>
+            <select name="year" class="form-select form-select-sm fw-bold"
+                style="width: 80px;">
+                {% for y in all_years %}
+                <option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-filter"></i> تحديث</button>
+        </form>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- الصف الأول: الكروت العلوية (ديناميكية حسب الباقة) -->
+    <!-- ============================================== -->
+    <div class="row g-3 mb-4">
+        {% if not is_pro_plan %}
+        <!-- 🔴 الكروت الخاصة بباقة "الطباعة فقط" 🔴 -->
+        <div class="col-sm-6 col-lg-3">
+            <div class="card card-sm hover-elevate shadow-sm h-100 border-0">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <span class="bg-primary text-white avatar"><i class="bi bi-receipt fs-3"></i></span>
+                        </div>
+                        <div class="col">
+                            <div class="fw-bold text-primary fs-3">
+                                {{ total_revenue_paper|intcomma }} جم
+                            </div>
+                            <div class="text-muted small fw-bold">إجمالي المبيعات الورقية</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card card-sm hover-elevate shadow-sm h-100 border-0">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <span class="bg-success text-white avatar"><i class="bi bi-cash fs-3"></i></span>
+                        </div>
+                        <div class="col">
+                            <div class="fw-bold text-success fs-3">
+                                {{ cash_sales_inflow|intcomma }} جم
+                            </div>
+                            <div class="text-muted small fw-bold">إجمالي مبيعات الكاش</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card card-sm hover-elevate shadow-sm h-100 border-0">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <span class="bg-info text-white avatar"><i class="bi bi-wallet2 fs-3"></i></span>
+                        </div>
+                        <div class="col">
+                            <div class="fw-bold text-info fs-3">
+                                {{ down_payment_inflow|intcomma }} جم
+                            </div>
+                            <div class="text-muted small fw-bold">إجمالي المقدمات المدفوعة</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card card-sm hover-elevate shadow-sm h-100 border-0">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <span class="bg-secondary text-white avatar"><i class="bi bi-file-earmark-text fs-3"></i></span>
+                        </div>
+                        <div class="col">
+                            <div class="fw-bold text-secondary fs-3">
+                                {{ inv_count|default:"0" }} فاتورة
+                            </div>
+                            <div class="text-muted small fw-bold">عدد الفواتير المُصدرة</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- 🟢 الكروت الخاصة بباقة "البرو" 🟢 -->
+        <div class="col-sm-6 col-lg-3">
+            <div class="card card-sm hover-elevate shadow-sm h-100 border-0">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <span class="bg-success text-white avatar"><i class="bi bi-wallet2 fs-3"></i></span>
+                        </div>
+                        <div class="col">
+                            <div class="fw-bold text-success fs-3">
+                                {{ net_cash_in_hand|intcomma }} جم
+                            </div>
+                            <div class="text-muted small fw-bold">صافي السيولة النقدية</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card card-sm hover-elevate shadow-sm h-100 border-0">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <span class="bg-primary text-white avatar"><i class="bi bi-graph-up-arrow fs-3"></i></span>
+                        </div>
+                        <div class="col">
+                            <div class="fw-bold text-primary fs-3">
+                                {{ estimated_net_profit|floatformat:0|intcomma }} جم
+                            </div>
+                            <div class="text-muted small fw-bold">صافي الربح التقديري</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card card-sm hover-elevate shadow-sm h-100 border-0">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <span class="bg-info text-white avatar"><i class="bi bi-boxes fs-3"></i></span>
+                        </div>
+                        <div class="col">
+                            <div class="fw-bold text-dark fs-3">
+                                {{ current_inventory_value|intcomma }} جم
+                            </div>
+                            <div class="text-muted small fw-bold">قيمة المخزون الحالي</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card card-sm hover-elevate shadow-sm h-100 border-0">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <span class="{% if low_stock_count > 0 %}bg-danger{% else %}bg-secondary{% endif %} text-white avatar"><i class="bi bi-exclamation-triangle fs-3"></i></span>
+                        </div>
+                        <div class="col">
+                            <div class="fw-bold {% if low_stock_count > 0 %}text-danger{% else %}text-success{% endif %} fs-3">
+                                {{ low_stock_count }} أصناف
+                            </div>
+                            <div class="text-muted small fw-bold">تنبيه النواقص</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ============================================== -->
+    <!-- باقي لوحة القيادة (مشوقة / مقفلة للباقة العادية) -->
+    <!-- ============================================== -->
+
+    <div class="{% if not is_pro_plan %}pro-locked-wrapper{% endif %}">
+        {% if not is_pro_plan %}
+        <div class="pro-overlay" data-bs-toggle="modal" data-bs-target="#proModal">
+            <div class="pro-overlay-icon"><i class="bi bi-lock-fill"></i> الإدارة المالية والتقارير الاحترافية (ميزة
+                Pro)</div>
+        </div>
+        {% endif %}
+
+        <div class="{% if not is_pro_plan %}pro-locked-content{% endif %}">
+
+            <!-- الصف الثاني: الجداول المالية -->
+            <div class="row g-4 mb-4">
+                <div class="col-lg-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-success text-white fw-bold"><i class="bi bi-cash-stack"></i> تفصيل
+                            حركة الخزينة</div>
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0 align-middle small">
+                                <tbody>
+                                    <tr>
+                                        <td>(+) مبيعات كاش فورية</td>
+                                        <td class="text-end fw-bold">{{ cash_sales_inflow|intcomma }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>(+) مقدمات الأقساط</td>
+                                        <td class="text-end fw-bold">{{ down_payment_inflow|intcomma }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>(+) تحصيلات الأقساط</td>
+                                        <td class="text-end fw-bold">{{ collection_inflow|intcomma }}</td>
+                                    </tr>
+                                    <tr class="bg-light fw-bold">
+                                        <td>إجمالي الوارد</td>
+                                        <td class="text-end">{{ total_cash_inflow|intcomma }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-danger">(-) مصروفات تشغيلية</td>
+                                        <td class="text-end text-danger fw-bold">- {{ monthly_expenses_val|intcomma }}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-danger">(-) مرتبات وعمولات مستحقة</td>
+                                        <td class="text-end text-danger fw-bold">- {{ total_auto_salaries|floatformat:0|intcomma }}</td>
+                                    </tr>
+                                    <tr class="bg-success-subtle border-top border-success">
+                                        <td class="fw-bold text-success">(=) الصافي في الدرج</td>
+                                        <td class="text-end fw-bold fs-6 text-success">{{ net_cash_in_hand|intcomma }}
+                                            جم</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-primary text-white fw-bold"><i class="bi bi-calculator"></i> قائمة
+                            الدخل والمصروفات</div>
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0 align-middle small">
+                                <tbody>
+                                    <tr>
+                                        <td class="fw-bold">إجمالي المبيعات</td>
+                                        <td class="text-end fw-bold text-primary">{{ total_revenue_paper|intcomma }}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-danger">(-) تكلفة البضاعة المباعة (COGS)</td>
+                                        <td class="text-end text-danger fw-bold">- {{ total_cogs|intcomma }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-danger">(-) عمولات المناديب</td>
+                                        <td class="text-end text-danger fw-bold">- {{ total_sales_comm_fixed|intcomma }}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-danger">(-) نسبة التحصيل (10%)</td>
+                                        <td class="text-end text-danger fw-bold">- {{ reserve_deduction|floatformat:0|intcomma }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-danger">(-) مصروفات أخرى</td>
+                                        <td class="text-end text-danger fw-bold">- {{ monthly_expenses_val|intcomma }}
+                                        </td>
+                                    </tr>
+                                    <tr class="bg-primary-subtle border-top border-primary">
+                                        <td class="fw-bold text-primary">(=) صافي الربح</td>
+                                        <td class="text-end fw-bold fs-6 text-primary">{{ estimated_net_profit|floatformat:0|intcomma }} جم</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- جدول الموظفين -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div
+                    class="card-header bg-white fw-bold py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-people-fill text-dark"></i> أداء الفريق والرواتب المستحقة</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 text-center table-bordered">
+                        <thead class="table-light align-middle">
+                            <tr>
+                                <th rowspan="2" class="bg-light">المندوب</th>
+                                <th colspan="3">الأداء البيعي</th>
+                                <th rowspan="2" class="text-primary border-start border-end">التحصيل الفعلي</th>
+                                <th colspan="3" class="table-primary">تفاصيل المرتب</th>
+                            </tr>
+                            <tr>
+                                <th class="small text-muted">كاش</th>
+                                <th class="small text-muted">قسط</th>
+                                <th class="small fw-bold text-dark bg-light">إجمالي المبيعات</th>
+                                <th class="small text-primary table-primary">المندبة</th>
+                                <th class="small text-primary table-primary">عمولة تحصيل</th>
+                                <th class="small fw-bold text-white bg-dark">المرتب</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sp in salespersons_stats %}
+                            <tr>
+                                <td class="text-start fw-bold ps-3">{{ sp.name }} <span
+                                        class="text-muted small fw-normal ms-1">({{ sp.receipts_count }} وصل)</span>
+                                </td>
+                                <td class="text-muted">{{ sp.cash_sales|intcomma }}</td>
+                                <td class="text-muted">{{ sp.credit_sales|intcomma }}</td>
+                                <td class="fw-bold bg-light">{{ sp.total_sales_val|intcomma }}</td>
+                                <td class="fw-bold text-primary border-start border-end">{{ sp.collected|intcomma }}
+                                </td>
+                                <td class="text-primary bg-primary-subtle">{{ sp.comm_sales|floatformat:2|intcomma }}
+                                </td>
+                                <td class="text-primary bg-primary-subtle">{{ sp.comm_coll|floatformat:2|intcomma }}
+                                </td>
+                                <td class="fw-bold text-white bg-dark">{{ sp.due_salary|floatformat:0|intcomma }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8">
+                                    <div class="empty-state-container">
+                                        <i class="bi bi-people" style="font-size: 3rem; opacity: 0.3; margin-bottom: 10px;"></i>
+                                        <h6 class="fw-bold text-muted mb-0">لا يوجد نشاط للفريق هذا الشهر</h6>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-dark fw-bold fs-6">
+                                <td>الإجمالي الكلي</td>
+                                <td>{{ grand_total_cash|intcomma }}</td>
+                                <td>{{ grand_total_credit|intcomma }}</td>
+                                <td class="text-warning">{{ grand_total_sales|intcomma }}</td>
+                                <td class="text-info">{{ grand_total_collected|intcomma }}</td>
+                                <td>{{ grand_total_comm_sales|floatformat:0|intcomma }}</td>
+                                <td>{{ grand_total_comm_coll|floatformat:0|intcomma }}</td>
+                                <td class="bg-danger text-white">{{ grand_total_due|floatformat:0|intcomma }} جم</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <!-- إحصائيات الأصناف والمناطق -->
+            <div class="row g-4">
+                <div class="col-lg-4 col-md-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-white fw-bold small text-uppercase text-muted">الأكثر مبيعاً بالمخزن
+                        </div>
+                        <ul class="list-group list-group-flush small">
+                            {% for item in top_products %}
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>{{ item.inventory_item__name }}</span>
+                                <span class="badge bg-light text-dark border">{{ item.qty }}</span>
+                            </li>
+                            {% empty %}
+                            <li class="list-group-item border-0">
+                                <div class="empty-state-container py-4">
+                                    <i class="bi bi-box-seam" style="font-size: 2.5rem; opacity: 0.3; margin-bottom: 8px;"></i>
+                                    <span class="fw-bold text-muted small">لا توجد مبيعات للأصناف</span>
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="col-lg-4 col-md-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-white fw-bold small text-uppercase text-muted">أعلى المناطق جغرافياً
+                        </div>
+                        <ul class="list-group list-group-flush small">
+                            {% for area in top_areas %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="fw-bold">{{ area.area|default:"غير محدد" }}</span>
+                                    <span class="badge bg-secondary ms-1">{{ area.count }} وصل</span>
+                                </div>
+                                <span class="fw-bold text-primary">{{ area.val|intcomma }}</span>
+                            </li>
+                            {% empty %}
+                            <li class="list-group-item border-0">
+                                <div class="empty-state-container py-4">
+                                    <i class="bi bi-geo" style="font-size: 2.5rem; opacity: 0.3; margin-bottom: 8px;"></i>
+                                    <span class="fw-bold text-muted small">لا توجد مبيعات في المناطق</span>
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+
+
+                <div class="col-lg-4 col-md-12">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <div class="text-center border-bottom pb-3 mb-3">
+                                <h6 class="text-muted small fw-bold mb-1">متوسط قيمة الفاتورة</h6>
+                                <h3 class="fw-bold text-dark mb-0">{{ avg_basket|floatformat:0|intcomma }} <small
+                                        class="fs-6 text-muted">جم</small></h3>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between px-2">
+                                <div>
+                                    <h6 class="fw-bold mb-1 small">توزيع المبيعات</h6>
+                                    <div class="d-flex flex-column small">
+                                        <span
+                                            class="badge bg-success-subtle text-success mb-1 border border-success">كاش</span>
+                                        <span
+                                            class="badge bg-primary-subtle text-primary border border-primary">قسط</span>
+                                    </div>
+                                </div>
+                                <div style="height: 90px; width: 90px;">
+                                    <canvas id="dashPaymentChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div> <!-- End of locked content -->
+    </div> <!-- End of wrapper -->
+
+</div>
+<!-- وضع القيم في حقول مخفية كحماية للجافاسكريبت -->
+<input type="hidden" id="hidden_cash_val" value="{{ chart_cash_val|default:'0' }}">
+<input type="hidden" id="hidden_credit_val" value="{{ chart_credit_val|default:'0' }}">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const ctx = document.getElementById('dashPaymentChart');
+        if (ctx) {
+            // قراءة القيم بأمان من الحقول المخفية
+            const cashVal = parseFloat(document.getElementById('hidden_cash_val').value) || 0;
+            const creditVal = parseFloat(document.getElementById('hidden_credit_val').value) || 0;
+
+            // التأكد من وجود بيانات لرسمها
+            if (cashVal > 0 || creditVal > 0) {
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['كاش', 'قسط'],
+                        datasets: [{
+                            data: [cashVal, creditVal],
+                            backgroundColor: ['#198754', '#0d6efd'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '65%',
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            }
+        }
+    });
+</script>
+
+{% endblock %}

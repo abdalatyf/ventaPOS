@@ -1,0 +1,304 @@
+{% extends "salesapp/base.html" %}
+{% load humanize %}
+
+{% block title %}كارت صنف - {{ product.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <!-- 🎛️ شريط العنوان والفلتر الزمني -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 bg-white p-3 rounded shadow-sm border">
+        <div class="mb-2 mb-md-0">
+            <h4 class="fw-bold text-dark mb-0"><i class="bi bi-card-list text-primary"></i> كارت صنف: {{ product.name }}
+            </h4>
+            <span class="text-muted small">عرض الحركات والأرباح خلال الفترة المحددة</span>
+        </div>
+
+        <form method="get" class="d-flex flex-wrap align-items-center gap-2 bg-light p-2 rounded border">
+            <span class="fw-bold text-secondary small">من:</span>
+            <select name="from_month" class="form-select form-select-sm" style="width: 70px;">
+                {% for m in available_months %}<option value="{{ m }}" {% if start_m == m %}selected{% endif %}>{{ m }}
+                </option>{% endfor %}
+            </select>
+            <select name="from_year" class="form-select form-select-sm" style="width: 80px;">
+                {% for y in available_years %}<option value="{{ y }}" {% if start_y == y %}selected{% endif %}>{{ y }}
+                </option>{% endfor %}
+            </select>
+
+            <span class="fw-bold text-secondary small ms-2">إلى:</span>
+            <select name="to_month" class="form-select form-select-sm" style="width: 70px;">
+                {% for m in available_months %}<option value="{{ m }}" {% if end_m == m %}selected{% endif %}>{{ m }}
+                </option>{% endfor %}
+            </select>
+            <select name="to_year" class="form-select form-select-sm" style="width: 80px;">
+                {% for y in available_years %}<option value="{{ y }}" {% if end_y == y %}selected{% endif %}>{{ y }}
+                </option>{% endfor %}
+            </select>
+
+            <button type="submit" class="btn btn-primary btn-sm ms-2"><i class="bi bi-funnel"></i> تصفية</button>
+            <a href="{% url 'product_ledger' product.id %}" class="btn btn-outline-secondary btn-sm"><i
+                    class="bi bi-arrow-clockwise"></i></a>
+        </form>
+    </div>
+
+    <!-- 🗂️ التبويبات -->
+    <ul class="nav nav-tabs nav-fill mb-4 fw-bold shadow-sm bg-white rounded-top" id="ledgerTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active text-dark" id="dashboard-tab" data-bs-toggle="tab"
+                data-bs-target="#dashboard" type="button" role="tab">
+                <i class="bi bi-speedometer2 text-primary"></i> 1. الملخص المالي والمخزني (Dashboard)
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link text-dark" id="details-tab" data-bs-toggle="tab" data-bs-target="#details"
+                type="button" role="tab">
+                <i class="bi bi-clock-history text-secondary"></i> 2. السجل التفصيلي للفواتير
+            </button>
+        </li>
+    </ul>
+
+    <!-- 📦 محتوى التبويبات -->
+    <div class="tab-content" id="ledgerTabsContent">
+
+        <!-- ========================================== -->
+        <!-- 📊 التاب الأول: لوحة التحكم (Dashboard) -->
+        <!-- ========================================== -->
+        <div class="tab-pane fade show active" id="dashboard" role="tabpanel">
+
+            <!-- كروت الإجماليات للفترة -->
+            <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-success text-white h-100 shadow-sm border-0">
+                        <div class="card-body text-center p-3">
+                            <h6 class="small opacity-75 mb-1"><i class="bi bi-cash-stack"></i> أرباح الكاش للفترة</h6>
+                            <h4 class="fw-bold mb-0">{{ grand_totals.cash_profit|floatformat:0|intcomma }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white h-100 shadow-sm border-0">
+                        <div class="card-body text-center p-3">
+                            <h6 class="small opacity-75 mb-1"><i class="bi bi-calendar-check"></i> أرباح القسط للفترة
+                            </h6>
+                            <h4 class="fw-bold mb-0">{{ grand_totals.inst_profit|floatformat:0|intcomma }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-dark h-100 shadow-sm border-0">
+                        <div class="card-body text-center p-3">
+                            <h6 class="small opacity-75 mb-1"><i class="bi bi-scales"></i> تأثير الجرد على الربح</h6>
+                            <h4 class="fw-bold mb-0" dir="ltr">{{ grand_totals.adj_profit|floatformat:0|intcomma }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-dark text-white h-100 shadow border-0 border-start border-5 border-success">
+                        <div class="card-body text-center p-3">
+                            <h6 class="small opacity-75 mb-1">صافي أرباح المنتج (للفترة)</h6>
+                            <h3 class="fw-bold text-success mb-0">{{ grand_totals.net_profit|floatformat:0|intcomma }}
+                            </h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 📦 1. جدول المخزن -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-dark text-white fw-bold py-3"><i class="bi bi-boxes"></i> حركة المخزن
+                    والتسويات</div>
+                <div class="card-body p-0 table-responsive">
+                    <table class="table table-bordered table-hover text-center align-middle mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>الشهر / السنة</th>
+                                <th>رصيد أول الشهر</th>
+                                <th class="text-primary">وارد (مشتريات)</th>
+                                <th class="text-warning">منصرف (مبيعات)</th>
+                                <th>تسويات (عجز/زيادة)</th>
+                                <th class="bg-success text-white">الرصيد النهائي</th>
+                                <th>سعر الشراء</th>
+                                <th>إجمالي القيمة</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for m in monthly_summary %}
+                            <tr>
+                                <td class="fw-bold text-start" dir="ltr">{{ m.month|stringformat:"02d" }} / {{ m.year }}
+                                </td>
+                                <td class="bg-light">{{ m.opening }}</td>
+                                <td class="text-primary fw-bold">+ {{ m.purchases }}</td>
+                                <td class="text-warning fw-bold">- {{ m.sales }}</td>
+                                <td>{% if m.surplus > 0 %}<span class="text-success fw-bold">+{{ m.surplus }}</span>{% endif %} {% if m.deficit > 0 %}<span class="text-danger fw-bold">-{{ m.deficit }}</span>{% endif %} {% if m.surplus == 0 and m.deficit == 0 %}-{% endif %}</td>
+                                <td class="bg-success-subtle text-success fw-bold fs-5">{{ m.closing }}</td>
+                                <td>{{ m.cost_unit|floatformat:0|intcomma }}</td>
+                                <td class="fw-bold text-primary">{{ m.total_val|floatformat:0|intcomma }}</td>
+                            </tr>
+                            {% empty %}<tr>
+                                <td colspan="8" class="text-muted py-4">لا توجد حركات مسجلة.</td>
+                            </tr>{% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 🟢 2. جدول الكاش -->
+            {% if grand_totals.cash_qty > 0 %}
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-success text-white fw-bold py-3"><i class="bi bi-cash-stack"></i> تحليل ربحية
+                    الكاش (P&L)</div>
+                <div class="card-body p-0 table-responsive">
+                    <table class="table table-bordered table-hover align-middle text-center mb-0"
+                        style="font-size: 0.9rem;">
+                        <thead class="table-light align-middle">
+                            <tr>
+                                <th rowspan="2" class="bg-light">الشهر / السنة</th>
+                                <th rowspan="2">الكمية</th>
+                                <th colspan="5" class="table-primary border-primary">تحليل القطعة</th>
+                                <th colspan="5" class="table-success border-success">تحليل الإجماليات</th>
+                            </tr>
+                            <tr>
+                                <th class="small bg-primary-subtle text-primary">سعر البيع</th>
+                                <th class="small bg-primary-subtle text-primary">سعر الشراء</th>
+                                <th class="small bg-primary-subtle text-primary">عمولة البيع</th>
+                                <th class="small bg-primary-subtle text-primary">عمولة التحصيل</th>
+                                <th class="small bg-primary text-white fw-bold">الربح الصافي</th>
+                                <th class="small bg-success-subtle text-success">المبيعات</th>
+                                <th class="small bg-success-subtle text-success">التكلفة</th>
+                                <th class="small bg-success-subtle text-success">عمولة البيع</th>
+                                <th class="small bg-success-subtle text-success">عمولة التحصيل</th>
+                                <th class="small bg-success text-white fw-bold">الربح الصافي</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for m in monthly_summary %}
+                            {% if m.cash.qty > 0 %}
+                            <tr>
+                                <td class="text-start fw-bold" dir="ltr">{{ m.month|stringformat:"02d" }} / {{ m.year }}
+                                </td>
+                                <td class="fw-bold fs-6">{{ m.cash.qty }}</td>
+                                <td>{{ m.cash.avg_sell|floatformat:0|intcomma }}</td>
+                                <td class="text-danger">{{ m.cost_unit|floatformat:0|intcomma }}</td>
+                                <td class="text-warning text-dark">-</td>
+                                <td class="text-muted bg-light">-</td>
+                                <td class="fw-bold text-success bg-light">{{ m.cash.profit_unit|floatformat:0|intcomma }}</td>
+                                <td class="fw-bold">{{ m.cash.rev|floatformat:0|intcomma }}</td>
+                                <td class="text-danger">{{ m.cash.cost|floatformat:0|intcomma }}</td>
+                                <td class="text-warning text-dark">-</td>
+                                <td class="text-muted bg-light">-</td>
+                                <td class="fw-bold text-white bg-success">{{ m.cash.profit|floatformat:0|intcomma }}
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+{% endif %}
+            <!-- 🔵 3. جدول القسط -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div
+                    class="card-header bg-primary text-white fw-bold py-3 d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-calendar-month"></i> تحليل ربحية التقسيط (P&L)</span>
+                    <span class="badge bg-danger">يتضمن خصم 10% ديون على القسط</span>
+                </div>
+                <div class="card-body p-0 table-responsive">
+                    <table class="table table-bordered table-hover align-middle text-center mb-0"
+                        style="font-size: 0.9rem;">
+                        <thead class="table-light align-middle">
+                            <tr>
+                                <th rowspan="2" class="bg-light">الشهر / السنة</th>
+                                <th rowspan="2">الكمية</th>
+                                <th colspan="5" class="table-primary border-primary">تحليل القطعة</th>
+                                <th colspan="5" class="table-success border-success">تحليل الإجماليات</th>
+                            </tr>
+                            <tr>
+                                <th class="small bg-primary-subtle text-primary">سعر البيع</th>
+                                <th class="small bg-primary-subtle text-primary">سعر الشراء</th>
+                                <th class="small bg-primary-subtle text-primary">عمولة البيع</th>
+                                <th class="small bg-primary-subtle text-primary">عمولة التحصيل</th>
+                                <th class="small bg-primary text-white fw-bold">الربح الصافي</th>
+                                <th class="small bg-success-subtle text-success">المبيعات</th>
+                                <th class="small bg-success-subtle text-success">التكلفة</th>
+                                <th class="small bg-success-subtle text-success">عمولة البيع</th>
+                                <th class="small bg-success-subtle text-success">عمولة التحصيل</th>
+                                <th class="small bg-success text-white fw-bold">الربح الصافي</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for m in monthly_summary %}
+                            {% if m.inst.qty > 0 %}
+                            <tr>
+                                <td class="text-start fw-bold" dir="ltr">{{ m.month|stringformat:"02d" }} / {{ m.year }}
+                                </td>
+                                <td class="fw-bold fs-6">{{ m.inst.qty }}</td>
+                                <td>{{ m.inst.avg_sell|floatformat:0|intcomma }}</td>
+                                <td class="text-danger">{{ m.cost_unit|floatformat:0|intcomma }}</td>
+                                <td class="text-warning text-dark">{{ m.inst.sales_comm_unit|floatformat:0|intcomma }}
+                                </td>
+                                <td class="text-danger">{{ m.inst.coll_comm_unit|floatformat:0|intcomma }}</td>
+                                <td class="fw-bold text-primary bg-light">{{ m.inst.profit_unit|floatformat:0|intcomma }}</td>
+                                <td class="fw-bold">{{ m.inst.rev|floatformat:0|intcomma }}</td>
+                                <td class="text-danger">{{ m.inst.cost|floatformat:0|intcomma }}</td>
+                                <td class="text-warning text-dark">{{ m.inst.sales_comm|floatformat:0|intcomma }}</td>
+                                <td class="text-danger fw-bold">{{ m.inst.coll_comm|floatformat:0|intcomma }}</td>
+                                <td class="fw-bold text-white bg-primary">{{ m.inst.profit|floatformat:0|intcomma }}
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 🧾 التاب الثاني: السجل التفصيلي -->
+        <!-- ========================================== -->
+        <div class="tab-pane fade" id="details" role="tabpanel">
+            <div class="card shadow-sm border-0">
+                <div
+                    class="card-header bg-dark text-white fw-bold py-3 d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-list-columns-reverse"></i> السجل التفصيلي للفواتير</span>
+                    <span class="badge bg-light text-dark">الفترة المحددة فقط</span>
+                </div>
+                <div class="card-body p-0 table-responsive">
+                    <table class="table table-hover text-center align-middle mb-0">
+                        <thead class="table-secondary">
+                            <tr>
+                                <th>التاريخ</th>
+                                <th>نوع الحركة</th>
+                                <th>رقم المرجع</th>
+                                <th class="text-success">وارد (+)</th>
+                                <th class="text-danger">منصرف (-)</th>
+                                <th class="bg-light fw-bold border-start">الرصيد</th>
+                                <th>البيان / العميل</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for mov in detailed_movements %}
+                            <tr class="{% if mov.type == 'INITIAL' %}table-warning fw-bold{% endif %}">
+                                <td class="fw-bold" dir="ltr">{{ mov.month|stringformat:"02d" }} / {{ mov.year }}</td>
+                                <td>{% if mov.type == 'IN' or mov.type == 'INITIAL' %}<span class="badge bg-success">{{ mov.label }}</span>{% else %}<span class="badge bg-danger">{{ mov.label }}</span>{% endif %}</td>
+                                <td class="text-primary fw-bold">{{ mov.ref }}</td>
+                                <td class="text-success fw-bold">{% if mov.in_qty > 0 %}+{{ mov.in_qty }}{% else %}-{% endif %}</td>
+                                <td class="text-danger fw-bold">{% if mov.out_qty > 0 %}-{{ mov.out_qty }}{% else %}-{% endif %}</td>
+                                <td class="bg-light fw-bold fs-6 border-start">{{ mov.balance }}</td>
+                                <td class="text-secondary small">{{ mov.person }}</td>
+                            </tr>
+                            {% empty %}<tr>
+                                <td colspan="7" class="text-muted p-4">لا توجد حركات مفصلة في هذه الفترة.</td>
+                            </tr>{% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}

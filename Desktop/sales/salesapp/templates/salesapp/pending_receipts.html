@@ -1,0 +1,145 @@
+{% extends 'salesapp/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="d-sm-flex align-items-center justify-content-between mb-4">
+    <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-fw fa-hourglass-half text-warning"></i> المعاملات الخارجية المعلقة</h1>
+</div>
+
+{% if batches_data %}
+    {% for batch in batches_data %}
+    <div class="card card-sm border-0 shadow-sm mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between {% if batch.has_error %}bg-danger{% else %}bg-primary{% endif %} text-white">
+            <h6 class="m-0 font-weight-bold">
+                {% if batch.source == 'الأونلاين (أونلاين)' %}
+                    <i class="fas fa-cloud"></i> الأونلاين
+                {% elif batch.source == 'سلك الـ USB' %}
+                    <i class="fab fa-usb"></i> USB
+                {% else %}
+                    <i class="fas fa-file-code"></i> ملف JSON
+                {% endif %}
+                | تاريخ التصدير: {{ batch.created_at|date:"Y-m-d H:i" }} | المندوب: {{ batch.salesperson_name }}
+            </h6>
+            <div>
+                <span class="badge badge-light text-dark px-2 py-1">العدد: {{ batch.receipts|length }} فواتير</span>
+            </div>
+        </div>
+        
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table table-striped" width="100%" cellspacing="0">
+                    <thead class="thead-light text-center align-middle">
+                        <tr>
+                            <th>#</th>
+                            <th>العميل</th>
+                            <th>الهاتف</th>
+                            <th>العنوان / المنطقة</th>
+                            <th>النوع</th>
+                            <th>التاريخ</th>
+                            <th>الإجمالي</th>
+                            <th>الأصناف المطلوبة</th>
+                            <th>إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-center align-middle">
+                        {% for r in batch.receipts %}
+                        <tr class="{% if r.has_error %}table-danger{% elif r.is_deleted_request %}table-danger text-danger font-weight-bold{% elif r.is_modified_request %}table-warning text-warning font-weight-bold{% endif %}">
+                            <td class="font-weight-bold">{{ forloop.counter }}</td>
+                            <td class="align-middle">
+                                {{ r.customer_name|default:"--" }}
+                                {% if r.is_deleted_request %}
+                                    <br><span class="badge badge-danger mt-1">طلب حذف من الموبايل</span>
+                                {% elif r.is_modified_request %}
+                                    <br><span class="badge badge-warning text-dark mt-1">معدلة بعد التأكيد</span>
+                                {% endif %}
+                            </td>
+                            <td class="align-middle"><span dir="ltr">{{ r.phone_number|default:"--" }}</span></td>
+                            <td class="align-middle text-truncate" style="max-width: 150px;">
+                                {{ r.address|default:"--" }}<br>
+                                <small class="text-muted">{{ r.area|default:"" }}</small>
+                            </td>
+                            <td class="align-middle text-center">
+                                {% if r.is_cash_sale %}
+                                    <span class="badge badge-success">كاش</span>
+                                {% else %}
+                                    <span class="badge badge-warning text-dark">قسط</span><br>
+                                    <small>{{ r.installment_system|default:"--" }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="align-middle">
+                                {% if r.sale_month and r.sale_year %}
+                                    {{ r.sale_month }}/{{ r.sale_year }}
+                                {% else %}
+                                    <span class="text-muted">غير محدد</span>
+                                {% endif %}
+                            </td>
+                            <td class="align-middle font-weight-bold text-success">{{ r.total_amount }}</td>
+                            <td class="align-middle text-truncate" style="max-width: 150px;">
+                                {{ r.products_text|default:"--" }}
+                            </td>
+                            <td class="align-middle text-center">
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'edit_pending_receipt' r.pending_id %}" class="btn btn-outline-warning" title="تعديل">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </a>
+                                    <form method="POST" action="{% url 'delete_pending_receipt' r.pending_id %}" style="display: inline;">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-outline-danger" onclick="return confirm('هل أنت متأكد من حذف هذه الفاتورة المعلقة؟');" title="حذف" style="border-top-right-radius: 0; border-bottom-right-radius: 0;">
+                                            <i class="bi bi-trash-fill"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <hr>
+            <div class="px-3">
+                <h6 class="font-weight-bold text-dark mb-3"><i class="fas fa-boxes"></i> إجمالي الطلبات للكميات المطلوبة للمجموعة وتوفرها:</h6>
+                <div class="row">
+                    {% for item_name, info in batch.item_summary.items %}
+                    <div class="col-md-4 col-lg-3 mb-2">
+                        <div class="p-2 border rounded {% if info.has_error %}border-danger bg-light text-danger{% else %}border-success bg-light text-success{% endif %}">
+                            <strong class="d-block text-truncate" title="{{ item_name }}">{{ item_name }}</strong>
+                            <small>المطلوب: {{ info.qty }} | المتاح: {{ info.safe_qty }}</small>
+                            {% if info.has_error %}
+                                <i class="fas fa-exclamation-circle float-left mt-1"></i>
+                            {% else %}
+                                <i class="fas fa-check-circle float-left mt-1"></i>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <hr>
+            
+            <form method="POST" action="{% url 'approve_pending_receipts' %}" class="d-flex justify-content-end">
+                {% csrf_token %}
+                <input type="hidden" name="batch_id" value="{{ batch.batch_id }}">
+                <button type="submit" name="action" value="delete" class="btn btn-outline-danger mr-2" onclick="return confirm('هل أنت متأكد من حذف هذه المجموعة بالكامل؟');">
+                    <i class="fas fa-trash"></i> حذف المجموعة
+                </button>
+                <button type="submit" name="action" value="approve" class="btn btn-success" onclick="return confirm('سيتم إدراج فواتير هذه المجموعة في النظام. السليمة فقط سيتم اعتمادها. هل ترغب بالاستمرار؟');">
+                    <i class="fas fa-check-circle"></i> اعتماد المجموعة وإدراجها
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="card card-sm border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <div class="alert alert-info text-center mb-0">
+                <i class="fas fa-info-circle fa-2x mb-2"></i>
+                <h5>لا توجد أي معاملات معلقة حالياً</h5>
+                <p class="mb-0">جميع الفواتير القادمة من الموبايل تم مراجعتها واعتمادها.</p>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
+{% endblock %}

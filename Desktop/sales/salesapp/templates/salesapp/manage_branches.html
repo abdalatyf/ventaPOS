@@ -1,0 +1,114 @@
+{% extends 'salesapp/base.html' %}
+{% load static %}
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h3 class="mb-4 text-center fw-bold text-primary">{{ page_title }}</h3>
+
+<ul class="nav nav-tabs nav-fill mb-4 fw-bold shadow-sm rounded-top">
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_branches' %}active{% endif %}"
+            href="{% url 'manage_branches' %}">
+            <i class="bi bi-shop"></i> الفروع
+        </a>
+    </li>
+
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_salespersons' %}active{% endif %}"
+            href="{% url 'manage_salespersons' %}">
+            <i class="bi bi-people"></i> الموظفين
+        </a>
+    </li>
+
+    {% if is_pro_plan %}
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_expenses' %}active{% endif %}"
+            href="{% url 'manage_expenses' %}">
+            <i class="bi bi-wallet2"></i> المصروفات
+        </a>
+    </li>
+    {% endif %}
+
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'general_settings' %}active{% endif %}"
+            href="{% url 'general_settings' %}">
+            <i class="bi bi-gear-fill"></i> الإعدادات العامة
+        </a>
+    </li>
+
+    <!-- 🔴 Tab الاستيراد الذكي -->
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'smart_import_wizard' %}active{% endif %}"
+            href="{% url 'smart_import_wizard' %}">
+            <i class="bi bi-file-earmark-excel"></i> استيراد الإكسيل
+        </a>
+    </li>
+
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'subscription_dashboard' %}active{% endif %}"
+            href="{% url 'subscription_dashboard' %}">
+            <i class="bi bi-shield-check"></i> الاشتراك والترخيص
+        </a>
+    </li>
+</ul>
+
+
+
+    <div class="card shadow-sm mb-4 border-0">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0 fw-bold"><i class="bi bi-plus-circle"></i> إضافة فرع جديد</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{% url 'manage_branches' %}" class="row g-3">
+                {% csrf_token %}
+                <div class="col-md-9">
+                    <label for="branch_name" class="form-label fw-bold">اسم الفرع (فريد)</label>
+                    <input type="text" class="form-control" id="branch_name" name="branch_name" required
+                        placeholder="مثال: فرع وسط البلد">
+                </div>
+                <div class="col-md-3 align-self-end">
+                    <button type="submit" class="btn btn-success w-100 fw-bold">حفظ الفرع</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0 fw-bold">الفروع المسجلة</h5>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-striped table-hover mb-0 text-center align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th scope="col">الكود</th>
+                        <th scope="col">اسم الفرع</th>
+                        <th scope="col">إجراء</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for branch in branches %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td class="fw-bold">{{ branch.name }}</td>
+                        <td>
+                            <form method="POST" action="{% url 'delete_branch' branch.pk %}" style="display: inline;"
+                                onsubmit="return confirm('حذف هذا الفرع؟');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-trash"></i>
+                                    حذف</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3" class="text-center p-4 text-muted">لا توجد فروع مسجلة.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

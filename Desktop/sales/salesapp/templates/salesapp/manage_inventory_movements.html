@@ -1,0 +1,106 @@
+{% extends 'salesapp/base.html' %}
+{% load static %}
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h3 class="mb-4 text-center fw-bold text-primary">{{ page_title }}</h3>
+
+<ul class="nav nav-tabs nav-fill mb-4 fw-bold shadow-sm rounded-top">
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_branches' %}active{% endif %}"
+            href="{% url 'manage_branches' %}">
+            <i class="bi bi-shop"></i> الفروع
+        </a>
+    </li>
+
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_salespersons' %}active{% endif %}"
+            href="{% url 'manage_salespersons' %}">
+            <i class="bi bi-people"></i> الموظفين
+        </a>
+    </li>
+
+    {% if is_pro_plan %}
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_expenses' %}active{% endif %}"
+            href="{% url 'manage_expenses' %}">
+            <i class="bi bi-wallet2"></i> المصروفات
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_products' %}active{% endif %}"
+            href="{% url 'manage_products' %}">
+            <i class="bi bi-box-seam"></i> المنتجات
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_inventory_movements' %}active{% endif %}"
+            href="{% url 'manage_inventory_movements' %}">
+            <i class="bi bi-arrow-left-right"></i> المخزون
+        </a>
+    </li>
+    {% endif %}
+
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'general_settings' %}active{% endif %}"
+            href="{% url 'general_settings' %}">
+            <i class="bi bi-gear-fill"></i> الإعدادات العامة
+        </a>
+    </li>
+
+    <!-- 🔴 Tab الاستيراد الذكي -->
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'smart_import_wizard' %}active{% endif %}"
+            href="{% url 'smart_import_wizard' %}">
+            <i class="bi bi-file-earmark-excel"></i> استيراد الإكسيل
+        </a>
+    </li>
+
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'subscription_dashboard' %}active{% endif %}"
+            href="{% url 'subscription_dashboard' %}">
+            <i class="bi bi-shield-check"></i> الاشتراك والترخيص
+        </a>
+    </li>
+</ul>
+
+    {% if success_message %}
+    <div class="alert alert-success" role="alert">{{ success_message }}</div>
+    {% endif %}
+
+    <div class="card shadow-sm mb-4 border-0">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0 fw-bold"><i class="bi bi-truck"></i> تسجيل حركة مخزون للفرع الحالي ({{ request.branch.name }})</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{% url 'manage_inventory_movements' %}" class="row g-3 align-items-end">
+                {% csrf_token %}
+                <div class="col-md-5">
+                    <label for="product_id" class="form-label fw-bold">اختر المنتج</label>
+                    <select class="form-select" id="product_id" name="product_id" required>
+                        <option value="">-- اختر المنتج --</option>
+                        {% for product in products %}
+                        <option value="{{ product.id }}">{{ product.name }} (المتاح: {{ product.quantity }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="quantity" class="form-label fw-bold">الكمية</label>
+                    <input type="number" class="form-control" id="quantity" name="quantity" min="1" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="movement_type" class="form-label fw-bold">نوع الحركة</label>
+                    <select class="form-select" id="movement_type" name="movement_type" required>
+                        <option value="add">إضافة بضاعة للمخزن (+)</option>
+                        <option value="return">مرتجع للمصنع (-)</option>
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-primary w-100 fw-bold">تنفيذ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

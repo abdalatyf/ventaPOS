@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card p-4">
+            <h3 class="mb-4 fw-bold text-primary">👤 إضافة عميل جديد</h3>
+            <form method="POST">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <label class="form-label">اسم العميل</label>
+                    {{ form.name }}
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">رقم الهاتف</label>
+                        {{ form.phone }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">اسم المحل</label>
+                        {{ form.store_name }}
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-danger fw-bold">بصمة الجهاز (Machine ID)</label>
+                    {{ form.machine_id }}
+                    <small class="text-muted">انسخ البصمة من رسالة العميل</small>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-lg w-100 mt-3">حفظ وانتقال للترخيص ⬅️</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,336 @@
+{% extends "salesapp/base.html" %}
+{% load static %}
+{% load humanize %}
+{% load sales_filters %}
+
+{% block title %}إدارة التحصيلات{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4">تقرير الأقساط المستحقة ({{ current_branch.name }})</h2>
+<style>
+    .range-slider-container {
+        position: relative;
+        width: 100%;
+        height: 40px;
+        margin-top: 10px;
+    }
+
+    .slider-track {
+        width: 100%;
+        height: 8px;
+        background-color: #e9ecef;
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        border-radius: 5px;
+    }
+
+    .slider-range-color {
+        height: 100%;
+        background-color: #0d6efd;
+        /* اللون الأزرق */
+        position: absolute;
+        border-radius: 5px;
+    }
+
+    .range-input {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 100%;
+        -webkit-appearance: none;
+        appearance: none;
+        background: none;
+        pointer-events: none;
+        /* يسمح بالتمرير فوق بعضهما */
+    }
+
+    .range-input::-webkit-slider-thumb {
+        height: 24px;
+        width: 24px;
+        border-radius: 50%;
+        background: #fff;
+        border: 3px solid #0d6efd;
+        /* دائرة زرقاء وبيضاء */
+        -webkit-appearance: none;
+        pointer-events: auto;
+        /* يجعل النقطة فقط قابلة للضغط */
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    }
+
+    .range-input::-moz-range-thumb {
+        height: 24px;
+        width: 24px;
+        border-radius: 50%;
+        background: #fff;
+        border: 3px solid #0d6efd;
+        pointer-events: auto;
+        cursor: pointer;
+    }
+</style>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-filter me-1"></i> فلاتر التقرير
+        </div>
+        <div class="card-body">
+            <form method="get" action="{% url 'manage_collections' %}" class="row g-3">
+
+                <div class="col-md-3">
+                    <label for="year" class="form-label">سنة الاستحقاق</label>
+                    <select id="year" name="year" class="form-select" required>
+                        {% for year in available_years %}
+                        <option value="{{ year }}" {% if selected_year   ==   year|stringformat:"s" %} selected {% endif %}>
+                            {{ year|to_arabic }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label for="month" class="form-label">شهر الاستحقاق</label>
+                    <select id="month" name="month" class="form-select" required>
+                        {% for month in available_months %}
+                        <option value="{{ month }}" {% if selected_month   ==   month|stringformat:"s" %} selected {% endif %}>
+                            {{ month|to_arabic }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label for="salesperson" class="form-label">المندوب (البائع)</label>
+                    <select id="salesperson" name="salesperson" class="form-select">
+                        <option value="">كل المندوبين</option>
+                        {% for sp in salespersons %}
+                        <option value="{{ sp.id }}" {% if selected_salesperson_id   ==   sp.id|stringformat:"s" %}selected{% endif %}>{{ sp.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <!-- 🔴 نطاق تاريخ البيع (مع زر تفعيل Checkbox) -->
+                <div class="col-12 mt-3">
+                    <div class="bg-light border border-primary p-3 rounded shadow-sm d-flex flex-wrap align-items-center gap-3">
+                
+                        <!-- زر التفعيل -->
+                        <div class="form-check form-switch fs-5 mb-0">
+                            <input class="form-check-input" type="checkbox" role="switch" id="enable_sale_date_filter"
+                                name="use_sale_date_filter" value="yes" {% if use_sale_date_filter == 'yes' %}checked{% endif %}>
+                            <label class="form-check-label fw-bold text-primary fs-6 mt-1" for="enable_sale_date_filter">
+                                <i class="bi bi-calendar-range"></i> تصفية بناءً على تاريخ البيع
+                            </label>
+                        </div>
+                
+                        <!-- القسم: من -->
+                        <div class="d-flex align-items-center gap-2 ms-4">
+                            <span class="badge bg-primary fs-6">من</span>
+                            <select name="sale_from_month" id="sale_from_month"
+                                class="form-select form-select-sm fw-bold border-primary sale-date-select" style="width: 100px;">
+                                <option value="">شهر..</option>
+                                {% for m in available_months %}
+                                <option value="{{ m }}" {% if sale_from_month == m|stringformat:"s" %}selected{% endif %}>{{ m|to_arabic }}</option>
+                                {% endfor %}
+                            </select>
+                            <select name="sale_from_year" id="sale_from_year"
+                                class="form-select form-select-sm fw-bold border-primary sale-date-select" style="width: 100px;">
+                                <option value="">سنة..</option>
+                                {% for y in available_years %}
+                                <option value="{{ y }}" {% if sale_from_year == y|stringformat:"s" %}selected{% endif %}>{{ y|to_arabic }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                
+                        <!-- القسم: إلى -->
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-primary fs-6">إلى</span>
+                            <select name="sale_to_month" id="sale_to_month"
+                                class="form-select form-select-sm fw-bold border-primary sale-date-select" style="width: 100px;">
+                                <option value="">شهر..</option>
+                                {% for m in available_months %}
+                                <option value="{{ m }}" {% if sale_to_month == m|stringformat:"s" %}selected{% endif %}>{{ m|to_arabic }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <select name="sale_to_year" id="sale_to_year"
+                                class="form-select form-select-sm fw-bold border-primary sale-date-select" style="width: 100px;">
+                                <option value="">سنة..</option>
+                                {% for y in available_years %}
+                                <option value="{{ y }}" {% if sale_to_year == y|stringformat:"s" %}selected{% endif %}>{{ y|to_arabic }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- سكريبت لتفعيل/تعطيل القوائم بناءً على الـ Checkbox -->
+                <script>
+                    document.addEventListener('DOMContentLoaded', function () {
+                        const checkbox = document.getElementById('enable_sale_date_filter');
+                        const selects = document.querySelectorAll('.sale-date-select');
+
+                        function toggleSelects() {
+                            selects.forEach(select => {
+                                select.disabled = !checkbox.checked;
+                                // جعل اللون باهتاً عند التعطيل ليكون واضحاً للعميل
+                                if (!checkbox.checked) {
+                                    select.classList.remove('border-primary');
+                                    select.classList.add('bg-secondary', 'bg-opacity-10');
+                                } else {
+                                    select.classList.add('border-primary');
+                                    select.classList.remove('bg-secondary', 'bg-opacity-10');
+                                }
+                            });
+                        }
+
+                        checkbox.addEventListener('change', toggleSelects);
+                        toggleSelects(); // تشغيل عند تحميل الصفحة
+                    });
+                </script>
+
+
+
+
+
+
+                <div class="col-md-2 align-self-end">
+                    <button type="submit" class="btn btn-primary w-100 mb-2">
+                        <i class="bi bi-search me-1"></i> عرض
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h2 class="h5 mb-0">
+                الأقساط المستحقة
+                {% if selected_month and selected_year %}
+                <span class="badge bg-primary">{{ selected_month|to_arabic }}/{{ selected_year|to_arabic }}</span>
+                {% endif %}
+                (العدد: {{ total_installments_count|to_arabic }})
+            </h2>
+    
+<div class="d-flex flex-wrap gap-3">
+
+    <div class="btn-group shadow-sm" dir="ltr">
+        <button type="button"
+            onclick="openDynamicPrintModal('{{ request.path }}?{{ request.GET.urlencode }}&print_a4_report=1', 'طباعة كشف A4 ورقياً')"
+            data-bs-toggle="modal" data-bs-target="#dynamicPrintModal" class="btn btn-primary btn-sm fw-bold px-3">
+            <i class="bi bi-printer-fill"></i> طباعة كشف A4
+        </button>
+
+        <button type="button"
+            onclick="startPrintProcess('{{ request.path }}?{{ request.GET.urlencode }}&print_a4_report=1&action=view', 1, 1000)"
+            class="btn btn-outline-primary btn-sm fw-bold px-3">
+            <i class="bi bi-file-earmark-pdf-fill"></i> عرض PDF
+        </button>
+    </div>
+
+    <div class="btn-group shadow-sm" dir="ltr">
+        <button type="button"
+            onclick="openDynamicPrintModal('{{ request.path }}?{{ request.GET.urlencode }}&print_vouchers=1', 'طباعة إيصالات العملاء ورقياً')"
+            data-bs-toggle="modal" data-bs-target="#dynamicPrintModal" class="btn btn-success btn-sm fw-bold px-3">
+            <i class="bi bi-printer-fill"></i> طباعة الإيصالات
+        </button>
+
+        <button type="button"
+            onclick="startPrintProcess('{{ request.path }}?{{ request.GET.urlencode }}&print_vouchers=1&action=view', {{ total_installments_count }}, 30)"
+            class="btn btn-outline-success btn-sm fw-bold px-3">
+            <i class="bi bi-file-earmark-pdf-fill"></i> عرض PDF
+        </button>
+    </div>
+
+</div>  
+
+        </div>
+    </div>
+
+
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-cash-stack me-1"></i> تفاصيل الأقساط
+        </div>
+        <div class="card-body">
+            {% if installments_by_salesperson %}
+            <!-- 🔴 التعديل هنا: استخدام الهيكل الجديد (data) الذي يحتوي على payments و sp_total -->
+            {% for salesperson_name, data in installments_by_salesperson.items %}
+        
+            <div class="mb-5">
+                <h4 class="mt-4 mb-3 p-2 bg-light border rounded text-dark fw-bold">
+                    <i class="bi bi-person-badge text-primary me-2"></i> المحصل / المندوب: {{ salesperson_name }}
+                </h4>
+        
+                <div class="table-responsive">
+                    <table class="table table-striped table-bordered table-hover table-sm align-middle mb-0">
+                        <thead class="table-light text-center">
+                            <tr>
+                                <th>#</th>
+                                <th>رقم الوصل</th>
+                                <th>اسم العميل</th>
+                                <th>هاتف العميل</th>
+                                <th class="text-primary fw-bold">تاريخ البيع</th>
+                                <th>تاريخ الاستحقاق</th>
+                                <th class="table-warning">مبلغ القسط</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-center">
+                            {% for payment in data.payments %}
+                            <tr>
+                                <td>{{ forloop.counter|to_arabic }}</td>
+                                <td>
+                                    <a href="{% url 'edit_receipt' payment.receipt.id %}" class="fw-bold text-decoration-none">
+                                        {{ payment.receipt.receipt_number|to_arabic }}
+                                    </a>
+                                </td>
+                                <td class="text-start">{{ payment.receipt.customer_name|default:"-" }}</td>
+                                <td>{{ payment.receipt.phone_number|default:"-"|to_arabic }}</td>
+        
+                                <td class="text-nowrap fw-bold text-primary" dir="ltr">
+                                    {{ payment.receipt.sale_year|to_arabic }}-{{ payment.receipt.sale_month|stringformat:"02d"|to_arabic }}
+                                </td>
+        
+                                <td class="text-nowrap" dir="ltr">{{ payment.payment_date|date:"Y-m"|to_arabic }}</td>
+                                <td class="fw-bold text-nowrap table-warning">{{ payment.amount|intcomma|to_arabic }} جم</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+        
+                        <!-- 🔴 صف الإجمالي الخاص بهذا المندوب (يظهر أسفل جدوله مباشرة) -->
+                        <tfoot class="table-dark text-white">
+                            <tr>
+                                <td colspan="6" class="text-start fw-bold fs-6">إجمالي عهدة ({{ salesperson_name }})</td>
+                                <td class="text-center fw-bold fs-6 text-warning">{{ data.sp_total|intcomma|to_arabic }} جم</td>
+                            </tr>
+                        </tfoot>
+        
+                    </table>
+                </div>
+            </div>
+        
+            {% endfor %}
+        
+            <!-- الإجمالي الكلي للتقرير المفلتر -->
+            <div class="alert alert-primary border-primary mt-4 text-center shadow-sm">
+                <h4 class="mb-0 fw-bold">
+                    إجمالي الأقساط المستحقة في هذا التقرير:
+                    <span class="text-danger ms-2">{{ total_amount_due|intcomma|to_arabic }} جم</span>
+                </h4>
+            </div>
+        
+            {% else %}
+            <!-- حالة عدم وجود بيانات -->
+            <div class="alert alert-warning text-center p-5 shadow-sm" role="alert">
+                <i class="bi bi-exclamation-triangle-fill fs-1 text-warning d-block mb-3"></i>
+                <h5 class="fw-bold">لا توجد أقساط مستحقة</h5>
+                <p class="mb-0 text-muted">لا توجد بيانات تطابق الفلاتر المختارة.</p>
+            </div>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+{% endblock %}

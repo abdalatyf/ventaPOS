@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Venta POS – نظام إدارة المبيعات والتقسيط</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --gold: #1DB876;
+  --gold-light: #4EEAA0;
+  --gold-glow: rgba(29,184,118,0.28);
+  --dark: #060D14;
+  --dark2: #0A1520;
+  --dark3: #0F1E2E;
+  --border: rgba(29,184,118,0.2);
+  --text: #D8E8F0;
+  --muted: #6A8A9E;
+  --white: #FFFFFF;
+  --green: #1DB876;
+  --red: #E74C3C;
+  --navy: #0D2847;
+  --navy-light: #143460;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{font-family:'Cairo',sans-serif;background:var(--dark);color:var(--text);overflow-x:hidden;line-height:1.8;}
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-track{background:var(--dark2);}
+::-webkit-scrollbar-thumb{background:var(--gold);border-radius:3px;}
+body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");pointer-events:none;z-index:9999;opacity:.5;}
+
+/* NAV */
+nav{position:fixed;top:0;width:100%;z-index:1000;padding:1rem 5%;display:flex;align-items:center;justify-content:space-between;background:rgba(8,10,15,0.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);}
+.logo{font-size:1.7rem;font-weight:900;color:var(--white);letter-spacing:-1px;}
+.logo span{color:var(--gold);}
+.nav-links{display:flex;gap:2rem;list-style:none;}
+.nav-links a{color:var(--muted);text-decoration:none;font-size:.9rem;font-weight:600;transition:color .2s;}
+.nav-links a:hover{color:var(--gold);}
+.btn-cta{padding:.6rem 1.8rem;background:linear-gradient(135deg,#1DB876,#0D8A50);color:var(--white);font-weight:800;font-size:.9rem;border:none;border-radius:50px;cursor:pointer;font-family:'Cairo',sans-serif;text-decoration:none;display:inline-block;transition:transform .2s,box-shadow .2s;box-shadow:0 4px 20px var(--gold-glow);}
+.btn-cta:hover{transform:translateY(-2px);box-shadow:0 8px 30px var(--gold-glow);}
+
+/* HERO */
+.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:8rem 5% 5rem;position:relative;background:radial-gradient(ellipse 60% 50% at 50% 0%, rgba(13,40,71,.8) 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 30% 100%, rgba(29,184,118,.1) 0%, transparent 70%),var(--dark);}
+.hero::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(13,40,71,.4) 1px, transparent 1px),linear-gradient(90deg, rgba(13,40,71,.4) 1px, transparent 1px);background-size:60px 60px;mask-image:radial-gradient(ellipse 80% 60% at 50% 50%, black 0%, transparent 100%);}
+.badge-tag{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1.2rem;border:1px solid var(--border);border-radius:50px;font-size:.85rem;font-weight:700;color:var(--gold);background:rgba(201,168,76,.08);margin-bottom:2rem;animation:fadeDown .8s ease both;}
+.badge-tag::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 2s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
+.hero h1{font-size:clamp(2.2rem,6vw,4.5rem);font-weight:900;line-height:1.2;color:var(--white);margin-bottom:1.5rem;animation:fadeDown .9s .1s ease both;}
+.hero h1 .highlight{background:linear-gradient(135deg,var(--gold),var(--gold-light));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.hero p{font-size:1.15rem;color:var(--muted);max-width:600px;margin:0 auto 2.5rem;animation:fadeDown 1s .2s ease both;}
+.hero-btns{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;animation:fadeDown 1s .3s ease both;}
+.btn-outline{padding:.65rem 1.8rem;border:1px solid var(--border);color:var(--text);background:transparent;border-radius:50px;font-family:'Cairo',sans-serif;font-size:.9rem;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:.5rem;transition:all .2s;}
+.btn-outline:hover{border-color:var(--gold);color:var(--gold);}
+.hero-stats{display:flex;gap:3rem;justify-content:center;flex-wrap:wrap;margin-top:4rem;padding-top:3rem;border-top:1px solid var(--border);animation:fadeDown 1s .4s ease both;}
+.stat{text-align:center;}
+.stat-num{font-size:2rem;font-weight:900;color:var(--gold);}
+.stat-label{font-size:.8rem;color:var(--muted);}
+
+/* SECTIONS */
+section{padding:6rem 5%;}
+.section-label{font-size:.75rem;font-weight:700;letter-spacing:3px;color:var(--gold);text-transform:uppercase;margin-bottom:.8rem;display:block;}
+.section-title{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:900;color:var(--white);margin-bottom:1rem;line-height:1.3;}
+.section-sub{color:var(--muted);font-size:1rem;max-width:550px;}
+.text-center{text-align:center;}
+.text-center .section-sub{margin:0 auto;}
+
+/* FEATURES */
+.features-section{background:var(--dark2);}
+.features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem;margin-top:3.5rem;}
+.feature-card{background:var(--dark3);border:1px solid var(--border);border-radius:16px;padding:2rem;transition:transform .3s,border-color .3s,box-shadow .3s;position:relative;overflow:hidden;}
+.feature-card::before{content:'';position:absolute;top:0;right:0;width:100%;height:3px;background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:0;transition:opacity .3s;}
+.feature-card:hover{transform:translateY(-6px);border-color:rgba(201,168,76,.4);box-shadow:0 20px 50px rgba(0,0,0,.4);}
+.feature-card:hover::before{opacity:1;}
+.feat-icon{font-size:2.2rem;margin-bottom:1.2rem;display:inline-block;}
+.feat-title{font-size:1.1rem;font-weight:800;color:var(--white);margin-bottom:.6rem;}
+.feat-desc{font-size:.9rem;color:var(--muted);line-height:1.7;}
+
+/* STEPS */
+.steps-section{background:var(--dark);}
+.steps-container{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:2rem;margin-top:3.5rem;}
+.step{text-align:center;padding:2rem 1.5rem;}
+.step-num{width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#1DB876,#0A6E40);color:var(--white);font-weight:900;font-size:1.4rem;display:flex;align-items:center;justify-content:center;margin:0 auto 1.2rem;box-shadow:0 0 30px var(--gold-glow);}
+.step h3{font-size:1rem;font-weight:800;color:var(--white);margin-bottom:.5rem;}
+.step p{font-size:.85rem;color:var(--muted);}
+
+/* QUICK START GUIDE */
+.guide-section{background:var(--dark2);}
+.guide-steps{display:flex;flex-direction:column;gap:3rem;margin-top:3.5rem;}
+.guide-step{display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:center;}
+.guide-step.reverse{direction:ltr;}
+.guide-step.reverse .guide-text{direction:rtl;}
+.guide-step-num{display:inline-flex;align-items:center;gap:.8rem;margin-bottom:1rem;}
+.guide-num-badge{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#1DB876,#0A6E40);color:var(--white);font-weight:900;font-size:1.1rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.guide-step-title{font-size:1.3rem;font-weight:900;color:var(--white);}
+.guide-step-desc{color:var(--muted);font-size:.95rem;margin-top:.8rem;line-height:1.8;}
+.guide-tip{display:inline-flex;align-items:flex-start;gap:.6rem;background:rgba(201,168,76,.08);border:1px solid var(--border);border-radius:10px;padding:.8rem 1rem;margin-top:1rem;font-size:.85rem;color:var(--gold-light);}
+.screenshot-placeholder{background:var(--dark3);border:2px dashed var(--border);border-radius:16px;padding:3rem 2rem;text-align:center;color:var(--muted);font-size:.9rem;min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.8rem;}
+.screenshot-placeholder .ph-icon{font-size:2.5rem;opacity:.4;}
+.screenshot-placeholder span{opacity:.5;font-size:.82rem;}
+
+/* PRICING */
+.pricing-section{background:var(--dark);}
+.pricing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.5rem;margin-top:3.5rem;align-items:start;}
+.price-card{background:var(--dark3);border:1px solid var(--border);border-radius:20px;padding:2.5rem 2rem;transition:transform .3s;position:relative;}
+.price-card.featured{border-color:var(--gold);background:linear-gradient(160deg,#0D2038,#060D18);box-shadow:0 0 50px rgba(201,168,76,.15);transform:scale(1.04);}
+.price-card:hover{transform:translateY(-6px);}
+.price-card.featured:hover{transform:scale(1.04) translateY(-6px);}
+.popular-tag{position:absolute;top:-14px;right:50%;transform:translateX(50%);background:linear-gradient(135deg,#1DB876,#0A6E40);color:var(--white);font-weight:800;font-size:.75rem;padding:.3rem 1.2rem;border-radius:50px;white-space:nowrap;}
+.plan-icon{font-size:2rem;margin-bottom:1rem;}
+.plan-name{font-size:1.1rem;font-weight:800;color:var(--white);margin-bottom:.3rem;}
+.plan-duration{font-size:.8rem;color:var(--muted);margin-bottom:1.5rem;}
+.plan-price{font-size:1.8rem;font-weight:900;color:var(--gold);margin-bottom:1.5rem;line-height:1.2;}
+.plan-price small{font-size:.78rem;color:var(--muted);font-weight:400;display:block;margin-top:.4rem;}
+.plan-features{list-style:none;margin-bottom:2rem;}
+.plan-features li{font-size:.85rem;color:var(--muted);padding:.4rem 0;border-bottom:1px solid rgba(255,255,255,.04);display:flex;gap:.6rem;align-items:flex-start;}
+.plan-features li::before{content:'✓';color:var(--green);font-weight:900;margin-top:.1rem;flex-shrink:0;}
+.plan-features li.no::before{content:'✗';color:var(--red);}
+.btn-plan{width:100%;padding:.8rem;border-radius:50px;font-family:'Cairo',sans-serif;font-weight:800;font-size:.95rem;cursor:pointer;transition:all .2s;text-decoration:none;display:block;text-align:center;}
+.btn-plan-outline{border:1px solid var(--border);color:var(--text);background:transparent;}
+.btn-plan-outline:hover{border-color:var(--gold);color:var(--gold);}
+.btn-plan-gold{background:linear-gradient(135deg,#1DB876,#0D8A50);color:var(--white);border:none;box-shadow:0 4px 20px var(--gold-glow);}
+.btn-plan-gold:hover{box-shadow:0 8px 30px var(--gold-glow);}
+
+/* COMPARE */
+.compare-section{background:var(--dark2);}
+.compare-table{width:100%;border-collapse:collapse;margin-top:3rem;font-size:.9rem;}
+.compare-table th,.compare-table td{padding:1rem 1.2rem;text-align:center;border-bottom:1px solid rgba(255,255,255,.05);}
+.compare-table th{color:var(--gold);font-weight:700;font-size:.85rem;background:var(--dark3);}
+.compare-table td:first-child{text-align:right;color:var(--text);}
+.compare-table tr:hover td{background:rgba(201,168,76,.04);}
+.compare-table .featured-col{background:rgba(201,168,76,.06);border-left:1px solid var(--border);border-right:1px solid var(--border);}
+.check{color:var(--green);font-size:1.1rem;}
+.cross{color:var(--red);}
+
+/* SECURITY */
+.security-section{background:var(--dark);position:relative;overflow:hidden;}
+.security-section::before{content:'';position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(13,40,71,.6) 0%,transparent 70%);left:-200px;top:-200px;}
+.security-grid{display:grid;grid-template-columns:1fr 1fr;gap:4rem;align-items:center;margin-top:3rem;}
+.security-list{list-style:none;margin-top:2rem;}
+.security-list li{display:flex;gap:1rem;align-items:flex-start;padding:1rem 0;border-bottom:1px solid rgba(255,255,255,.05);}
+.sec-icon{font-size:1.4rem;flex-shrink:0;margin-top:.1rem;}
+.sec-text h4{font-size:.95rem;font-weight:700;color:var(--white);margin-bottom:.2rem;}
+.sec-text p{font-size:.82rem;color:var(--muted);}
+.security-visual{background:var(--dark3);border:1px solid var(--border);border-radius:20px;padding:2rem;text-align:center;}
+.shield-big{font-size:6rem;display:block;margin-bottom:1rem;filter:drop-shadow(0 0 30px rgba(201,168,76,.4));animation:float 3s ease-in-out infinite;}
+@keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-12px);}}
+.enc-badge{display:inline-block;background:rgba(46,204,113,.1);border:1px solid rgba(46,204,113,.3);color:var(--green);font-size:.72rem;font-weight:700;padding:.25rem .9rem;border-radius:50px;margin:.3rem;}
+
+/* CTA */
+.cta-section{background:linear-gradient(135deg,#060D14,#0A1A10);text-align:center;padding:7rem 5%;position:relative;overflow:hidden;border-top:1px solid var(--border);}
+.cta-section::before{content:'';position:absolute;width:800px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(201,168,76,.08) 0%,transparent 70%);left:50%;top:50%;transform:translate(-50%,-50%);}
+.cta-section h2{font-size:clamp(2rem,5vw,3.5rem);font-weight:900;color:var(--white);margin-bottom:1rem;}
+.cta-section p{color:var(--muted);margin-bottom:2.5rem;font-size:1.05rem;}
+.whatsapp-btn{display:inline-flex;align-items:center;gap:.8rem;padding:1rem 2.5rem;background:#25D366;color:var(--white);border-radius:50px;font-family:'Cairo',sans-serif;font-size:1.1rem;font-weight:800;text-decoration:none;box-shadow:0 8px 30px rgba(37,211,102,.3);transition:transform .2s,box-shadow .2s;}
+.whatsapp-btn:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(37,211,102,.4);}
+.phone-display{margin-top:1.5rem;font-size:1.4rem;font-weight:900;color:var(--gold);letter-spacing:2px;direction:ltr;display:block;}
+
+/* FOOTER */
+footer{background:var(--dark2);border-top:1px solid var(--border);padding:2rem 5%;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;font-size:.85rem;color:var(--muted);}
+
+@keyframes fadeDown{from{opacity:0;transform:translateY(-20px);}to{opacity:1;transform:translateY(0);}}
+.reveal{opacity:0;transform:translateY(30px);transition:opacity .7s ease,transform .7s ease;}
+.reveal.visible{opacity:1;transform:translateY(0);}
+
+@media(max-width:768px){
+  .nav-links{display:none;}
+  .security-grid{grid-template-columns:1fr;}
+  .guide-step{grid-template-columns:1fr;}
+  .guide-step.reverse{direction:rtl;}
+  .hero-stats{gap:1.5rem;}
+}
+</style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav>
+  <div style="display:flex;align-items:center;gap:.8rem;">
+    <img src="imgs/logo.png" style="width:42px;height:42px;object-fit:contain;border-radius:8px;" alt="">
+    <div class="logo">Venta<span>POS</span></div>
+  </div>
+  <ul class="nav-links">
+    <li><a href="#features">المميزات</a></li>
+    <li><a href="#guide">دليل البدء</a></li>
+    <li><a href="#pricing">الأسعار</a></li>
+    <li><a href="#security">الأمان</a></li>
+  </ul>
+  <a href="https://wa.me/201044208010" class="btn-cta">جرّب مجاناً</a>
+</nav>
+
+<!-- HERO  style="width:100%;display:block;" -->
+<section class="hero">
+  <div style="position:relative;z-index:1;max-width:800px;">
+    <div style="margin-bottom:1.5rem;">
+      <img src="imgs/logo.png" style="width:90px;height:90px;object-fit:contain;filter:drop-shadow(0 0 20px rgba(29,184,118,.4));" alt="">
+    </div>
+    <div class="badge-tag">شغّال من غير نت — بياناتك عندك أنت</div>
+    <h1>بيعاتك وأقساطك<br><span class="highlight">في إيدك</span></h1>
+    <p>نظام بسيط وسريع بتسجل فيه الوصلات، تطبع الإيصالات، وتعرف أرباحك الحقيقية كل شهر. من غير تعقيد ومن غير إنترنت.</p>
+    <div class="hero-btns">
+      <a href="https://wa.me/201044208010" class="btn-cta">🚀 جرّب شهر كامل مجاناً</a>
+      <a href="#guide" class="btn-outline">🔍 شوف إزاي يشتغل</a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat"><div class="stat-num">100%</div><div class="stat-label">من غير نت</div></div>
+      <div class="stat"><div class="stat-num">🔒</div><div class="stat-label">بياناتك مشفرة</div></div>
+      <div class="stat"><div class="stat-num">متعدد</div><div class="stat-label">الفروع والمناديب</div></div>
+      <div class="stat"><div class="stat-num">فوري</div><div class="stat-label">طباعة الإيصالات</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features-section" id="features">
+  <div class="text-center reveal">
+    <span class="section-label">اللي هتلاقيه في النظام</span>
+    <h2 class="section-title">كل حاجة محتاجها في مكان واحد</h2>
+    <p class="section-sub">من أول وصل للتقرير الشهري — كل شيء جاهز.</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card reveal">
+      <div class="feat-icon">🧾</div>
+      <div class="feat-title">وصلات كاش وتقسيط</div>
+      <div class="feat-desc">سجّل الوصلة في ثوانٍ، كاش أو تقسيط. الرقم بيتحسب تلقائي ومفيش تكرار.</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feat-icon">📊</div>
+      <div class="feat-title">نظام قسط مرن</div>
+      <div class="feat-desc">حدد نظام القسط بأي شكل زي <code style="background:rgba(201,168,76,.15);padding:.1rem .4rem;border-radius:4px;">500*12</code> أو <code style="background:rgba(201,168,76,.15);padding:.1rem .4rem;border-radius:4px;">500*6 + 200*3</code> والنظام يحسب الباقي تلقائي.</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feat-icon">📦</div>
+      <div class="feat-title">متابعة المخزون</div>
+      <div class="feat-desc">اعرف كمية البضاعة الموجودة في كل فرع وقيمتها. سجّل الشراء والمرتجع بسهولة.</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feat-icon">💰</div>
+      <div class="feat-title">تقرير الأرباح الحقيقية</div>
+      <div class="feat-desc">شوف ربحك الصافي الحقيقي كل شهر بعد حساب التكاليف والعمولات والمصروفات.</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feat-icon">👥</div>
+      <div class="feat-title">عمولات ومرتبات المناديب</div>
+      <div class="feat-desc">النظام يحسب عمولة كل مندوب تلقائي ويطلع كشف التحصيل الشهري جاهز للتسليم.</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feat-icon">🏪</div>
+      <div class="feat-title">أكتر من فرع</div>
+      <div class="feat-desc">شغّل أكتر من فرع من نفس الجهاز. لكل فرع مخزونه ووصلاته وموظفيه.</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feat-icon">🖨️</div>
+      <div class="feat-title">طباعة سريعة</div>
+      <div class="feat-desc">اطبع إيصال واحد أو مجموعة دفعة واحدة. كشوف التحصيل بصفحة لكل مندوب على ورقة.</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feat-icon">📥</div>
+      <div class="feat-title">استيراد البيانات القديمة</div>
+      <div class="feat-desc">عندك بيانات قديمة في جداول؟ تقدر تستوردها للنظام بخطوات بسيطة من غير ما تفقد حاجة.</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feat-icon">📱</div>
+      <div class="feat-title">إضافة الوصلات من التليفون</div>
+      <div class="feat-desc">المندوب في الشارع؟ مش مشكلة. يقدر يسجل الوصلة من تليفونه على طول من غير ما يرجع للمكتب.</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feat-icon">📅</div>
+      <div class="feat-title">كشف التحصيل وتاريخ الاستحقاق</div>
+      <div class="feat-desc">اطبع كشف شهري لكل مندوب بأسماء العملاء ومبالغ الأقساط المستحقة. كل مندوب في ورقة لوحده جاهزة للتسليم والتحصيل.</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feat-icon">💾</div>
+      <div class="feat-title">نسخة احتياطية</div>
+      <div class="feat-desc">احفظ نسخة من بياناتك على درايف أو فلاشة. وارجعها تاني لو احتجت على أي جهاز.</div>
+    </div>
+    <div class="feature-card reveal" style="border-color:rgba(46,204,113,.3);background:linear-gradient(135deg,#0E1A14,#161B26);position:relative;overflow:hidden;">
+      <div style="position:absolute;top:12px;left:12px;background:rgba(46,204,113,.15);border:1px solid rgba(46,204,113,.4);color:#2ECC71;font-size:.7rem;font-weight:800;padding:.2rem .8rem;border-radius:50px;">قريباً ✨</div>
+      <div class="feat-icon">🌐</div>
+      <div class="feat-title" style="color:#2ECC71;">الأونلاين — متابعة من أي مكان</div>
+      <div class="feat-desc">قريباً هتقدر تتابع وصلاتك وتقاريرك من أي جهاز وأي مكان. بدون ما تكون قاعد على الجهاز الأساسي.</div>
+      <div style="margin-top:1rem;font-size:.8rem;color:rgba(46,204,113,.6);font-weight:700;">سجّل اهتمامك — وهنعلمك أول ما يتاح 👇</div>
+      <a href="https://wa.me/201044208010?text=عايز%20أعرف%20لما%20ميزة%20الأونلاين%20تتاح" style="display:inline-block;margin-top:.6rem;padding:.4rem 1.2rem;background:rgba(46,204,113,.15);border:1px solid rgba(46,204,113,.4);color:#2ECC71;border-radius:50px;font-size:.8rem;font-weight:700;text-decoration:none;">أبلغني لما يتاح</a>
+    </div>
+  </div>
+</section>
+
+<!-- RECEIPT SAMPLE -->
+<section style="background:var(--dark);padding:5rem 5%;">
+  <div class="text-center reveal" style="margin-bottom:3rem;">
+    <span class="section-label">شكل الإيصال</span>
+    <h2 class="section-title">الإيصال اللي بيوصل للعميل</h2>
+    <p class="section-sub">كل بيانات الوصل في إيصال مرتب وواضح جاهز للطباعة فوراً.</p>
+  </div>
+  <div class="reveal" style="max-width:820px;margin:0 auto;">
+    <div style="border-radius:16px;overflow:hidden;border:2px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,.5);">
+      <div style="background:var(--dark2);padding:.7rem 1.2rem;display:flex;align-items:center;gap:.6rem;">
+        <span style="color:var(--gold);font-size:.85rem;font-weight:700;">🖨️ نموذج الإيصال المطبوع</span>
+      </div>
+      <img src="imgs/invoice.png" style="width:100%;display:block;"alt="">
+    </div>
+
+    <div style="display:flex;gap:1.5rem;flex-wrap:wrap;justify-content:center;margin-top:1.5rem;">
+      <div style="display:flex;align-items:center;gap:.5rem;color:var(--muted);font-size:.85rem;"><span style="color:var(--green);">✓</span> اسم المؤسسة وبياناتها</div>
+      <div style="display:flex;align-items:center;gap:.5rem;color:var(--muted);font-size:.85rem;"><span style="color:var(--green);">✓</span> بيانات العميل والعنوان</div>
+      <div style="display:flex;align-items:center;gap:.5rem;color:var(--muted);font-size:.85rem;"><span style="color:var(--green);">✓</span> نظام القسط والمبلغ المتبقي</div>
+      <div style="display:flex;align-items:center;gap:.5rem;color:var(--muted);font-size:.85rem;"><span style="color:var(--green);">✓</span> تاريخ الدفع والمندوب</div>
+    </div>
+  </div>
+</section>
+
+<!-- STEPS -->
+<section class="steps-section">
+  <div class="text-center reveal">
+    <span class="section-label">بسيط من أول يوم</span>
+    <h2 class="section-title">تشتغل عليه في أربع خطوات بس</h2>
+    <p class="section-sub">مفيش تدريب طويل ومفيش تعقيد.</p>
+  </div>
+  <div class="steps-container">
+    <div class="step reveal">
+      <div class="step-num">١</div>
+      <h3>حمّل وفعّل البرنامج</h3>
+      <p>حمّله على جهازك وفعّله بالكود الخاص بجهازك. مرة واحدة وبس.</p>
+    </div>
+    <div class="step reveal">
+      <div class="step-num">٢</div>
+      <h3>سجّل بيانات نشاطك</h3>
+      <p>حط اسم المؤسسة والفروع والموظفين والمنتجات. بيستغرق دقايق.</p>
+    </div>
+    <div class="step reveal">
+      <div class="step-num">٣</div>
+      <h3>ابدأ تسجيل الوصلات</h3>
+      <p>سجّل كاش أو تقسيط واطبع الإيصال للعميل في الحال.</p>
+    </div>
+    <div class="step reveal">
+      <div class="step-num">٤</div>
+      <h3>تابع أرباحك كل شهر</h3>
+      <p>افتح التقارير واعرف وضعك المالي الحقيقي بالأرقام.</p>
+    </div>
+  </div>
+</section>
+
+<!-- QUICK START GUIDE -->
+<section class="guide-section" id="guide">
+  <div class="text-center reveal">
+    <span class="section-label">دليل البدء السريع</span>
+    <h2 class="section-title">خطوة خطوة من أول ما تفتح البرنامج</h2>
+    <p class="section-sub">معاك صور من النظام نفسه عشان تعرف تمشي صح من أول يوم.</p>
+  </div>
+
+  <div class="guide-steps">
+
+    <!-- Step 1: Activation -->
+    <div class="guide-step reveal">
+      <div class="guide-text">
+        <div class="guide-step-num">
+          <div class="guide-num-badge">١</div>
+          <div class="guide-step-title">تفعيل البرنامج</div>
+        </div>
+        <div class="guide-step-desc">أول ما تشغّل البرنامج هتظهرلك شاشة التفعيل. فيها بصمة جهازك — انسخها وابعتهالنا على واتساب وهنبعتلك كود التفعيل فوراً. حطه في الخانات واضغط تفعيل.</div>
+        <div class="guide-tip">💡 كود التفعيل شكله كده: <strong style="color:var(--gold);">XXXX-XXXX-XXXX-XXXX</strong> — بيشتغل على جهازك بس.</div>
+      </div>
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/Activation.png" style="width:100%;display:block;" alt="">
+      </div>
+      </div>
+
+    <!-- Step 2: Setup Company (first time)style="width:100%;display:block;" -->
+    <div class="guide-step reverse reveal">
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/setup.png" style="width:100%;display:block;" alt="">
+      </div>
+        <div class="guide-text">
+        <div class="guide-step-num">
+          <div class="guide-num-badge">٢</div>
+          <div class="guide-step-title">إعداد النظام لأول مرة</div>
+        </div>
+        <div class="guide-step-desc">بعد التفعيل مباشرة هتظهرلك شاشة الإعداد الأول — دي بتعمل فيها حسابك كمدير للنظام، وبتحط اسم المؤسسة ورقم التليفون وملاحظات الفاتورة. الشاشة دي بتظهر مرة واحدة بس في العمر.</div>
+        <div class="guide-tip">💡 البيانات دي هتظهر في كل إيصال بتطبعه — خدها بجدية واتأكد من الاسم ورقم التليفون.</div>
+      </div>
+    </div>
+
+    <!-- Step 3: Company Settings later -->
+    <div class="guide-step reveal">
+      <div class="guide-text">
+        <div class="guide-step-num">
+          <div class="guide-num-badge">3</div>
+          <div class="guide-step-title">مراجعة وتعديل بيانات النشاط</div>
+        </div>
+        <div class="guide-step-desc">تقدر ترجع وتعدّل بيانات نشاطك في أي وقت من الإعدادات العامة — اسم الشركة، التليفون، ونص ذيل الفاتورة.</div>
+        <div class="guide-tip">💡 من نفس الصفحة تقدر تغير كلمة السر وتعمل نسخة احتياطية.</div>
+      </div>
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/settings.png" style="width:100%;display:block;" alt="">
+      </div>
+      </div>
+
+    <!-- Step 4: Add Branch -->
+    <div class="guide-step reveal">
+      <div class="guide-text">
+        <div class="guide-step-num">
+          <div class="guide-num-badge">٤</div>
+          <div class="guide-step-title">إضافة الفرع</div>
+        </div>
+        <div class="guide-step-desc">من الإعدادات اختار "الفروع" وأضف فرعك. لو عندك فرع واحد بس حط اسمه وخلاص. كل وصل وكل مخزون بيتسجل تحت الفرع اللي انت فيه.</div>
+        <div class="guide-tip">💡 تقدر تضيف أكتر من فرع في أي وقت وكل فرع مستقل بذاته.</div>
+      </div>
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/branchadd.png" style="width:100%;display:block;" alt="">
+      </div>
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/branch.png" style="width:100%;display:block;" alt="">
+      </div>
+      </div>
+
+    <!-- Step 5: Add Salesperson -->
+    <div class="guide-step reverse reveal">
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/empls.png" style="width:100%;display:block;" alt="">
+      </div>
+        <div class="guide-text">
+        <div class="guide-step-num">
+          <div class="guide-num-badge">٥</div>
+          <div class="guide-step-title">إضافة المناديب والموظفين</div>
+        </div>
+        <div class="guide-step-desc">من الإعدادات اختار "الموظفين" وأضف أسماء المناديب اللي بيشتغلوا. المندوب بيتربط بالفرع واسمه بيظهر في كل وصل وفي كشوف التحصيل.</div>
+        <div class="guide-tip">💡 لو فيه مندوب واحد بس كمان لازم تضيفه عشان الوصلات تتسجل صح.</div>
+      </div>
+    </div>
+
+    <!-- Step 6: Add Products -->
+    <div class="guide-step reveal">
+      <div class="guide-text">
+        <div class="guide-step-num">
+          <div class="guide-num-badge">٦</div>
+          <div class="guide-step-title">إضافة المنتجات</div>
+        </div>
+        <div class="guide-step-desc">من الإعدادات اختار "المنتجات" وأضف كل صنف عندك. لكل منتج بتحط اسمه وسعر الشراء والكمية الموجودة وعمولة المندوب. البيانات دي بتبني عليها تقارير الأرباح وبيقل تلقائي كلما بعت بضاعة جديدة.</div>
+        <div class="guide-tip">💡 ضيف مخزنك كله بالأرقام وبعد كد ضيف من "المخزون" كلما اشتريت بضاعة جديدة.</div>
+      </div>
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/products.png" style="width:100%;display:block;"alt="">
+      </div>
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/movements.png" style="width:100%;display:block;"alt="">
+      </div>
+      </div>
+
+    <!-- Step 7: Login -->
+    <div class="guide-step reverse reveal">
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/login.png" style="width:100%;display:block;" alt="">
+      </div> 
+             <div class="guide-text">
+        <div class="guide-step-num">
+          <div class="guide-num-badge">٧</div>
+          <div class="guide-step-title">تسجيل الدخول اليومي</div>
+        </div>
+        <div class="guide-step-desc">عند كل تشغيل للبرنامج بتدخل باسم المستخدم وكلمة السر. بسيطة وسريعة.</div>
+        <div class="guide-tip">💡 لو نسيت كلمة السر في أسفل الشاشة رابط "الطوارئ" تقدر منه تعمل ريست.</div>
+      </div>
+    </div>
+
+    <!-- Step 8: Dashboard -->
+    <div class="guide-step reveal">
+      <div class="guide-text">
+        <div class="guide-step-num">
+          <div class="guide-num-badge">٨</div>
+          <div class="guide-step-title">الصفحة الرئيسية — مركز التحكم</div>
+        </div>
+        <div class="guide-step-desc">دي صفحتك الرئيسية اللي هتبدأ منها كل يوم. من هنا تضيف وصل جديد، تبحث في الوصلات، تشوف تقارير الأقساط، أو تدخل على أي قسم من القائمة وتشوف المرتبات والاحصاءات الاجمالية.</div>
+        <div class="guide-tip">💡 في أعلى الشاشة اسم الفرع اللي أنت فيه دايماً عشان تبقى عارف أنت فين.</div>
+      </div>
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+      <img src="imgs/dash1.png"style="width:100%;display:block;" alt="">
+      </div>
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+      <img src="imgs/dash2.png"style="width:100%;display:block;" alt="">
+      </div>
+      </div>
+
+    <!-- Step 9: Add Receipt -->
+    <div class="guide-step reverse reveal">
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/add.png"style="width:100%;display:block;" alt="">
+      </div>
+              <div class="guide-text">
+        <div class="guide-step-num">
+          <div class="guide-num-badge">٩</div>
+          <div class="guide-step-title">إضافة وصل جديد</div>
+        </div>
+        <div class="guide-step-desc">اضغط "إضافة وصل" من القائمة. حط اسم العميل ورقم تليفونه والمبلغ ونظام القسط. لو بيع كاش اختار "كاش" وهيتحسب تلقائي.</div>
+        <div class="guide-tip">💡 نظام القسط بتكتبه كده: <strong style="color:var(--gold);">500*12</strong> يعني ٥٠٠ جنيه لمدة ١٢ شهر.</div>
+      </div>
+    </div>
+
+    <!-- Step 10: Print Receipt -->
+    <div class="guide-step reveal">
+      <div class="guide-text">
+        <div class="guide-step-num">
+          <div class="guide-num-badge">١٠</div>
+          <div class="guide-step-title">طباعة وبحث وتعديل الإيصال</div>
+        </div>
+        <div class="guide-step-desc">بعد التسجيل ادخل على صفحة بحث الايصالات وحدد عايز تطبع شهر كام ومين المندوب او عن طريق رقم الفاتورة تقدر تطبع وصل واحد او مجموعة.</div>
+        <div class="guide-tip">💡 الإيصال بيتضمن كل بيانات الوصل وبيانات نشاطك اللي سجلتها في الإعدادات.</div>
+      </div>
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/search1.png"style="width:100%;display:block;" alt="">
+      </div>
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/search2.png"style="width:100%;display:block;" alt="">
+      </div>
+    </div>
+
+    <!-- Step 11: Collection Report -->
+    <div class="guide-step reverse reveal">
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/inst.png"style="width:100%;display:block;" alt="">
+    </div>
+      <div class="guide-text">
+        <div class="guide-step-num">
+          <div class="guide-num-badge">١١</div>
+          <div class="guide-step-title">كشف التحصيل الشهري</div>
+        </div>
+        <div class="guide-step-desc">من قسم "تقرير الأقساط" تقدر تطبع التحصيل فقط للشهر والمندوب اللي تحددهم وكمان كشف لكل مندوب بأسماء عملاؤه ومبالغ الأقساط المستحقة عليهم في الشهر ده. كل مندوب في ورقة لوحده جاهز للتسليم.</div>
+        <div class="guide-tip">💡 الكشف بيبين تاريخ الاستحقاق والمبلغ المطلوب من كل عميل بالتفصيل.</div>
+      </div>
+    </div>
+
+    <!-- Step 12: Profit Reports -->
+    <div class="guide-step reveal">
+      <div class="guide-text">
+        <div class="guide-step-num">
+          <div class="guide-num-badge">١٢</div>
+          <div class="guide-step-title">(جرد المبيعات المتطور) تقرير الأرباح الشهري</div>
+        </div>
+        <div class="guide-step-desc">من قسم "الجرد" هتلاقي تقرير كامل لكل شهر بيبين إجمالي المبيعات والتكاليف والعمولات وصافي ربحك الحقيقي.</div>
+        <div class="guide-tip">💡 تقدر تفلتر على أي شهر وأي مندوب عشان تشوف الأرقام بالتفصيل.</div>
+      </div>
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/gard1.png"style="width:100%;display:block;" alt="">
+      </div>
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/gard2.png"style="width:100%;display:block;" alt="">
+      </div>
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/gard3.png"style="width:100%;display:block;" alt="">
+      </div>
+    </div>
+
+    <div class="guide-step reveal">
+      <div class="guide-text">
+        <div class="guide-step-num">
+          <div class="guide-num-badge">13</div>
+          <div class="guide-step-title">صفحة المصروفات</div>
+        </div>
+        <div class="guide-step-desc">من صفحة الاعدادات ثم المصروفات تقدر تضيف مصروفات شركتك كلها عشان يحسب لك مكسبك الصافي</div>
+        <div class="guide-tip">💡 تقدر تفلتر على أي شهر عشان تشوف الأرقام بالتفصيل.</div>
+      </div>
+      <div style="border-radius:12px;overflow:hidden;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.4);">
+        <img src="imgs/msrofat.png"style="width:100%;display:block;" alt="">
+      </div>
+
+    </div>
+
+  </div></section>
+
+<!-- PRICING -->
+<section class="pricing-section" id="pricing">
+  <div class="text-center reveal">
+    <span class="section-label">الأسعار والباقات</span>
+    <h2 class="section-title">ابدأ مجاناً واشترك لما تبقى مرتاح</h2>
+    <p class="section-sub">شهر كامل تجرب فيه كل حاجة من غير أي إلزام.</p>
+  </div>
+  <div class="pricing-grid">
+
+    <div class="price-card reveal">
+      <div class="plan-icon">🆓</div>
+      <div class="plan-name">تجربة مجانية</div>
+      <div class="plan-duration">شهر كامل</div>
+      <div class="plan-price">مجاناً<small>من غير أي إلزام</small></div>
+      <ul class="plan-features">
+        <li>كل مميزات النظام كاملة</li>
+        <li>طباعة الإيصالات</li>
+        <li>وصلات كاش وتقسيط</li>
+        <li>تقارير الأرباح والخسائر</li>
+        <li>كشوف التحصيل الشهرية</li>
+        <li>إدارة المخزون والمناديب</li>
+      </ul>
+      <a href="https://wa.me/201044208010" class="btn-plan btn-plan-outline">ابدأ التجربة</a>
+    </div>
+
+    <div class="price-card reveal">
+      <div class="plan-icon">🖨️</div>
+      <div class="plan-name">الطباعة فقط</div>
+      <div class="plan-duration">سنة أو مدى الحياة</div>
+      <div class="plan-price">ادفع مرة<small>مناسب للأنشطة الصغيرة</small></div>
+      <ul class="plan-features">
+        <li>طباعة غير محدودة</li>
+        <li>وصلات كاش وتقسيط</li>
+        <li>أكتر من فرع</li>
+        <li>نسخة احتياطية</li>
+        <li class="no">تقارير الأرباح والخسائر</li>
+        <li class="no">إدارة المخزون والعمولات</li>
+      </ul>
+      <a href="https://wa.me/201044208010" class="btn-plan btn-plan-outline">استفسر عن السعر</a>
+    </div>
+
+    <div class="price-card featured reveal">
+      <div class="popular-tag">⭐ الأكثر طلباً</div>
+      <div class="plan-icon">👑</div>
+      <div class="plan-name">الإدارة الكاملة</div>
+      <div class="plan-duration">سنة / ٣ سنوات / ٥ سنوات / مدى الحياة</div>
+      <div class="plan-price">كلمنا للسعر<small>باقات بتناسب الكل</small></div>
+      <ul class="plan-features">
+        <li>كل حاجة في باقة الطباعة</li>
+        <li>تقارير الأرباح والخسائر الكاملة</li>
+        <li>إدارة المخزون والحركات</li>
+        <li>كشوف المرتبات والعمولات</li>
+        <li>إدارة المصروفات الشهرية</li>
+        <li>استيراد البيانات القديمة</li>
+      </ul>
+      <a href="https://wa.me/201044208010" class="btn-plan btn-plan-gold">احصل عليها دلوقتي</a>
+    </div>
+
+  </div>
+</section>
+
+<!-- COMPARE -->
+<section class="compare-section">
+  <div class="text-center reveal">
+    <span class="section-label">مقارنة الباقات</span>
+    <h2 class="section-title">إيه اللي بتاخده في كل باقة؟</h2>
+  </div>
+  <div style="overflow-x:auto;margin-top:2.5rem;">
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th style="text-align:right;">الميزة</th>
+          <th>تجربة مجانية</th>
+          <th>طباعة فقط</th>
+          <th class="featured-col" style="color:var(--gold-light);">⭐ إدارة كاملة</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>وصلات كاش وتقسيط</td><td><span class="check">✓</span></td><td><span class="check">✓</span></td><td class="featured-col"><span class="check">✓</span></td></tr>
+        <tr><td>طباعة الإيصالات</td><td><span class="check">✓</span></td><td><span class="check">✓</span></td><td class="featured-col"><span class="check">✓</span></td></tr>
+        <tr><td>أكتر من فرع وموظف</td><td><span class="check">✓</span></td><td><span class="check">✓</span></td><td class="featured-col"><span class="check">✓</span></td></tr>
+        <tr><td>نسخة احتياطية واسترجاع</td><td><span class="check">✓</span></td><td><span class="check">✓</span></td><td class="featured-col"><span class="check">✓</span></td></tr>
+        <tr><td>استيراد البيانات القديمة</td><td><span class="check">✓</span></td><td><span class="cross">✗</span></td><td class="featured-col"><span class="check">✓</span></td></tr>
+        <tr><td>تقارير الأرباح والخسائر</td><td><span class="check">✓</span></td><td><span class="cross">✗</span></td><td class="featured-col"><span class="check">✓</span></td></tr>
+        <tr><td>متابعة المخزون</td><td><span class="check">✓</span></td><td><span class="cross">✗</span></td><td class="featured-col"><span class="check">✓</span></td></tr>
+        <tr><td>كشوف المرتبات والعمولات</td><td><span class="check">✓</span></td><td><span class="cross">✗</span></td><td class="featured-col"><span class="check">✓</span></td></tr>
+        <tr><td>متابعة المصروفات الشهرية</td><td><span class="check">✓</span></td><td><span class="cross">✗</span></td><td class="featured-col"><span class="check">✓</span></td></tr>
+        <tr><td>إضافة الوصلات من التليفون</td><td><span style="color:#E67E22;font-weight:700;">قريباً</span></td><td><span style="color:#E67E22;font-weight:700;">قريباً</span></td><td class="featured-col"><span style="color:#E67E22;font-weight:700;">قريباً</span></td></tr>
+        <tr><td>متابعة أونلاين من أي مكان</td><td><span style="color:#E67E22;font-weight:700;">قريباً</span></td><td><span style="color:#E67E22;font-weight:700;">قريباً</span></td><td class="featured-col"><span style="color:#E67E22;font-weight:700;">قريباً</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- SECURITY -->
+<section class="security-section" id="security">
+  <div class="security-grid">
+    <div class="reveal">
+      <span class="section-label">الأمان والخصوصية</span>
+      <h2 class="section-title">بياناتك عندك أنت بس<br>مش على نت ومش عند حد تاني</h2>
+      <p class="section-sub">صمّمنا النظام عشان بياناتك تبقى في أمان تام على جهازك أنت.</p>
+      <ul class="security-list">
+        <li>
+          <div class="sec-icon">🔐</div>
+          <div class="sec-text"><h4>البيانات مشفرة بالكامل</h4><p>حتى لو حصل أي حاجة للجهاز، الملفات مش قابلة للفتح من غير مفتاح التشفير.</p></div>
+        </li>
+        <li>
+          <div class="sec-icon">💻</div>
+          <div class="sec-text"><h4>الكود مربوط بجهازك</h4><p>كود التفعيل بيشتغل على جهازك بس، مش قابل للنسخ أو الاستخدام على أجهزة تانية.</p></div>
+        </li>
+        <li>
+          <div class="sec-icon">📴</div>
+          <div class="sec-text"><h4>شغّال من غير نت خالص</h4><p>البرنامج مش محتاج إنترنت خالص. بياناتك مش بتتبعت لأي سيرفر برّاني.</p></div>
+        </li>
+        <li>
+          <div class="sec-icon">💾</div>
+          <div class="sec-text"><h4>حفظ تلقائي كل ٥ دقايق</h4><p>النظام بيحفظ شغلك تلقائي أثناء الاستخدام. حتى لو انقطع الكهرباء مش هتخسر حاجة.</p></div>
+        </li>
+      </ul>
+    </div>
+    <div class="security-visual reveal">
+      <span class="shield-big">🛡️</span>
+      <h3 style="color:var(--white);font-size:1.3rem;margin-bottom:1rem;">الأمان مش شغلتك أنت</h3>
+      <p style="color:var(--muted);font-size:.95rem;line-height:1.9;margin-top:.5rem;">احنا اتعبنا في موضوع الأمان عشان انت ماتتعبش. البرنامج مصمم من الأساس إن بياناتك تبقى عندك أنت بس — على جهازك، مش على نت، ومش عند أي حد تاني.</p>
+      <p style="color:var(--muted);font-size:.95rem;line-height:1.9;margin-top:.8rem;">حتى لو الجهاز اتسرق أو انكسر — بياناتك محمية وتقدر ترجعها من النسخة الاحتياطية في دقيقتين.</p>
+    </div>
+  </div>
+</section>
+
+<!-- DOWNLOAD -->
+<section style="background:var(--dark2);padding:5rem 5%;text-align:center;">
+  <div class="reveal">
+    <span class="section-label">حمّل البرنامج</span>
+    <h2 class="section-title">جهازك جاهز؟ حمّل دلوقتي</h2>
+    <p class="section-sub" style="margin:0 auto 2.5rem;">حجم التثبيت خفيف، والتركيب في دقيقتين. بعد التحميل كلمنا على واتساب وهنبعتلك كود التفعيل.</p>
+
+    <a href="https://www.mediafire.com/file/ufsdn442k39ztq6/Venta_Offline_Setup_v1.0.exe/file" 
+       style="display:inline-flex;align-items:center;gap:1rem;padding:1.2rem 3rem;
+              background:linear-gradient(135deg,#1DB876,#0D8A50);
+              color:var(--white);border-radius:50px;font-family:'Cairo',sans-serif;
+              font-size:1.15rem;font-weight:800;text-decoration:none;
+              box-shadow:0 8px 30px rgba(29,184,118,.35);
+              transition:transform .2s,box-shadow .2s;"
+       onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 12px 40px rgba(29,184,118,.45)'"
+       onmouseout="this.style.transform='none';this.style.boxShadow='0 8px 30px rgba(29,184,118,.35)'">
+      <span style="font-size:1.6rem;">⬇️</span>
+      تحميل البرنامج مجاناً
+    </a>
+
+    <div style="margin-top:1.5rem;display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:.5rem;color:var(--muted);font-size:.85rem;">
+        <span style="color:var(--green);">✓</span> 7 يشتغل على ويندوز
+      </div>
+      <div style="display:flex;align-items:center;gap:.5rem;color:var(--muted);font-size:.85rem;">
+        <span style="color:var(--green);">✓</span> ما بيحتاجش نت
+      </div>
+      <div style="display:flex;align-items:center;gap:.5rem;color:var(--muted);font-size:.85rem;">
+        <span style="color:var(--green);">✓</span> التركيب سهل في دقيقتين
+      </div>
+      <div style="display:flex;align-items:center;gap:.5rem;color:var(--muted);font-size:.85rem;">
+        <span style="color:var(--green);">✓</span> شهر تجربة مجاناً
+      </div>
+    </div>
+
+    <p style="color:var(--muted);font-size:.78rem;margin-top:1.2rem;">
+      ⚠️ بعد التحميل لازم تفعّل البرنامج — كلمنا على واتساب وهنبعتلك الكود فوراً
+    </p>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div style="position:relative;z-index:1;">
+    <span class="section-label" style="display:block;text-align:center;margin-bottom:1rem;">كلمنا دلوقتي</span>
+    <h2>جاهز تبدأ؟<br>شهر كامل مجاناً</h2>
+    <p>كلمنا على واتساب وهنبعتلك البرنامج ونساعدك في التركيب خطوة بخطوة.</p>
+    <a href="https://wa.me/201044208010?text=السلام%20عليكم،%20عايز%20أجرب%20Venta%20POS" class="whatsapp-btn">
+      💬 كلمنا على واتساب دلوقتي
+    </a>
+    <span class="phone-display">01044208010</span>
+    <p style="color:var(--muted);font-size:.82rem;margin-top:1rem;">بنرد في نفس اليوم</p>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div style="display:flex;align-items:center;gap:.6rem;">
+    <img src="imgs/logo.png" style="width:42px;height:42px;object-fit:contain;border-radius:8px;" alt="">
+    </div>
+  <div>نظام إدارة المبيعات والتقسيط</div>
+  <div>جميع الحقوق محفوظة © 2026 Venta Software Solutions</div>
+</footer>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); });
+}, {threshold: 0.1});
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+document.querySelectorAll('.feature-card, .step').forEach((el, i) => {
+  el.style.transitionDelay = (i % 3) * 0.12 + 's';
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,806 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Tabler Core & Theme (RTL Version) -->
+  <link rel="stylesheet" href="{% static 'css/tabler.rtl.min.css' %}">
+  <link rel="stylesheet" href="{% static 'css/tabler-vendors.rtl.min.css' %}">
+  <!-- Fonts -->
+  <link rel="stylesheet" href="{% static 'css/cairo-local.css' %}">
+  <link rel="stylesheet" href="{% static 'salesapp/vendor/bootstrap-icons/font/bootstrap-icons.css' %}">
+  <title>{% block title %}Venta POS{% endblock %}</title>
+  
+  <style>
+    /* Theme Design Tokens override */
+    :root, [data-bs-theme="light"], [data-bs-theme="dark"] {
+        --tblr-primary: #1A4571; 
+        --tblr-primary-rgb: 26, 69, 113;
+        --tblr-dark: #111827; 
+        --tblr-dark-rgb: 17, 24, 39;
+        --tblr-success: #1DA068; 
+        --tblr-success-rgb: 29, 160, 104;
+        --tblr-green: #24B476; 
+        --tblr-bg-surface: #FFFFFF;
+        --tblr-bg-surface-secondary: #F4F6F8;
+        --tblr-font-sans-serif: 'Cairo', sans-serif;
+        --tblr-body-font-family: 'Cairo', sans-serif;
+        --tblr-border-radius: 8px;
+        --tblr-border-radius-lg: 12px;
+    }
+    body {
+        font-family: 'Cairo', sans-serif !important;
+        background-color: var(--tblr-bg-surface-secondary);
+        color: var(--tblr-dark);
+        overflow-x: hidden; 
+    }
+    h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
+        color: var(--tblr-dark) !important;
+        font-weight: 700;
+    }
+    .btn-primary {
+        background-color: var(--tblr-primary) !important;
+        border-color: var(--tblr-primary) !important;
+        color: #ffffff;
+    }
+    .btn-success {
+        background-color: var(--tblr-success) !important;
+        border-color: var(--tblr-success) !important;
+        color: #ffffff;
+    }
+
+
+    /* 2. تحويل الحاوية لـ Full Width (تعديل جوهري) */
+    .main-container {
+      width: 98%;
+      /* يأخذ 98% من الشاشة */
+      max-width: 100%;
+      /* إلغاء القيد القديم (1100px) */
+      margin: 20px auto;
+      /* توسيط */
+      padding: 20px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    }
+
+    .navbar-brand {
+      font-weight: 700;
+    }
+
+    .arabic-numerals {
+      font-feature-settings: "ss01";
+    }
+
+    /* 3. تنسيقات القائمة الجانبية (Sidebar) المسطحة */
+    .custom-sidebar .sidebar-section-title {
+      color: #667382;
+      font-weight: 700;
+      padding: 1.25rem 1.25rem 0.5rem 1.25rem;
+      font-size: 0.95rem;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.5px;
+    }
+    .custom-sidebar .list-group-item {
+      background-color: transparent;
+      color: #111827;
+      border: none;
+      padding: 0.65rem 2.5rem 0.65rem 1rem;
+      transition: all 0.2s ease-in-out;
+      font-size: 0.95rem;
+      margin: 0.15rem 0.5rem;
+      border-radius: 8px;
+    }
+    .custom-sidebar .list-group-item:hover {
+      color: #1A4571;
+      background-color: rgba(26,69,113,0.08);
+      padding-right: 3rem;
+    }
+    .custom-sidebar .list-group-item.active {
+      color: #1A4571;
+      background-color: rgba(26, 69, 113, 0.1);
+      font-weight: bold;
+      border-right: 3px solid #1A4571;
+    }
+  </style>
+  {% block extra_css %}{% endblock %}
+</head>
+
+<body>
+<div class="page">
+  <!-- شريط التنقل العلوي -->
+  <nav class="navbar navbar-expand navbar-light bg-white shadow-sm" style="border-bottom: 1px solid rgba(0,0,0,0.05);">
+    <div class="container-fluid">
+      <!-- زر فتح القائمة الجانبية -->
+      <button class="btn btn-outline-secondary border-0 me-3" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
+        <i class="bi bi-list fs-4"></i>
+      </button>
+      <a class="navbar-brand fw-bold" href="/" style="color: #1A4571;">Venta POS</a>
+      
+      <div class="collapse navbar-collapse d-flex justify-content-end">
+        <!-- أزرار الزوم -->
+        <div class="d-flex align-items-center mx-2 ps-2 border-start border-secondary">
+          <button onclick="zoomOut()" class="btn btn-sm btn-link text-secondary p-1" title="تصغير"><i class="bi bi-dash-circle fs-5"></i></button>
+          <button onclick="resetZoom()" class="btn btn-sm btn-link text-secondary p-1" title="افتراضي"><i class="bi bi-aspect-ratio fs-5"></i></button>
+          <button onclick="zoomIn()" class="btn btn-sm btn-link text-secondary p-1" title="تكبير"><i class="bi bi-plus-circle fs-5"></i></button>
+        </div>
+        
+        {% if request.session.selected_branch_name %}
+        <span class="navbar-text text-success d-none d-md-inline-block fw-bold ms-3">
+          الفرع: {{ request.session.selected_branch_name }}
+        </span>
+        <a href="{% url 'select_branch' %}" class="btn btn-sm btn-outline-warning ms-3 fw-bold">تغيير الفرع</a>
+        {% endif %}
+      </div>
+    </div>
+  </nav>
+
+  <!-- القائمة الجانبية (Offcanvas Sidebar) بناءً على التقسيم المعماري -->
+  <div class="offcanvas offcanvas-start bg-white text-dark shadow-lg" tabindex="-1" id="sidebarMenu" aria-labelledby="sidebarMenuLabel" dir="rtl" style="width: 320px;">
+    <div class="offcanvas-header border-bottom border-secondary py-3">
+      <h5 class="offcanvas-title fw-bold" id="sidebarMenuLabel" style="color: #111827;"><i class="bi bi-grid-1x2-fill text-primary me-2"></i> القائمة الرئيسية</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body p-0">
+      <div class="custom-sidebar pb-4" id="accordionSidebar">
+        
+        <!-- 1. المبيعات (Sales) -->
+        <div class="sidebar-section-title text-success">
+          <i class="bi bi-cart-check-fill me-2"></i> 1. المبيعات
+        </div>
+        <div class="list-group list-group-flush">
+          <a href="{% url 'add_receipt' %}" class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'add_receipt' %}active{% endif %}">إضافة فاتورة</a>
+          <a href="{% url 'search_receipts' %}" class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'search_receipts' %}active{% endif %}">بحث وتعديل الفواتير</a>
+        </div>
+
+        <!-- 2. المشتريات والمصروفات (Purchases & Expenses) -->
+        <div class="sidebar-section-title text-info mt-2">
+          <i class="bi bi-truck me-2"></i> 2. المشتريات والمصروفات
+        </div>
+        <div class="list-group list-group-flush">
+          <a href="{% url 'manage_purchase_invoices' %}" class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'manage_purchase_invoices' %}active{% endif %}">إضافة فاتورة شراء</a>
+          <a href="{% url 'search_purchase_invoices' %}" class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'search_purchase_invoices' %}active{% endif %}">بحث فواتير الشراء</a>
+          {% if is_pro_plan %}
+          <a href="{% url 'manage_expenses' %}" class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'manage_expenses' %}active{% endif %}">المصروفات</a>
+          {% endif %}
+        </div>
+
+        <!-- 3. التأسيس والإدارة (Management) -->
+        <div class="sidebar-section-title text-primary mt-2">
+          <i class="bi bi-building me-2"></i> 3. التأسيس والإدارة
+        </div>
+        <div class="list-group list-group-flush">
+          <a href="{% url 'manage_branches' %}" class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'manage_branches' %}active{% endif %}">إدارة الفروع</a>
+          <a href="{% url 'manage_salespersons' %}" class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'manage_salespersons' %}active{% endif %}">إدارة المناديب</a>
+          <a href="{% url 'manage_products' %}" class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'manage_products' %}active{% endif %}">الأصناف والتسعير</a>
+          <a href="{% url 'manage_suppliers' %}" class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'manage_suppliers' %}active{% endif %}">إدارة الموردين</a>
+        </div>
+
+        <!-- 4. التقارير والتحليلات (Reports & Analytics) -->
+        <div class="sidebar-section-title text-warning mt-2">
+          <i class="bi bi-pie-chart-fill me-2"></i> 4. التقارير والتحليلات
+        </div>
+        <div class="list-group list-group-flush">
+          <a href="{% url 'dashboard' %}" class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">ملخصات الداشبورد</a>
+          <a href="{% if is_pro_plan %}{% url 'sales_reports' %}{% else %}#proModal{% endif %}" {% if not is_pro_plan %} data-bs-toggle="modal" {% endif %} class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'sales_reports' %}active{% endif %}">صفحة الجرد (3 أقسام){% if not is_pro_plan %}<i class="bi bi-lock-fill text-warning ms-1"></i>{% endif %}</a>
+          <a href="{% if is_pro_plan %}{% url 'manage_collections' %}{% else %}#proModal{% endif %}" {% if not is_pro_plan %} data-bs-toggle="modal" {% endif %} class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'manage_collections' %}active{% endif %}">إدارة التحصيلات والديون{% if not is_pro_plan %}<i class="bi bi-lock-fill text-warning ms-1"></i>{% endif %}</a>
+        </div>
+
+        <!-- 5. الأدوات (Tools) -->
+        <div class="sidebar-section-title text-info mt-2">
+          <i class="bi bi-tools me-2"></i> 5. الأدوات
+        </div>
+        <div class="list-group list-group-flush">
+          <a href="{% url 'cloud_hub' %}" class="list-group-item list-group-item-action {% if request.resolver_match.url_name in 'cloud_hub,mobile_sync,cloud_status,manage_devices,pending_receipts' %}active{% endif %}"><i class="bi bi-cloud-arrow-down-fill me-2" style="color: #0dcaf0;"></i> الربط أونلاين</a>
+          <a href="{% url 'smart_import_wizard' %}" class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'smart_import_wizard' %}active{% endif %}"><i class="bi bi-magic me-2" style="color: #d63384;"></i> الاستيراد الذكي</a>
+          <a href="{% url 'backup_dashboard' %}" class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'backup_dashboard' %}active{% endif %}"><i class="bi bi-database-down me-2 text-success"></i> النسخ الاحتياطي</a>
+        </div>
+
+        <!-- 6. الإعدادات والأمان (Settings) -->
+        <div class="sidebar-section-title text-secondary mt-2">
+          <i class="bi bi-gear-fill me-2"></i> 6. الإعدادات والأمان
+        </div>
+        <div class="list-group list-group-flush">
+          <a href="{% url 'general_settings' %}" class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'general_settings' %}active{% endif %}">الشركة والاشتراكات</a>
+          <a href="{% url 'shutdown_app' %}" class="list-group-item list-group-item-action text-danger fw-bold mt-3"><i class="bi bi-power me-1"></i> إغلاق البرنامج</a>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="page-wrapper">
+    <div class="page-body">
+      <div class="container-fluid">
+    {% if error_message %}
+    <div class="alert alert-danger" role="alert">
+      {{ error_message }}
+    </div>
+    {% endif %}
+{% if messages %}
+<div class="mb-4">
+  {% for message in messages %}
+  <div
+    class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} fw-bold shadow-sm alert-dismissible fade show"
+    role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+    {% block content %}
+    {% endblock %}
+      </div>
+    </div>
+  </div>
+
+  <script src="{% static 'salesapp/vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+
+  <div id="print-overlay"
+    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; justify-content: center; align-items: center; flex-direction: column;">
+    <div class="bg-white p-4 rounded shadow-lg text-center" style="width: 350px;">
+      <h5 class="mb-3">جاري تحضير ملف الطباعة...</h5>
+      <div class="progress mb-3" style="height: 25px;">
+        <div id="print-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+          role="progressbar" style="width: 0%;">0%</div>
+      </div>
+      <p class="text-muted small mb-4">يرجى الانتظار، جاري معالجة البيانات.</p>
+      <button id="cancel-print-btn" class="btn btn-danger w-100">إلغاء العملية</button>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      // ============================================
+      // 1. منطق الزوم (Zoom Logic) - تمت إضافته
+      // ============================================
+      let currentZoom = parseFloat(localStorage.getItem('appZoomLevel')) || 1.0;
+      // تطبيق الزوم المحفوظ عند الفتح
+      if (currentZoom !== 1.0) document.body.style.zoom = currentZoom;
+      window.applyZoom = function (level) {
+        document.body.style.zoom = level;
+        localStorage.setItem('appZoomLevel', level);
+        currentZoom = level;
+      }
+      window.zoomIn = function () {
+        if (currentZoom < 3.0) applyZoom(currentZoom + 0.1);
+      }
+      window.zoomOut = function () {
+        if (currentZoom > 0.5) applyZoom(currentZoom - 0.1);
+      }
+      window.resetZoom = function () {
+        applyZoom(1.0);
+      }
+      // دعم اختصارات الكيبورد (Ctrl +/-)
+      document.addEventListener('keydown', function (event) {
+        if (event.ctrlKey) {
+          if (event.key === '=' || event.key === '+') {
+            event.preventDefault();
+            zoomIn();
+          } else if (event.key === '-') {
+            event.preventDefault();
+            zoomOut();
+          } else if (event.key === '0') {
+            event.preventDefault();
+            resetZoom();
+          }
+        }
+      });
+
+      // ============================================
+      // 2. منطق الطباعة (Print Logic)
+      // ============================================
+      let printController = null;
+      let progressInterval = null;
+      const overlay = document.getElementById('print-overlay');
+      const progressBar = document.getElementById('print-progress-bar');
+      const cancelBtn = document.getElementById('cancel-print-btn');
+      const progressText = document.querySelector('#print-overlay h5');
+
+      window.startPrintProcess = function (url, itemCount = 1, msPerItem = 100) {
+        overlay.style.display = 'flex';
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+        progressBar.classList.remove('bg-success', 'bg-danger');
+        progressBar.classList.add('bg-primary');
+        progressText.textContent = itemCount > 1
+          ? `جاري تحضير ${itemCount} إيصال للطباعة...`
+          : 'جاري تحضير الإيصال للطباعة...';
+
+        printController = new AbortController();
+        const signal = printController.signal;
+        const baseTime = 3000;
+        const estimatedDuration = baseTime + (itemCount * msPerItem);
+        const updateInterval = 100;
+        const totalSteps = estimatedDuration / updateInterval;
+        let currentStep = 0;
+
+        progressInterval = setInterval(() => {
+          currentStep++;
+          let percentage = Math.round((currentStep / totalSteps) * 100);
+          if (percentage > 95) {
+            percentage = 95;
+          } else {
+            progressBar.style.width = percentage + '%';
+            progressBar.textContent = percentage + '%';
+          }
+        }, updateInterval);
+
+        fetch(url, { signal: signal })
+          .then(response => {
+            if (!response.ok) throw new Error('فشل التحميل');
+            return response.blob();
+          })
+          .then(blob => {
+            clearInterval(progressInterval);
+            progressBar.style.width = '100%';
+            progressBar.textContent = '100%';
+            progressBar.classList.replace('bg-primary', 'bg-success');
+            progressText.textContent = 'تم إنشاء الملف بنجاح!';
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = `طباعة_${new Date().getTime()}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => { overlay.style.display = 'none'; }, 1500);
+          })
+          .catch(err => {
+            clearInterval(progressInterval);
+            if (err.name === 'AbortError') {
+              console.log('تم إلغاء الطباعة');
+            } else {
+              alert('حدث خطأ: ' + err.message);
+              overlay.style.display = 'none';
+            }
+          });
+      };
+
+      cancelBtn.addEventListener('click', function () {
+        if (printController) {
+          printController.abort();
+          clearInterval(progressInterval);
+          progressBar.classList.replace('bg-primary', 'bg-danger');
+          progressBar.textContent = 'تم الإلغاء';
+          setTimeout(() => { overlay.style.display = 'none'; }, 500);
+        }
+      });
+    });
+  </script>
+  <script src="{% static 'js/htmx.min.js' %}"></script>
+
+  <!-- Modal الترقية لباقة Pro -->
+  <div class="modal fade" id="proModal" tabindex="-1" aria-labelledby="proModalLabel" aria-hidden="true" dir="rtl">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-warning">
+        <div class="modal-header bg-warning-subtle">
+          <h5 class="modal-title fw-bold text-dark" id="proModalLabel"><i class="bi bi-lock-fill text-warning fs-4"></i>
+            ميزة مدفوعة</h5>
+          <button type="button" class="btn-close m-0" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body text-center py-4">
+          <i class="bi bi-rocket-takeoff-fill text-primary" style="font-size: 3rem;"></i>
+          <h4 class="mt-3 fw-bold">الترقية إلى باقة الإدارة الكاملة (Pro)</h4>
+          <p class="text-muted mt-2">
+            هذه الميزة غير متاحة في باقة "الطباعة فقط" الحالية.<br>
+            للتمتع بإدارة متكاملة للمخزون، وتقارير الأرباح الدقيقة، ومتابعة المحصلين والديون، يرجى ترقية اشتراكك.
+          </p>
+        </div>
+        <div class="modal-footer bg-light justify-content-center">
+          <a href="{% url 'subscription_dashboard' %}" class="btn btn-primary fw-bold px-4">ترقية الحساب الآن</a>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+        </div>
+      </div>
+    </div>
+  </div>
+<div class="modal fade" id="dynamicPrintModal" tabindex="-1" aria-hidden="true" dir="rtl">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-white text-dark py-2" style="border-bottom: 1px solid rgba(0,0,0,0.05);">
+        <h5 class="modal-title" id="dynamicPrintTitle"><i class="bi bi-printer-fill text-primary"></i> إعدادات الطباعة</h5>
+        <button type="button" class="btn-close m-0" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="dynamicPrintForm" action="" method="POST">
+        {% csrf_token %}
+        <div class="modal-body text-start">
+          <label class="form-label fw-bold">اختر الطابعة:</label>
+          <select name="selected_printer" class="form-select mb-3">
+            <option value="">-- الطابعة الافتراضية للويندوز --</option>
+            {% for printer in printers %}
+            <option value="{{ printer }}">{{ printer }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="modal-footer py-2 d-flex justify-content-between">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+          <button type="submit" class="btn btn-primary px-4"
+            onclick="this.innerHTML='جاري الإرسال للطابعة...'; this.style.pointerEvents='none';">
+            بدء الطباعة
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openDynamicPrintModal(url, title) {
+    document.getElementById('dynamicPrintForm').action = url;
+    document.getElementById('dynamicPrintTitle').innerHTML = '<i class="bi bi-printer-fill"></i> ' + title;
+  }
+</script>
+<script>
+  async function startSmartBatchPrint(url, totalReceipts) {
+    if (window.isBatchPrinting) return;
+    window.isBatchPrinting = true;
+
+    // 1. إغلاق نافذة اختيار الطابعة
+    const printerModal = document.getElementById('printerModal');
+    if (printerModal) {
+      bootstrap.Modal.getInstance(printerModal).hide();
+    }
+
+    // 2. تجهيز عناصر الواجهة
+    const printerName = document.getElementById('selectedPrinter').value;
+    const overlay = document.getElementById('smartPrintOverlay');
+    const progressBar = document.getElementById('smartProgressBar');
+    const statusText = document.getElementById('printStatusText');
+    const detailsText = document.getElementById('printDetailsText');
+    const cancelBtn = document.getElementById('cancelPrintBtn');
+
+    // 3. متغيرات التحكم والإلغاء
+    let isCancelled = false;
+    const limit = 5; // عدد الفواتير في الدفعة
+    let completedReceipts = 0; // عداد الوصلات الفعلي
+
+    // إظهار الشاشة وتصفير العدادات
+    overlay.classList.add('show');
+    progressBar.style.width = '0%';
+    progressBar.innerText = '0%';
+    cancelBtn.disabled = false;
+    cancelBtn.innerHTML = '<i class="bi bi-stop-circle-fill"></i> إيقاف الطباعة';
+
+    // 🔴 تفعيل حماية المتصفح لمنع المستخدم من عمل Refresh أو رجوع
+    window.onbeforeunload = function () {
+      return "جاري الطباعة! إغلاق الصفحة سيؤدي إلى إيقاف العملية. هل أنت متأكد؟";
+    };
+
+    // 🔴 تفعيل زر الإلغاء
+    cancelBtn.onclick = function () {
+      if (confirm("هل أنت متأكد أنك تريد إيقاف الطباعة الآن؟\nسيتم طباعة الأوراق التي وصلت للطابعة فقط.")) {
+        isCancelled = true;
+        cancelBtn.disabled = true;
+        cancelBtn.innerHTML = "جاري الإيقاف...";
+        statusText.innerText = "⚠️ تم إرسال أمر إيقاف الطباعة!";
+      }
+    };
+
+    // 4. حلقة الإرسال للسيرفر
+    for (let offset = 0; offset < totalReceipts; offset += limit) {
+      // إذا ضغط المستخدم على زر الإلغاء، اخرج من اللوب فوراً
+      if (isCancelled) {
+        detailsText.innerText = `تم إيقاف العملية بعد طباعة ${completedReceipts} وصل.`;
+        break;
+      }
+
+      let currentBatchEnd = Math.min(offset + limit, totalReceipts);
+      statusText.innerText = `⏳ جاري الطباعة...`;
+      detailsText.innerText = `(إرسال الوصلات من ${offset + 1} إلى ${currentBatchEnd}) من إجمالي ${totalReceipts} وصل`;
+
+      try {
+        const formData = new FormData();
+        formData.append('selected_printer', printerName);
+        formData.append('offset', offset);
+        formData.append('limit', limit);
+
+        // جلب مفتاح الأمان
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        const response = await fetch(url, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            // 🔴 إرسال مفتاح الأمان في الـ Headers (الطريقة الأقوى لجانغو)
+            'X-CSRFToken': csrfToken
+          }
+        });
+
+        // 🔴 اصطياد الخطأ (400 أو 500) قبل أن يحاول قراءته كـ JSON
+        if (!response.ok) {
+          const errorHtml = await response.text();
+          console.error("الخطأ القادم من السيرفر:", errorHtml);
+
+          // فتح صفحة الخطأ في نافذة جديدة لتقرأ سبب رفض جانغو بوضوح
+          const newWindow = window.open();
+          newWindow.document.write(errorHtml);
+
+          alert(`توقفت الطباعة عند الدفعة ${completedReceipts / limit + 1} بسبب رفض السيرفر (خطأ ${response.status}).\nتم فتح نافذة جديدة بها تفاصيل الخطأ.`);
+          break; // إيقاف الطباعة
+        }
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+          completedReceipts = currentBatchEnd;
+          let percentage = Math.round((completedReceipts / totalReceipts) * 100);
+
+          progressBar.style.width = percentage + '%';
+          progressBar.innerText = percentage + '%';
+
+          if (completedReceipts < totalReceipts && !isCancelled) {
+            statusText.innerText = "⏸️ استراحة الطابعة لتجنب التكدس...";
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+        } else {
+          alert('توقفت الطباعة بسبب: ' + data.message);
+          break;
+        }
+
+      } catch (error) {
+        console.error("خطأ تقني في المتصفح:", error);
+        alert('حدث خطأ في المتصفح، يرجى مراجعة الـ Console (F12).');
+        break;
+      }
+    }
+
+    // 5. إنهاء العملية (سواء نجاح أو إلغاء)
+    // 🔴 إلغاء حماية المتصفح
+    window.onbeforeunload = null;
+
+    if (!isCancelled && completedReceipts === totalReceipts) {
+      statusText.innerText = "✅ تمت طباعة كافة الوصلات بنجاح!";
+      detailsText.innerText = `اكتمل إرسال ${totalReceipts} وصل للطابعة.`;
+      cancelBtn.style.display = 'none'; // إخفاء الزر عند النجاح
+    }
+
+    // إخفاء الشاشة بعد ثانيتين
+    setTimeout(() => {
+      overlay.classList.remove('show');
+      cancelBtn.style.display = 'inline-block'; // إعادته للمرات القادمة
+      window.isBatchPrinting = false;
+    }, 2500);
+  }
+</script>
+<div id="smartPrintOverlay" class="print-overlay">
+  <div class="print-modal-box">
+    <div class="mb-3 text-primary">
+      <i class="bi bi-printer-fill" style="font-size: 3rem; animation: pulse 1.5s infinite;"></i>
+    </div>
+
+    <h4 class="fw-bold text-dark mb-2">جاري الطباعة... الرجاء عدم إغلاق الصفحة</h4>
+
+    <p class="text-primary fw-bold mb-1 fs-5" id="printStatusText">بدء الاتصال...</p>
+    <p class="text-muted small mb-3" id="printDetailsText">تجهيز البيانات...</p>
+
+    <div class="custom-progress-bar mb-4">
+      <div id="smartProgressBar" class="custom-progress-fill">0%</div>
+    </div>
+
+    <button id="cancelPrintBtn" class="btn btn-outline-danger btn-sm px-4 fw-bold">
+      <i class="bi bi-stop-circle-fill"></i> إيقاف الطباعة
+    </button>
+  </div>
+</div>
+
+<style>
+  /* تحديث الـ CSS لمنع أي نقرات خارج المربع وتغطية كامل الشاشة بقوة */
+.print-overlay {
+        position: fixed !important;
+        top: 0 !important; 
+        left: 0 !important; 
+        right: 0 !important; 
+        bottom: 0 !important;
+        width: 100vw !important; 
+        height: 100vh !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: rgba(255, 255, 255, 0.9) !important; 
+        backdrop-filter: blur(10px);
+        z-index: 2147483647 !important; /* القوة القصوى */
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+        opacity: 0; 
+        visibility: hidden; 
+        pointer-events: none; 
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+
+  .print-overlay.show {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: all;
+    /* تفعيل النقر فقط على محتويات الشاشة */
+  }
+
+  .print-modal-box {
+    background: #ffffff;
+    padding: 40px;
+    border-radius: 20px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.2);
+    text-align: center;
+    transform: translateY(20px);
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  .print-overlay.show .print-modal-box {
+    transform: translateY(0);
+  }
+
+  .custom-progress-bar {
+    height: 25px;
+    border-radius: 20px;
+    background-color: #e9ecef;
+    overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+
+  .custom-progress-fill {
+    height: 100%;
+    background: linear-gradient(45deg, #0d6efd, #0dcaf0);
+    background-size: 200% 200%;
+    animation: gradientMove 2s ease infinite;
+    width: 0%;
+    transition: width 0.3s linear;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+  }
+
+  @keyframes gradientMove {
+    0% {
+      background-position: 0% 50%;
+    }
+
+    50% {
+      background-position: 100% 50%;
+    }
+
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+
+  @keyframes pulse {
+    0% {
+      transform: scale(1);
+      opacity: 1;
+    }
+
+    50% {
+      transform: scale(1.1);
+      opacity: 0.7;
+    }
+
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+</style>
+<script>
+  // 1. دالة لتجهيز بيانات الوصل المفرط وفتح النافذة
+  function prepareSinglePrint(url, receiptNum) {
+    document.getElementById('pendingSingleUrl').value = url;
+    document.getElementById('targetReceiptNum').innerText = receiptNum;
+    const modal = new bootstrap.Modal(document.getElementById('singlePrinterModal'));
+    modal.show();
+  }
+
+  // 2. دالة التنفيذ الفعلي (التي تظهر الشاشة الضبابية)
+  async function executeSinglePrint() {
+    // إغلاق نافذة الاختيار
+    const modalEl = document.getElementById('singlePrinterModal');
+    bootstrap.Modal.getInstance(modalEl).hide();
+
+    const url = document.getElementById('pendingSingleUrl').value;
+    const printerName = document.getElementById('singleSelectedPrinter').value;
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    // إظهار الشاشة الضبابية الموحدة
+    const overlay = document.getElementById('smartPrintOverlay');
+    const progressBar = document.getElementById('smartProgressBar');
+    const statusText = document.getElementById('printStatusText');
+    const detailsText = document.getElementById('printDetailsText');
+    const cancelBtn = document.getElementById('cancelPrintBtn');
+
+    overlay.classList.add('show');
+    progressBar.style.width = '50%';
+    progressBar.innerText = '50%';
+    statusText.innerText = "⏳ جاري الإرسال للطابعة المحددة...";
+    detailsText.innerText = "معالجة إيصال فردي";
+    if (cancelBtn) cancelBtn.style.display = 'none';
+
+    try {
+      const formData = new FormData();
+      formData.append('selected_printer', printerName);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': csrfToken
+        }
+      });
+
+      if (response.ok) {
+        progressBar.style.width = '100%';
+        progressBar.innerText = '100%';
+        statusText.innerText = "✅ اكتملت العملية!";
+        setTimeout(() => {
+          overlay.classList.remove('show');
+          if (cancelBtn) cancelBtn.style.display = 'inline-block';
+        }, 1200);
+      } else {
+        alert('حدث خطأ في الطابعة المحددة.');
+        overlay.classList.remove('show');
+      }
+    } catch (error) {
+      alert('فشل الاتصال بالسيرفر.');
+      overlay.classList.remove('show');
+    }
+  }
+</script>
+
+<!-- ==========================================
+     3. المزامنة التلقائية مع الأونلاين (Auto-Sync)
+     ========================================== -->
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+    
+    function performAutoSync() {
+      const csrfTokenMatch = document.querySelector('[name=csrfmiddlewaretoken]');
+      if (!csrfTokenMatch) return; // Prevent errors if no form with CSRF is on the page
+      
+      const csrfToken = csrfTokenMatch.value;
+      
+      fetch('/tools/cloud-push-ajax/', {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': csrfToken
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success' && data.synced_count > 0) {
+          console.log(`[Auto-Sync] Successfully synced ${data.synced_count} items to the cloud.`);
+          // Optional: You could trigger a small non-intrusive toast notification here
+        } else if (data.status === 'error') {
+          console.error(`[Auto-Sync] Error: ${data.message}`);
+        } else {
+          console.log('[Auto-Sync] No new data to sync.');
+        }
+      })
+      .catch(error => {
+        console.error('[Auto-Sync] Connection failed:', error);
+      });
+    }
+
+    // Run once on load after 30 seconds
+    setTimeout(performAutoSync, 30000);
+    
+    // Then run repeatedly every 5 minutes
+    setInterval(performAutoSync, SYNC_INTERVAL_MS);
+  });
+</script>
+
+<!-- Tabler Core JS -->
+<script src="{% static 'js/tabler.min.js' %}"></script>
+</div>
+</body>
+
+
+</html>

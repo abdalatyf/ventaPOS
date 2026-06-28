@@ -1,0 +1,103 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="{% static 'css/tabler.rtl.min.css' %}">
+  <link rel="stylesheet" href="{% static 'css/cairo-local.css' %}">
+  <link rel="stylesheet" href="{% static 'salesapp/vendor/bootstrap-icons/font/bootstrap-icons.css' %}">
+  <title>تسجيل الدخول - VentaPOS</title>
+  <style>
+    body { font-family: 'Cairo', sans-serif; background-color: #f8f9fa; }
+    .card-login { border-radius: 12px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+    .nav-tabs .nav-link { font-weight: 600; color: #6c7a91; border: none; border-bottom: 3px solid transparent; padding: 1rem; }
+    .nav-tabs .nav-link.active { color: #1A4571; border-bottom-color: #1A4571; background: transparent; }
+    .btn-primary { background-color: #1A4571; border-color: #1A4571; }
+    .btn-primary:hover { background-color: #133153; }
+    .btn-success { background-color: #2F9E44; border-color: #2F9E44; }
+  </style>
+</head>
+<body class="d-flex flex-column">
+  <div class="page page-center">
+    <div class="container container-tight py-4">
+      <div class="text-center mb-4">
+        <img src="{% static 'salesapp/images/venta.png' %}" height="80" alt="Venta POS">
+        <h2 class="mt-3 text-dark">Venta POS</h2>
+        <p class="text-muted">نظام إدارة المبيعات والتقسيط المتقدم</p>
+      </div>
+
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags }} alert-dismissible" role="alert">
+            <div class="d-flex">
+              <div>{{ message }}</div>
+            </div>
+            <a class="btn-close" data-bs-dismiss="alert" aria-label="close"></a>
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      <div class="card card-login">
+        <div class="card-body">
+          
+          {% if not is_cloud %}
+          <!-- Local Login (Master PC) -->
+          <h3 class="text-center mb-4 text-primary fw-bold">تسجيل دخول الإدارة</h3>
+          <form method="POST">
+            {% csrf_token %}
+            <input type="hidden" name="login_type" value="local">
+            <div class="mb-3">
+              <label class="form-label fw-bold text-muted">اسم المستخدم</label>
+              <input type="text" name="username" class="form-control form-control-lg" required>
+            </div>
+            <div class="mb-4">
+              <label class="form-label fw-bold text-muted">كلمة المرور</label>
+              <input type="password" name="password" class="form-control form-control-lg" required>
+            </div>
+            <div class="form-footer">
+              <button type="submit" class="btn btn-primary w-100 btn-lg fw-bold">تسجيل الدخول</button>
+            </div>
+          </form>
+          {% else %}
+          
+          <!-- Cloud Login (Viewer PC) -->
+          <h3 class="text-center mb-4 text-success fw-bold"><i class="bi bi-cloud-check"></i> دخول الفروع أونلاين</h3>
+          <form method="POST">
+            {% csrf_token %}
+            <input type="hidden" name="login_type" value="cloud">
+            <div class="mb-3">
+              <label class="form-label fw-bold text-muted">بيانات الفرع أونلاين (Company-User)</label>
+              <div class="input-icon">
+                <span class="input-icon-addon"><i class="bi bi-cloud"></i></span>
+                <input type="text" name="cloud_username_full" class="form-control form-control-lg" placeholder="مثال: 1050-ahmed" required style="direction: ltr;">
+              </div>
+              <small class="form-hint text-muted mt-2">اكتب كود الشركة ثم الشرطة ثم اسمك</small>
+            </div>
+            <div class="mb-4">
+              <label class="form-label fw-bold text-muted">كلمة المرور</label>
+              <div class="input-icon">
+                <span class="input-icon-addon"><i class="bi bi-lock"></i></span>
+                <input type="password" name="cloud_password" class="form-control form-control-lg" required>
+              </div>
+            </div>
+            <div class="form-footer">
+              <button type="submit" class="btn btn-success w-100 btn-lg fw-bold"><i class="bi bi-cloud-check me-2"></i> اتصال بالأونلاين</button>
+            </div>
+          </form>
+          {% endif %}
+          
+        </div>
+      </div>
+
+      <div class="text-center text-muted mt-4">
+        <a href="{% url 'emergency_reset' %}" class="text-decoration-none text-danger small"><i class="bi bi-shield-exclamation"></i> نسيت بيانات الدخول؟ (استعادة كود الطوارئ)</a>
+      </div>
+      
+    </div>
+  </div>
+  
+  <!-- Add Tabler JS (falls back to bootstrap bundle) -->
+  <script src="{% static 'salesapp/vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+</body>
+</html>

@@ -1,0 +1,97 @@
+{% extends "salesapp/base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}تقرير المستحقات - {{ current_branch.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded shadow-sm border">
+        <div>
+            <h4 class="fw-bold text-dark mb-0"><i class="bi bi-person-lines-fill"></i> تقرير مرتبات وعمولات المناديب
+            </h4>
+            <span class="text-muted small">فرع {{ current_branch.name }} - عن شهر: <span class="fw-bold text-primary">{{ selected_month }} / {{ selected_year }}</span></span>
+        </div>
+
+        <form method="get" action="{% url 'salaries_report' %}" class="d-flex align-items-center gap-2">
+            <select name="month" class="form-select form-select-sm fw-bold" style="width: 100px;">
+                {% for m in available_months %}
+                <option value="{{ m }}" {% if selected_month == m %}selected{% endif %}>شهر {{ m }}</option>
+                {% endfor %}
+            </select>
+            <select name="year" class="form-select form-select-sm fw-bold" style="width: 80px;">
+                {% for y in available_years %}
+                <option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> عرض</button>
+        </form>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white fw-bold py-3">
+            <i class="bi bi-table"></i> تفاصيل الاستحقاقات المالية
+        </div>
+        <div class="card-body p-0">
+            {% if report_data %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 text-center table-bordered">
+                    <thead class="table-light align-middle">
+                        <tr>
+                            <th rowspan="2" class="bg-light">اسم المندوب</th>
+                            <th colspan="3" class="text-muted small">مؤشرات الأداء (للعلم)</th>
+                            <th colspan="3" class="table-primary border-primary">حساب المستحقات (القبض)</th>
+                        </tr>
+                        <tr>
+                            <th class="small">مبيعات كاش</th>
+                            <th class="small">مبيعات قسط</th>
+                            <th class="small text-primary fw-bold">التحصيل الفعلي</th>
+
+                            <th class="table-primary border-primary text-primary">عمولة البيع<br><small>(من
+                                    الأصناف)</small></th>
+                            <th class="table-primary border-primary text-primary">عمولة التحصيل<br><small>(10%)</small>
+                            </th>
+                            <th class="table-dark text-white">إجمالي المستحق</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in report_data %}
+                        <tr>
+                            <td class="text-start fw-bold">{{ item.name }}</td>
+
+                            <td class="text-muted">{{ item.cash_sales|intcomma }}</td>
+                            <td class="text-muted">{{ item.credit_sales|intcomma }}</td>
+                            <td class="fw-bold text-dark bg-light">{{ item.collected_amount|intcomma }}</td>
+
+                            <td class="text-primary fw-bold bg-primary-subtle">{{ item.sales_commission|floatformat:2|intcomma }}</td>
+                            <td class="text-primary fw-bold bg-primary-subtle">{{ item.collection_commission|floatformat:2|intcomma }}</td>
+                            <td class="fw-bold text-white bg-dark fs-5">{{ item.total_salary|floatformat:0|intcomma }}
+                                جم</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="table-secondary fw-bold fs-6">
+                            <td>الإجمالي الكلي</td>
+                            <td>{{ total_cash_sales_all|intcomma }}</td>
+                            <td>{{ total_credit_sales_all|intcomma }}</td>
+                            <td>{{ total_collected_all|intcomma }}</td>
+
+                            <td class="text-primary">{{ total_sales_comm_all|floatformat:2|intcomma }}</td>
+                            <td class="text-primary">{{ total_coll_comm_all|floatformat:2|intcomma }}</td>
+                            <td class="bg-dark text-white">{{ total_salary_all|floatformat:0|intcomma }} جم</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                لا توجد بيانات مرتبات أو عمولات لهذا الشهر.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

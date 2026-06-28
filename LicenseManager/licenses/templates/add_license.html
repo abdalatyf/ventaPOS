@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card p-4">
+            <h3 class="mb-4 fw-bold text-success">🔑 إصدار رخصة جديدة</h3>
+            <form method="POST">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <label class="form-label">اختر العميل</label>
+                    {{ form.client }}
+                    <small><a href="{% url 'add_client' %}" class="text-decoration-none">+ عميل جديد؟</a></small>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">نوع الباقة</label>
+                        {{ form.product_id }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">السعر (جنية)</label>
+                        {{ form.price }}
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">تاريخ البداية</label>
+                    {{ form.start_date }}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">ملاحظات سرية (اختياري)</label>
+                    {{ form.notes }}
+                </div>
+
+                <button type="submit" class="btn btn-success btn-lg w-100 mt-3">✨ إصدار الكود الآن</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

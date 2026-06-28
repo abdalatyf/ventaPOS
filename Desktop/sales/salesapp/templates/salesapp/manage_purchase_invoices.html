@@ -1,0 +1,322 @@
+{% extends 'salesapp/base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<style>
+    .input-wrapper { position: relative; }
+    .suggestions-dropdown {
+        position: absolute; top: 100%; left: 0; right: 0; z-index: 1050;
+        background: #fff; border: 1px solid #ced4da; border-top: none;
+        max-height: 250px; overflow-y: auto; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 0 0 5px 5px; list-style: none; padding: 0; margin: 0; display: none;
+    }
+    .suggestions-dropdown li {
+        padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #f8f9fa;
+        font-size: 14px; text-align: right; color: #333;
+    }
+    .suggestions-dropdown li:hover, .suggestions-dropdown li.active {
+        background-color: #198754; color: white;
+    }
+    .suggestions-dropdown li .meta { font-size: 12px; color: #888; display: block; margin-top: 2px; }
+    .suggestions-dropdown li.active .meta, .suggestions-dropdown li:hover .meta { color: #e0e0e0; }
+</style>
+
+<div class="container mt-4">
+    <h3 class="mb-4 text-center fw-bold text-success"><i class="bi bi-cart-check-fill"></i> إدارة المشتريات والموردين</h3>
+
+    <ul class="nav nav-tabs nav-fill mb-4 fw-bold shadow-sm rounded-top">
+        <li class="nav-item">
+            <a class="nav-link text-dark" href="{% url 'manage_products' %}"><i class="bi bi-box-seam"></i> 1. المخزن</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link text-dark" href="{% url 'manage_suppliers' %}"><i class="bi bi-building"></i> 2. الموردين</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link active bg-success text-white" href="{% url 'manage_purchase_invoices' %}">
+                <i class="bi bi-receipt"></i> 3. فواتير الشراء ومرتجع المصنع
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link text-dark" href="{% url 'search_purchase_invoices' %}"><i class="bi bi-search"></i> 4. سجل الفواتير</a>
+        </li>
+    </ul>
+
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} fw-bold shadow-sm alert-dismissible fade show">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <form method="POST" id="purchase-form">
+        {% csrf_token %}
+        <div class="row g-4">
+            <div class="col-lg-12">
+                <div class="card shadow-sm border-success">
+                    <div class="card-header bg-success text-white py-3">
+                        <h5 class="mb-0 fw-bold"><i class="bi bi-info-square"></i> البيانات الأساسية للفاتورة</h5>
+                    </div>
+                    <div class="card-body bg-light">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">نوع العملية <span class="text-danger">*</span></label>
+                                <div class="d-flex gap-4 mt-1 p-2 bg-white border rounded">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="invoice_type" id="type_purchase" value="PURCHASE" checked>
+                                        <label class="form-check-label fw-bold text-success" for="type_purchase">شراء (إضافة للمخزن)</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="invoice_type" id="type_return" value="RETURN">
+                                        <label class="form-check-label fw-bold text-danger" for="type_return">مرتجع (خصم من المخزن)</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">المورد<span class="text-danger">*</span></label>
+                                <select class="form-select border-success fw-bold" name="supplier_id" required>
+                                    <option value="">-- اختر المورد المسجل --</option>
+                                    {% for supplier in suppliers %}
+                                    <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label fw-bold">الشهر</label>
+                                <input type="number" class="form-control text-center fw-bold" name="invoice_month" value="{{ current_month }}" min="1" max="12" required>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label fw-bold">السنة</label>
+                                <input type="number" class="form-control text-center fw-bold" name="invoice_year" value="{{ current_year }}" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-12">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-dark text-white py-3">
+                        <h5 class="mb-0 fw-bold"><i class="bi bi-cart-plus"></i> إدراج الأصناف في الفاتورة</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2 align-items-end mb-4 p-3 bg-light rounded border border-2" id="add-item-row">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">بحث ذكي عن المنتج (بالأسهم و Enter)</label>
+                                <div class="input-wrapper">
+                                    <input type="text" class="form-control fw-bold border-primary" id="product_search" placeholder="اكتب اسم الصنف هنا..." autocomplete="off">
+                                    <ul class="suggestions-dropdown" id="list-product"></ul>
+                                </div>
+                                <input type="hidden" id="selected_product_id">
+                                <input type="hidden" id="selected_product_name">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small fw-bold">الكمية</label>
+                                <input type="number" class="form-control text-center fw-bold" id="item_quantity" min="1" value="1">
+                            </div>
+
+                            <div class="col-md-2 pricing-fields">
+                                <label class="form-label small fw-bold text-success">سعر الشراء</label>
+                                <input type="number" class="form-control text-center fw-bold" id="item_price" min="0" placeholder="سعر الفاتورة">
+                            </div>
+
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-primary w-100 fw-bold py-2" id="add-item-btn">
+                                    <i class="bi bi-plus-circle"></i> إضافة
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover text-center align-middle" id="items-table">
+                                <thead class="table-secondary">
+                                    <tr>
+                                        <th style="width: 45%;">اسم الصنف</th>
+                                        <th>الكمية</th>
+                                        <th class="pricing-col">سعر الشراء</th>
+                                        <th class="pricing-col">الإجمالي</th>
+                                        <th style="width: 50px;">حذف</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="items-table-body"></tbody>
+                            </table>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mt-4 border-top pt-3">
+                            <h3 class="fw-bold text-success pricing-fields m-0">إجمالي الفاتورة الكلي: <span id="total-amount-display">0</span> ج.م</h3>
+                            <input type="hidden" name="invoice_items_json" id="invoice_items_json">
+                            <button type="submit" class="btn btn-success btn-lg px-5 fw-bold shadow-lg">
+                                <i class="bi bi-save-fill"></i> حفظ الفاتورة وتحديث المخزن
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const productSearchInput = document.getElementById('product_search');
+        const list = document.getElementById('list-product');
+        const typePurchase = document.getElementById('type_purchase');
+        const typeReturn = document.getElementById('type_return');
+        const pricingFields = document.querySelectorAll('.pricing-fields');
+        const pricingCols = document.querySelectorAll('.pricing-col');
+
+        let invoiceItems = [];
+        let currentFocus = -1;
+
+        function togglePricingVisibility() {
+            const isReturn = typeReturn.checked;
+            pricingFields.forEach(el => el.style.display = isReturn ? 'none' : 'block');
+            pricingCols.forEach(el => el.style.display = isReturn ? 'none' : 'table-cell');
+            renderItemsTable();
+        }
+        typePurchase.addEventListener('change', togglePricingVisibility);
+        typeReturn.addEventListener('change', togglePricingVisibility);
+
+        productSearchInput.addEventListener('input', function () {
+            const term = this.value.trim();
+            list.innerHTML = '';
+            currentFocus = -1;
+            if (term.length < 1) { list.style.display = 'none'; return; }
+
+            const invM = document.querySelector('input[name="invoice_month"]').value;
+            const invY = document.querySelector('input[name="invoice_year"]').value;
+
+            fetch(`/api/product-suggestions/?term=${encodeURIComponent(term)}&month=${invM}&year=${invY}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.length > 0) {
+                        list.style.display = 'block';
+                        data.forEach((item) => {
+                            const li = document.createElement('li');
+                            const regex = new RegExp(`(${term})`, "gi");
+                            const highlighted = item.value.replace(regex, "<strong>$1</strong>");
+                            
+                            let metaHtml = '';
+                            if(item.max !== undefined) {
+                                metaHtml = `<span class="meta">(الكمية المتاحة: ${item.max})</span>`;
+                            }
+
+                            li.innerHTML = `<span>${highlighted}</span> ${metaHtml}`;
+                            li.onclick = () => selectProduct(item);
+                            list.appendChild(li);
+                        });
+                    } else {
+                        list.style.display = 'none';
+                    }
+                })
+                .catch(err => console.error("Error Autocomplete:", err));
+        });
+
+        productSearchInput.addEventListener('keydown', function (e) {
+            let items = list.getElementsByTagName('li');
+            if (e.key === 'ArrowDown') { currentFocus++; addActive(items); } 
+            else if (e.key === 'ArrowUp') { currentFocus--; addActive(items); } 
+            else if (e.key === 'Enter') {
+                if (list.style.display === 'block') {
+                    e.preventDefault();
+                    if (currentFocus > -1 && items[currentFocus]) items[currentFocus].click();
+                }
+            }
+        });
+
+        function selectProduct(item) {
+            productSearchInput.value = item.value;
+            document.getElementById('selected_product_id').value = item.id;
+            document.getElementById('selected_product_name').value = item.value;
+            document.getElementById('item_price').value = '';
+
+            list.style.display = 'none';
+            document.getElementById('item_quantity').focus();
+            document.getElementById('item_quantity').select();
+        }
+
+        function addActive(x) {
+            if (!x || x.length === 0) return false;
+            removeActive(x);
+            if (currentFocus >= x.length) currentFocus = 0;
+            if (currentFocus < 0) currentFocus = (x.length - 1);
+            if (x[currentFocus]) {
+                x[currentFocus].classList.add("active");
+                x[currentFocus].scrollIntoView({ block: "nearest" });
+            }
+        }
+
+        function removeActive(x) {
+            for (let i = 0; i < x.length; i++) x[i].classList.remove("active");
+        }
+
+        document.getElementById('add-item-btn').addEventListener('click', function () {
+            const id = document.getElementById('selected_product_id').value;
+            const name = document.getElementById('selected_product_name').value;
+            const qty = parseInt(document.getElementById('item_quantity').value) || 0;
+            const price = parseFloat(document.getElementById('item_price').value) || 0;
+
+            if (!id || qty <= 0) { alert('برجاء اختيار الصنف وتحديد الكمية.'); return; }
+
+            const idx = invoiceItems.findIndex(i => String(i.id) === String(id));
+            if (idx > -1) {
+                invoiceItems[idx].quantity += qty;
+                invoiceItems[idx].price = price;
+            } else {
+                invoiceItems.push({ id, name, quantity: qty, price });
+            }
+
+            renderItemsTable();
+
+            productSearchInput.value = '';
+            document.getElementById('selected_product_id').value = '';
+            document.getElementById('item_quantity').value = 1;
+            document.getElementById('item_price').value = '';
+            productSearchInput.focus();
+        });
+
+        function renderItemsTable() {
+            const tbody = document.getElementById('items-table-body');
+            tbody.innerHTML = '';
+            let total = 0;
+            const isReturn = typeReturn.checked;
+
+            invoiceItems.forEach((item, index) => {
+                const lineTotal = item.quantity * item.price;
+                total += lineTotal;
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                <td class="text-start fw-bold text-dark">${item.name}</td>
+                <td class="fw-bold fs-5">${item.quantity}</td>
+                <td class="pricing-col text-success fw-bold">${item.price}</td>
+                <td class="pricing-col fw-bold bg-light">${lineTotal}</td>
+                <td><button type="button" class="btn btn-outline-danger border-0" onclick="removeItem(${index})"><i class="bi bi-trash-fill"></i></button></td>
+            `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('total-amount-display').innerText = total;
+            document.getElementById('invoice_items_json').value = JSON.stringify(invoiceItems);
+            document.querySelectorAll('.pricing-col').forEach(el => el.style.display = isReturn ? 'none' : 'table-cell');
+        }
+
+        window.removeItem = function (index) {
+            invoiceItems.splice(index, 1);
+            renderItemsTable();
+        };
+
+        document.getElementById('purchase-form').addEventListener('submit', function (e) {
+            if (invoiceItems.length === 0) {
+                e.preventDefault();
+                alert('لا يمكن حفظ فاتورة بدون أصناف!');
+            }
+        });
+
+        document.addEventListener('click', (e) => { if (e.target !== productSearchInput) list.style.display = 'none'; });
+    });
+</script>
+{% endblock %}

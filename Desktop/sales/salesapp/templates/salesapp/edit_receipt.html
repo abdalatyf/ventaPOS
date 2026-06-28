@@ -1,0 +1,738 @@
+{% extends 'salesapp/base.html' %}
+{% load static %}
+{% load sales_filters %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<style>
+    /* تنسيقات قائمة البحث الذكي */
+    .input-wrapper {
+        position: relative;
+    }
+
+    .suggestions-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        z-index: 1050;
+        background: #fff;
+        border: 1px solid #ced4da;
+        border-top: none;
+        max-height: 250px;
+        overflow-y: auto;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 0 0 5px 5px;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: none;
+    }
+
+    .suggestions-dropdown li {
+        padding: 8px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #f8f9fa;
+        color: #333;
+        font-size: 14px;
+        text-align: right;
+    }
+
+    .suggestions-dropdown li:hover,
+    .suggestions-dropdown li.active {
+        background-color: #0d6efd;
+        color: white;
+    }
+
+    .suggestions-dropdown li .meta {
+        font-size: 12px;
+        color: #888;
+        display: block;
+    }
+
+    .suggestions-dropdown li.active .meta,
+    .suggestions-dropdown li:hover .meta {
+        color: #e0e0e0;
+    }
+</style>
+
+<form method="POST" action="{% url 'edit_receipt' receipt.id %}" id="receipt-form">
+    {% csrf_token %}
+
+    {% if error_message %}
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        {{ error_message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card shadow-sm mb-4" id="customer-section">
+                <div class="card-header">
+                    <h2 class="h5 mb-0">1. بيانات العميل</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label for="customer_name" class="form-label">اسم العميل <span id="customer-name-required"
+                                    class="text-danger">*</span></label>
+                            <div class="input-wrapper">
+                                <input type="text" class="form-control" id="customer_name" name="customer_name"
+                                    value="{{ receipt.customer_name }}" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="phone_number" class="form-label">رقم الهاتف</label>
+                            <div class="input-wrapper">
+                                <input type="text" class="form-control arabic-numerals" id="phone_number"
+                                    name="phone_number" value="{{ receipt.phone_number }}" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="address" class="form-label">العنوان</label>
+                            <div class="input-wrapper">
+                                <input type="text" class="form-control arabic-numerals" id="address" name="address"
+                                    value="{{ receipt.address }}" autocomplete="off">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h2 class="h5 mb-0">2. المنتجات المباعة <span class="text-danger">*</span></h2>
+                </div>
+                <div class="card-body d-flex flex-column">
+
+                    {% if is_pro_plan %}
+                    <!-- ============================================== -->
+                    <!-- 🟢 واجهة الـ Pro: بحث ذكي وجدول وربط بالمخزون 🟢 -->
+                    <!-- ============================================== -->
+                    <div class="row g-2 align-items-end mb-3 flex-shrink-0" id="add-item-row">
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">بحث عن المنتج</label>
+                            <div class="input-wrapper">
+                                <input type="text" class="form-control form-control-sm" id="product_search"
+                                    placeholder="اكتب اسم المنتج..." autocomplete="off">
+                                <ul class="suggestions-dropdown" id="list-product"></ul>
+                            </div>
+                            <input type="hidden" id="selected_product_id">
+                            <input type="hidden" id="selected_product_max">
+                            <input type="hidden" id="selected_product_name">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="item_quantity" class="form-label small fw-bold">الكمية</label>
+                            <input type="number" class="form-control form-control-sm text-center arabic-numerals"
+                                id="item_quantity" min="1" value="1">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="item_price" class="form-label small fw-bold">سعر البيع</label>
+                            <input type="number" class="form-control form-control-sm text-center arabic-numerals"
+                                id="item_price" min="0" value="0">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-info btn-sm w-100 fw-bold text-white"
+                                id="add-item-btn">
+                                <i class="bi bi-plus-lg"></i> إضافة
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex-grow-1" style="overflow-y: auto; max-height: 250px;">
+                        <table class="table table-bordered table-sm" id="items-table">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>المنتج</th>
+                                    <th class="text-center">كمية</th>
+                                    <th class="text-center">سعر</th>
+                                    <th class="text-center">إجمالي</th>
+                                    <th class="text-center">حذف</th>
+                                </tr>
+                            </thead>
+                            <tbody id="items-table-body"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="flex-shrink-0 fw-bold fs-5 mt-2">
+                        <div class="row">
+                            <div class="col text-end border-top pt-2">الإجمالي الكلي:</div>
+                            <div class="col-auto text-center border-top pt-2" id="total-amount-display"
+                                style="min-width: 80px;">0
+                            </div>
+                            <div class="col-auto" style="width: 50px;"></div>
+                        </div>
+                    </div>
+                    <input type="hidden" name="sale_items_json" id="sale_items_json"
+                        value="{{ sale_items_json_str|escape }}">
+
+                    {% else %}
+                    <!-- ============================================== -->
+                    <!-- 🔴 واجهة الـ Basic: نص حر وإجمالي محسوب 🔴 -->
+                    <!-- ============================================== -->
+                    <div class="mb-3">
+                        <label for="basic_products_text" class="form-label fw-bold">المنتجات (وصف الفاتورة)</label>
+                        <!-- يتم جلب النص القديم للفاتورة -->
+                        <textarea class="form-control bg-light fs-5" id="basic_products_text" name="basic_products_text"
+                            rows="3" required>{{ receipt.products_text }}</textarea>
+                    </div>
+
+                    <div class="mt-auto pt-3 border-top">
+                        <label class="form-label fw-bold text-primary">إجمالي الفاتورة (يُحسب تلقائياً من الأقساط
+                            والمقدم)</label>
+                        <input type="text" class="form-control form-control-lg text-center fw-bold text-primary"
+                            id="basic_total_amount_display" readonly
+                            style="background-color: #e9ecef; cursor: not-allowed; font-size: 1.5rem;"
+                            value="{{ receipt.total_amount|to_arabic }}">
+                        <input type="hidden" name="basic_total_amount" id="basic_total_amount_hidden"
+                            value="{{ receipt.total_amount }}">
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow-sm mb-4" id="payment-section">
+                <div class="card-header">
+                    <h2 class="h5 mb-0">3. بيانات الدفع والحفظ</h2>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-3">
+                            <label for="down_payment" class="form-label small fw-bold">المقدم</label>
+                            <input type="text" class="form-control form-control-sm text-center fw-bold border-primary"
+                                id="down_payment" name="down_payment" value="{{ receipt.down_payment|to_arabic }}">
+                        </div>
+                        <div class="col-md-9">
+                            <label for="installment_system" class="form-label small fw-bold">وصف نظام القسط <span
+                                    id="installment-required" class="text-danger">*</span></label>
+                            <textarea class="form-control form-control-sm fw-bold text-center bg-white"
+                                id="installment_system" name="installment_system" rows="1"
+                                style="resize: none; overflow: hidden;">{{ receipt.installment_system|to_arabic }}</textarea>
+                        </div>
+                    </div>
+
+                    <div class="mb-3 border-top pt-2">
+                        <label class="form-label small fw-bold text-muted mb-1">حاسبة الأقساط المساعدة (تلقائي)</label>
+                        <div class="row g-1">
+                            {% for i in "123" %}
+                            <div class="col-4">
+                                <div class="p-1 border rounded bg-white text-center system-card">
+                                    <div class="badge bg-secondary mb-1 w-100" style="font-size: 0.6rem;">نظام {{ i }}
+                                    </div>
+                                    <input type="number" name="sys{{ i }}_count"
+                                        class="form-control form-control-sm mb-1 text-center system-input p-0"
+                                        data-sys="{{ i }}" data-type="count" placeholder="شهر"
+                                        style="font-size: 0.8rem;">
+                                    <input type="number" name="sys{{ i }}_amount"
+                                        class="form-control form-control-sm text-center system-input p-0"
+                                        data-sys="{{ i }}" data-type="amount" placeholder="مبلغ"
+                                        style="font-size: 0.8rem;">
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="mt-auto text-center pt-2">
+                        <button type="submit" class="btn btn-success w-100 fw-bold shadow-sm">
+                            <i class="bi bi-save"></i> حفظ التعديلات
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h2 class="h5 mb-0">4. المعلومات الأساسية</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="receipt_number" class="form-label">رقم الوصل</label>
+                            <input type="text" class="form-control" id="receipt_number"
+                                value="{{ receipt.receipt_number|to_arabic }}" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="salesperson_id" class="form-label">المندوب <span
+                                    class="text-danger">*</span></label>
+                            <select class="form-select" id="salesperson_id" name="salesperson_id" required>
+                                <option value="">-- اختر --</option>
+                                {% for person in salespersons %}
+                                <option value="{{ person.id }}" {% if person.id == receipt.salesperson.id %}selected{% endif %}>{{ person.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="area" class="form-label">المنطقة</label>
+                            <div class="input-wrapper">
+                                <input type="text" class="form-control arabic-numerals" id="area" name="area"
+                                    value="{{ receipt.area }}" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-center justify-content-center pt-4">
+                            <div class="form-check form-switch fs-5">
+                                <input class="form-check-input" type="checkbox" role="switch" id="is_cash_sale"
+                                    name="is_cash_sale" {% if receipt.is_cash_sale %}checked{% endif %}>
+                                <label class="form-check-label" for="is_cash_sale">بيع كاش؟</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="sale_year" class="form-label">سنة البيع <span
+                                    class="text-danger">*</span></label>
+                            <input type="number" class="form-control arabic-numerals" id="sale_year" name="sale_year"
+                                value="{{ receipt.sale_year }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="sale_month" class="form-label">شهر البيع <span
+                                    class="text-danger">*</span></label>
+                            <input type="number" class="form-control arabic-numerals" id="sale_month" name="sale_month"
+                                value="{{ receipt.sale_month }}" min="1" max="12" required>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 mt-4">
+            <div class="card shadow border-primary">
+                <div class="card-body p-3 d-flex justify-content-between align-items-center bg-light rounded">
+                    <div class="fs-5 fw-bold text-primary">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <span id="save-status-text">تعديل الفاتورة سيؤدي لإعادة حساب الأقساط و تحديث المخزن.</span>
+                    </div>
+                    <button type="submit" class="btn btn-success btn-lg fw-bold px-5 shadow">
+                        <i class="bi bi-save me-2"></i> حفظ التعديلات
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // --- 1. إعدادات اللغة والأرقام ---
+        const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+
+        function toArabic(str) {
+            return String(str).replace(/[0-9]/g, w => arabicDigits[+w]);
+        }
+
+        function toEnglish(str) {
+            if (!str) return "0";
+            return String(str).replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d));
+        }
+
+        document.body.addEventListener('input', function (e) {
+            if ((e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') &&
+                e.target.type !== 'hidden' && e.target.type !== 'number' && e.target.type !== 'password') {
+                let val = e.target.value;
+                if (/[0-9]/.test(val)) {
+                    let pos = e.target.selectionStart;
+                    e.target.value = toArabic(val);
+                    e.target.setSelectionRange(pos, pos);
+                }
+            }
+        });
+
+        // --- 2. تعريف المتغيرات ---
+        const receiptForm = document.getElementById('receipt-form');
+        const cashSaleCheckbox = document.getElementById('is_cash_sale');
+        const customerSection = document.getElementById('customer-section');
+        const paymentSection = document.getElementById('payment-section');
+
+        const itemQuantityInput = document.getElementById('item_quantity');
+        const itemPriceInput = document.getElementById('item_price');
+        const addItemBtn = document.getElementById('add-item-btn');
+        const itemsTableBody = document.getElementById('items-table-body');
+        const totalAmountDisplay = document.getElementById('total-amount-display');
+        const saleItemsJsonInput = document.getElementById('sale_items_json');
+
+        const downPaymentInput = document.getElementById('down_payment');
+        const systemInputs = document.querySelectorAll('.system-input');
+        const resultTextarea = document.getElementById('installment_system');
+
+        // --- 3. إظهار الخطأ ---
+        function showFormError(message) {
+            const oldAlert = document.getElementById('js-form-alert');
+            if (oldAlert) oldAlert.remove();
+
+            const alertHtml = `
+            <div id="js-form-alert" class="alert alert-danger alert-dismissible fade show mb-4 shadow-sm" role="alert" style="border-right: 5px solid #dc3545;">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-exclamation-triangle-fill fs-4 me-3 text-danger"></i>
+                    <div>
+                        <h5 class="alert-heading h6 fw-bold mb-1">تنبيه هام!</h5>
+                        <p class="mb-0 small">${message}</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>`;
+
+            receiptForm.insertAdjacentHTML('beforebegin', alertHtml);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // --- 4. إدارة المنتجات ---
+        let saleItems = [];
+        try {
+            let initialJson = saleItemsJsonInput.value.replace(/&quot;/g, '"');
+            if (initialJson && initialJson !== '[]') {
+                saleItems = JSON.parse(initialJson);
+                renderItemsTable();
+            }
+        } catch (e) { console.error("JSON Error:", e); saleItems = []; }
+
+        function calculateTotal() {
+            let total = 0;
+            saleItems.forEach(item => total += item.quantity * item.price);
+            if (totalAmountDisplay) {
+                totalAmountDisplay.innerText = toArabic(total);
+                totalAmountDisplay.dataset.value = total;
+            }
+            if (saleItemsJsonInput) saleItemsJsonInput.value = JSON.stringify(saleItems);
+        }
+
+        function renderItemsTable() {
+            if (!itemsTableBody) return;
+            itemsTableBody.innerHTML = '';
+            saleItems.forEach((item, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.name}</td>
+                    <td class="text-center">${toArabic(item.quantity)}</td>
+                    <td class="text-center">${toArabic(item.price)}</td>
+                    <td class="text-center">${toArabic(item.quantity * item.price)}</td>
+                    <td class="text-center"><button type="button" class="btn btn-danger btn-sm delete-item-btn" data-index="${index}">X</button></td>
+                `;
+                itemsTableBody.appendChild(row);
+            });
+            calculateTotal();
+        }
+
+        if (addItemBtn) {
+            addItemBtn.addEventListener('click', function () {
+                const id = document.getElementById('selected_product_id').value;
+                const name = document.getElementById('selected_product_name').value;
+
+                const qty = parseInt(toEnglish(itemQuantityInput.value));
+                const price = parseFloat(toEnglish(itemPriceInput.value));
+
+                if (!id) { alert('الرجاء اختيار منتج من القائمة.'); return; }
+                if (isNaN(qty) || qty <= 0) { alert('الكمية غير صحيحة'); return; }
+
+                const existingIndex = saleItems.findIndex(i => String(i.id) === String(id));
+                if (existingIndex > -1) {
+                    saleItems[existingIndex].quantity += qty;
+                    saleItems[existingIndex].price = price;
+                } else {
+                    saleItems.push({ id: id, name: name, quantity: qty, price: price });
+                }
+
+                renderItemsTable();
+
+                document.getElementById('product_search').value = '';
+                document.getElementById('selected_product_id').value = '';
+                itemQuantityInput.value = '١';
+                itemPriceInput.value = '٠';
+                document.getElementById('product_search').focus();
+            });
+        }
+
+        if (itemsTableBody) {
+            itemsTableBody.addEventListener('click', function (e) {
+                if (e.target.classList.contains('delete-item-btn')) {
+                    saleItems.splice(e.target.dataset.index, 1);
+                    renderItemsTable();
+                }
+            });
+        }
+
+        // --- 5. Autocomplete (البحث الذكي المربوط بـ API) ---
+        let currentFocus = -1;
+        const autocompleteFields = [
+            { id: 'area', type: 'area' },
+            { id: 'customer_name', type: 'name' },
+            { id: 'phone_number', type: 'phone' },
+            { id: 'address', type: 'address' },
+            {
+                id: 'product_search', type: 'product',
+                onSelect: function (item) {
+                    let selectedIdField = document.getElementById('selected_product_id');
+                    if (selectedIdField) {
+                        selectedIdField.value = item.id;
+                        document.getElementById('selected_product_name').value = item.value;
+                        if (document.getElementById('selected_product_max')) {
+                            document.getElementById('selected_product_max').value = item.max;
+                        }
+                        document.getElementById('item_quantity').focus();
+                    }
+                }
+            }
+        ];
+
+        autocompleteFields.forEach(setupAutocomplete);
+
+        function setupAutocomplete(field) {
+            const input = document.getElementById(field.id);
+            if (!input) return;
+
+            if (!input.parentElement.classList.contains('input-wrapper')) {
+                const wrapper = document.createElement('div'); wrapper.className = 'input-wrapper';
+                input.parentNode.insertBefore(wrapper, input); wrapper.appendChild(input);
+            }
+
+            let list = input.parentNode.querySelector('.suggestions-dropdown');
+            if (!list) {
+                list = document.createElement('ul');
+                list.className = 'suggestions-dropdown';
+                input.parentNode.appendChild(list);
+            }
+
+            input.addEventListener('blur', function () {
+                setTimeout(() => { list.style.display = 'none'; }, 200);
+            });
+
+            const performSearch = () => {
+                const term = toEnglish(input.value.trim());
+                list.innerHTML = '';
+                currentFocus = -1;
+
+                if (term.length < 1) {
+                    list.style.display = 'none';
+                    return;
+                }
+
+                const renderList = (items) => {
+                    if (items.length > 0) {
+                        list.style.display = 'block';
+                        items.forEach(item => {
+                            const li = document.createElement('li');
+                            const regex = new RegExp(`(${term})`, "gi");
+                            const highlighted = item.value.replace(regex, "<strong>$1</strong>");
+
+                            // بناء عنصر الميتا فقط في حالة وجود max (للمنتجات)
+                            let metaHtml = '';
+                            if (item.max !== undefined) {
+                                metaHtml = `<span class="meta">(متاح حالياً: ${toArabic(item.max)})</span>`;
+                            }
+
+                            li.innerHTML = `<span>${highlighted}</span> ${metaHtml}`;
+                            li.onclick = () => {
+                                input.value = item.value;
+                                list.style.display = 'none';
+                                if (field.onSelect) field.onSelect(item);
+                            };
+                            list.appendChild(li);
+                        });
+                    } else {
+                        list.style.display = 'none';
+                    }
+                };
+
+                let url = '';
+                if (field.type === 'product') {
+                    // الاعتماد على شهر وسنة الفاتورة في واجهة التعديل
+                    const saleM = document.getElementById('sale_month')?.value;
+                    const saleY = document.getElementById('sale_year')?.value;
+                    url = `/api/product-suggestions/?term=${encodeURIComponent(term)}&month=${saleM}&year=${saleY}`;
+                } else {
+                    const spId = document.getElementById('salesperson_id') ? document.getElementById('salesperson_id').value : '';
+                    const currentArea = document.getElementById('area')?.value || '';
+                    const currentName = document.getElementById('customer_name')?.value || '';
+                    url = `/api/customer-suggestions/?term=${encodeURIComponent(term)}&field=${field.type}&salesperson_id=${spId}&current_area=${encodeURIComponent(currentArea)}&current_name=${encodeURIComponent(currentName)}`;
+                }
+
+                fetch(url)
+                    .then(res => res.json())
+                    .then(data => {
+                        // لو كان الحقل يخص المنتجات سنأخذ الداتا كاملة، وإلا نمرر القيمة فقط
+                        const formattedData = field.type === 'product' ? data : data.map(d => ({ value: d.value }));
+                        renderList(formattedData);
+                    })
+                    .catch(err => console.error("Error Autocomplete:", err));
+            };
+
+            input.addEventListener('input', performSearch);
+            input.addEventListener('focus', performSearch);
+
+            input.addEventListener('keydown', function (e) {
+                let items = list.getElementsByTagName('li');
+                if (e.key === 'ArrowDown') { currentFocus++; addActive(items); }
+                else if (e.key === 'ArrowUp') { currentFocus--; addActive(items); }
+                else if (e.key === 'Enter') {
+                    if (list.style.display === 'block') {
+                        e.preventDefault();
+                        if (currentFocus > -1 && items) items[currentFocus].click();
+                    }
+                }
+            });
+
+            function addActive(x) {
+                if (!x || x.length === 0) return false;
+                removeActive(x);
+                if (currentFocus >= x.length) currentFocus = 0;
+                if (currentFocus < 0) currentFocus = (x.length - 1);
+                if (x[currentFocus]) { x[currentFocus].classList.add("active"); x[currentFocus].scrollIntoView({ block: "nearest" }); }
+            }
+            function removeActive(items) { for (let i = 0; i < items.length; i++) items[i].classList.remove('active'); }
+            document.addEventListener('click', e => { if (e.target !== input) list.style.display = 'none'; });
+        }
+
+        // --- 6. نظام الأقساط (Sync & Reverse Sync) ---
+        let isInternalUpdate = false;
+
+        function updateFromBoxes() {
+            if (isInternalUpdate) return;
+            isInternalUpdate = true;
+            let parts = [];
+            for (let i = 1; i <= 3; i++) {
+                const count = toEnglish(document.querySelector(`.system-input[data-sys="${i}"][data-type="count"]`).value);
+                const amount = toEnglish(document.querySelector(`.system-input[data-sys="${i}"][data-type="amount"]`).value);
+                if ((count && amount && parseInt(count) !== 0 && parseInt(amount) !== 0)) parts.push(`${amount}*${count}`);
+            }
+            resultTextarea.value = toArabic(parts.join(' + '));
+            isInternalUpdate = false;
+        }
+
+        function updateFromText() {
+            if (isInternalUpdate) return;
+            isInternalUpdate = true;
+            systemInputs.forEach(inp => inp.value = '');
+
+            const text = toEnglish(resultTextarea.value);
+            if (text) {
+                const parts = text.split('+');
+                parts.forEach((part, index) => {
+                    if (index >= 3) return;
+                    let [val1, val2] = part.trim().split('*');
+                    if (val1 && val2) {
+                        val1 = parseInt(val1); val2 = parseInt(val2);
+                        let amount = (val2 > 20) ? val2 : val1;
+                        let count = (val2 > 20) ? val1 : val2;
+
+                        const countInp = document.querySelector(`.system-input[data-sys="${index + 1}"][data-type="count"]`);
+                        const amountInp = document.querySelector(`.system-input[data-sys="${index + 1}"][data-type="amount"]`);
+                        if (countInp) countInp.value = count;
+                        if (amountInp) amountInp.value = amount;
+                    }
+                });
+            }
+            isInternalUpdate = false;
+        }
+
+        systemInputs.forEach(inp => inp.addEventListener('input', updateFromBoxes));
+        resultTextarea.addEventListener('input', updateFromText);
+
+        updateFromText();
+
+        // --- 7. التحكم في الحقول المطلوبة ---
+        function toggleRequiredFields() {
+            const isCash = cashSaleCheckbox.checked;
+            customerSection.style.display = isCash ? 'none' : 'block';
+            paymentSection.style.display = isCash ? 'none' : 'block';
+            document.getElementById('customer_name').required = !isCash;
+            document.getElementById('installment_system').required = !isCash;
+            const statusText = document.getElementById('save-status-text');
+            if (statusText) {
+                statusText.innerText = isCash
+                    ? "تنبيه: سيتم تحويل الفاتورة إلى كاش وحذف جميع الأقساط."
+                    : "تنبيه: سيتم حذف الأقساط القديمة وإعادة إنشائها حسب البيانات الجديدة وتحديث المخزن.";
+                statusText.className = isCash ? "fs-6 fw-bold text-danger" : "fs-6 fw-bold text-primary";
+            }
+        }
+        cashSaleCheckbox.addEventListener('change', toggleRequiredFields);
+        toggleRequiredFields();
+
+        // --- 8. التحقق النهائي عند الحفظ ---
+        receiptForm.addEventListener('submit', function (e) {
+            {% if is_pro_plan %}
+            if (saleItems.length === 0) {
+                e.preventDefault();
+                showFormError("لا يمكن حفظ وصل فارغ. يرجى إضافة منتجات.");
+                return;
+            }
+
+            if (cashSaleCheckbox.checked) return;
+
+            let totalReceipt = parseFloat(totalAmountDisplay.dataset.value);
+            if (isNaN(totalReceipt)) totalReceipt = parseFloat(toEnglish(totalAmountDisplay.innerText) || 0);
+
+            const downPayment = parseFloat(toEnglish(downPaymentInput.value) || 0);
+
+            let totalInstallments = 0;
+            for (let i = 1; i <= 3; i++) {
+                const countInput = document.querySelector(`.system-input[data-sys="${i}"][data-type="count"]`);
+                const amountInput = document.querySelector(`.system-input[data-sys="${i}"][data-type="amount"]`);
+
+                if (countInput && amountInput) {
+                    const count = parseFloat(toEnglish(countInput.value) || 0);
+                    const amount = parseFloat(toEnglish(amountInput.value) || 0);
+                    totalInstallments += (count * amount);
+                }
+            }
+
+            const totalCalculated = downPayment + totalInstallments;
+
+            if (Math.abs(totalReceipt - totalCalculated) > 1) {
+                e.preventDefault();
+                const diff = totalReceipt - totalCalculated;
+                showFormError(`يوجد خطأ في الحسابات المالية.<br>الإجمالي: ${totalReceipt}<br>المقدم+الأقساط: ${totalCalculated}<br>الفرق: ${diff}`);
+            }
+            {% else %}
+            const basicProducts = document.getElementById('basic_products_text').value.trim();
+            if (!basicProducts) {
+                e.preventDefault();
+                showFormError("يرجى كتابة المنتجات المباعة في الفاتورة.");
+            }
+            {% endif %}
+        });
+
+        // --- 9. الحساب التلقائي للباقة الأساسية Basic ---
+        function calculateBasicTotal() {
+            const isBasic = !document.getElementById('items-table');
+            if (!isBasic) return;
+
+            const downPayment = parseFloat(toEnglish(document.getElementById('down_payment').value) || 0);
+            let totalInstallments = 0;
+            for (let i = 1; i <= 3; i++) {
+                const countInput = document.querySelector(`.system-input[data-sys="${i}"][data-type="count"]`);
+                const amountInput = document.querySelector(`.system-input[data-sys="${i}"][data-type="amount"]`);
+
+                if (countInput && amountInput) {
+                    const count = parseFloat(toEnglish(countInput.value) || 0);
+                    const amount = parseFloat(toEnglish(amountInput.value) || 0);
+                    totalInstallments += (count * amount);
+                }
+            }
+
+            const finalTotal = downPayment + totalInstallments;
+            const displayField = document.getElementById('basic_total_amount_display');
+            const hiddenField = document.getElementById('basic_total_amount_hidden');
+
+            if (displayField && hiddenField) {
+                displayField.value = toArabic(finalTotal);
+                hiddenField.value = finalTotal;
+            }
+        }
+
+        document.getElementById('down_payment').addEventListener('input', calculateBasicTotal);
+        systemInputs.forEach(inp => inp.addEventListener('input', calculateBasicTotal));
+        resultTextarea.addEventListener('input', calculateBasicTotal);
+
+        const downPaymentInputObj = document.getElementById('down_payment');
+        if (downPaymentInputObj) {
+            downPaymentInputObj.addEventListener('blur', function () {
+                if (this.value.trim() === '') {
+                    this.value = '٠';
+                    if (typeof calculateBasicTotal === 'function') calculateBasicTotal();
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

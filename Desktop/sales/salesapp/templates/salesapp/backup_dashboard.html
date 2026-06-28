@@ -1,0 +1,111 @@
+{% extends 'salesapp/base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h3 class="mb-4 text-center fw-bold text-success"><i class="bi bi-database-down"></i> {{ page_title }}</h3>
+
+    <div class="card shadow-sm border-0 border-start border-5 border-success mb-5">
+        <div class="card-header bg-success text-white py-3">
+            <h5 class="mb-0 fw-bold"><i class="bi bi-cloud-download-fill"></i> سحب نسخة احتياطية (Backup)</h5>
+        </div>
+        <div class="card-body p-4">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h6 class="fw-bold text-dark fs-5">حفظ نسخة كاملة من قاعدة البيانات</h6>
+                    <p class="text-muted mb-0 mt-2">
+                        للحفاظ على بياناتك من الضياع في حال تلف الويندوز أو تغيير الجهاز، قم بتحميل ملف النسخة الاحتياطية وحفظه في مكان آمن (مثل فلاشة ميموري أو Google Drive).
+                    </p>
+                </div>
+                <div class="col-md-4 text-end mt-3 mt-md-0">
+                    <button onclick="saveDatabaseBackup()" class="btn btn-outline-success btn-lg fw-bold w-100 shadow-sm" id="backupBtn">
+                        <span id="btnText"><i class="bi bi-download"></i> حفظ النسخة الآن</span>
+                        <span id="btnSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                    </button>
+                </div>
+                
+                <script>
+                    async function saveDatabaseBackup() {
+                        const btn = document.getElementById('backupBtn');
+                        const btnText = document.getElementById('btnText');
+                        const btnSpinner = document.getElementById('btnSpinner');
+
+                        try {
+                            btn.disabled = true;
+                            btnText.textContent = "جاري التحضير...";
+                            btnSpinner.classList.remove('d-none');
+
+                            const today = new Date().toISOString().slice(0, 10);
+                            const handle = await window.showSaveFilePicker({
+                                suggestedName: `Backup_VentaPOS_${today}.sqlite3`,
+                                types: [{
+                                    description: 'ملف قاعدة بيانات SQLite',
+                                    accept: { 'application/vnd.sqlite3': ['.sqlite3'] },
+                                }],
+                            });
+
+                            const response = await fetch("{% url 'download_backup' %}");
+                            const blob = await response.blob();
+
+                            const writable = await handle.createWritable();
+                            await writable.write(blob);
+                            await writable.close();
+
+                            alert("تم حفظ النسخة الاحتياطية بنجاح!");
+
+                        } catch (err) {
+                            if (err.name !== 'AbortError') {
+                                window.location.href = "{% url 'download_backup' %}";
+                            }
+                        } finally {
+                            btn.disabled = false;
+                            btnText.innerHTML = '<i class="bi bi-download"></i> حفظ النسخة الآن';
+                            btnSpinner.classList.add('d-none');
+                        }
+                    }
+                </script>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 border-start border-5 border-danger mb-5">
+        <div class="card-header bg-danger text-white py-3">
+            <h5 class="mb-0 fw-bold"><i class="bi bi-arrow-counterclockwise"></i> استرجاع نسخة سابقة (Restore)</h5>
+        </div>
+        <div class="card-body p-4">
+            <div class="row align-items-center">
+                <div class="col-md-7">
+                    <h6 class="fw-bold text-danger fs-5">تحذير هام جداً! ⚠️</h6>
+                    <p class="text-muted mb-0 mt-2">
+                        استخدام هذه الميزة سيقوم <strong class="text-danger">بمسح كافة البيانات الحالية</strong> بشكل نهائي، واستبدالها بالبيانات الموجودة في الملف الذي ستقوم برفعه.
+                        <br><br>
+                        لا تستخدم هذا الخيار إلا في حالة نقل البرنامج لجهاز جديد، أو إذا كنت متأكداً تماماً من رغبتك في العودة لبيانات قديمة.
+                    </p>
+                </div>
+                <div class="col-md-5 mt-4 mt-md-0">
+                    <form action="{% url 'restore_backup' %}" method="POST" enctype="multipart/form-data" id="restoreForm">
+                        {% csrf_token %}
+                        <div class="input-group input-group-lg shadow-sm">
+                            <input type="file" class="form-control" name="backup_file" required accept=".sqlite3,.db">
+                            <button class="btn btn-danger fw-bold px-4" type="button" onclick="confirmRestore()">
+                                <i class="bi bi-upload"></i> استرجاع
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function confirmRestore() {
+        if (confirm("هل أنت متأكد تماماً؟\nسيتم حذف جميع البيانات الحالية نهائياً واستبدالها بالنسخة المختارة.\nهذا الإجراء لا يمكن التراجع عنه!")) {
+            document.getElementById('restoreForm').submit();
+        }
+    }
+</script>
+{% endblock %}

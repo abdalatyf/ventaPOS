@@ -1,0 +1,303 @@
+{% extends 'salesapp/base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h3 class="mb-4 text-center fw-bold text-primary">{{ page_title }}</h3>
+
+
+    {% if messages %}
+    <div class="mb-3">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+<div class="card shadow-sm border-0 border-start border-5 border-success mb-5">
+    <div class="card-body p-4 text-center bg-light">
+        <h4 class="fw-bold text-success mb-3">Venta POS - نظام المبيعات الشامل</h4>
+        <p class="text-muted mb-2">إصدار البرنامج: <strong>v1.0.0 (Stable Release)</strong></p>
+        <p class="text-muted mb-4">تم تصميم هذا النظام خصيصاً لتلبية احتياجات السوق المصري في إدارة المبيعات والأقساط
+            المعقدة بدقة متناهية وسرعة فائقة.</p>
+
+        <div class="d-inline-flex align-items-center bg-white border rounded-pill px-4 py-2 shadow-sm">
+            <i class="bi bi-headset text-success fs-1 me-3"></i> <!-- استبدال صورتك بأيقونة دعم فني -->
+            <div class="text-start pe-3 border-end">
+                <span class="d-block small text-muted lh-1">تم التطوير بواسطة</span>
+                <span class="d-block fw-bold text-dark lh-1 mt-1 fs-5">Venta POS Team</span>
+            </div>
+            <div class="ps-3 d-flex flex-column align-items-center">
+                <span class="fw-bold text-primary mb-1" dir="ltr" style="letter-spacing: 1px;">01114630467</span>
+                <a href="https://wa.me/201114630467" target="_blank"
+                    class="badge bg-success text-decoration-none px-3 py-2 rounded-pill">
+                    <i class="bi bi-whatsapp"></i> رسالة للدعم
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-building"></i> بيانات المؤسسة (التي تظهر في الفاتورة)</h5>
+    </div>
+    <div class="card-body bg-light">
+        <form method="POST"> {% csrf_token %}
+            <input type="hidden" name="save_settings" value="1">
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">اسم الشركة</label>
+                    {{ form.name }}
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">وصف النشاط</label>
+                    {{ form.description }}
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">رقم الهاتف 1</label>
+                    {{ form.phone1 }}
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">رقم الهاتف 2</label>
+                    {{ form.phone2 }}
+                </div>
+
+                <div class="col-md-12">
+                    <label class="form-label fw-bold">نص ذيل الفاتورة (Footer)</label>
+                    {{ form.footer_text }}
+                    <div class="form-text">يظهر في أسفل كل إيصال.</div>
+                </div>
+
+                <div class="col-12 text-end border-top pt-3">
+                    <button type="submit" class="btn btn-primary fw-bold px-4">
+                        <i class="bi bi-save"></i> حفظ بيانات الشركة
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-dark text-white py-3">
+            <h5 class="mb-0 fw-bold"><i class="bi bi-shield-lock-fill"></i> أمان الحساب (تغيير كلمة المرور)</h5>
+        </div>
+        <div class="card-body">
+
+            {% if pwd_form.errors %}
+            <div class="alert alert-danger">
+                <ul class="mb-0 small">
+                    {% for field in pwd_form %}
+                    {% for error in field.errors %}
+                    <li>{{ error }}</li>
+                    {% endfor %}
+                    {% endfor %}
+                    {% for error in pwd_form.non_field_errors %}
+                    <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <form method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="change_password_btn" value="1">
+
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">كلمة المرور الحالية</label>
+                        <input type="password" name="old_password" class="form-control" required placeholder="******">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">كلمة المرور الجديدة</label>
+                        <input type="password" name="new_password1" class="form-control" required placeholder="******">
+                        <div class="form-text small">يفضل أن تكون قوية.</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">تأكيد الجديدة</label>
+                        <input type="password" name="new_password2" class="form-control" required placeholder="******">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-warning w-100 fw-bold">
+                            تغيير <i class="bi bi-arrow-left"></i>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <style>
+        .machine-id-container { border: 2px dashed #0d6efd; background-color: #f0f8ff; border-radius: 10px; padding: 10px; }
+        .machine-id-text { font-family: 'Consolas', monospace; font-size: 1.4rem; font-weight: 900; background-color: transparent !important; border: none !important; }
+        .license-input-group { direction: ltr; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; }
+        .license-box { width: 100px; height: 60px; font-size: 1.5rem; text-align: center; border: 2px solid #ced4da; border-radius: 8px; font-weight: bold; text-transform: uppercase; letter-spacing: 3px; background-color: #f8f9fa; }
+        .license-box:focus { background-color: #fff; border-color: #198754; outline: none; transform: scale(1.05); }
+        .separator { font-size: 2rem; font-weight: bold; color: #6c757d; padding-top: 5px; }
+    </style>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-primary text-white py-3 fw-bold">
+            <i class="bi bi-shield-check"></i> بيانات الاشتراك والترخيص
+        </div>
+        <div class="card-body bg-light">
+            <div class="card shadow-sm mb-4 border-0">
+                <div class="card-header bg-white fw-bold">🆔 بصمة الجهاز (Machine ID)</div>
+                <div class="card-body">
+                    <p class="text-muted small mb-2">انسخ هذا الكود وأرسله للدعم الفني لتفعيل النظام أو الدفع.</p>
+                    <div class="input-group input-group-lg machine-id-container">
+                        <input type="text" class="form-control text-center machine-id-text" value="{{ machine_id }}"
+                            id="dashMid" readonly>
+                        <button class="btn btn-primary px-4 fw-bold" style="border-radius: 8px;" type="button"
+                            onclick="copyDashMid()">نسخ <i class="bi bi-clipboard"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-4 mb-3">
+                    <div class="card text-white bg-info h-100 shadow-sm border-0">
+                        <div class="card-body text-center">
+                            <h1 class="display-6"><i class="bi bi-calendar-check"></i></h1>
+                            <h6 class="card-title mt-2 opacity-75">صلاحية النظام</h6>
+                            <p class="card-text fw-bold fs-5">
+                                {% if license.expiry_date %}حتى {{ license.expiry_date|date:"d/m/Y" }}{% else %}مدى الحياة ∞{% endif %}
+                            </p>
+                            {% if license.expiry_date %}
+                            <small class="badge bg-white text-info rounded-pill px-3">
+                                {% if days_remaining > 0 %}متبقي {{ days_remaining }} يوم{% else %}منتهي{% endif %}
+                            </small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4 mb-3">
+                    <div class="card text-white {% if license %}bg-primary{% else %}bg-danger{% endif %} h-100 shadow-sm border-0">
+                        <div class="card-body text-center">
+                            <h1 class="display-6">
+                                {% if license %}<i class="bi bi-check-circle"></i>{% else %}<i class="bi bi-x-circle"></i>{% endif %}
+                            </h1>
+                            <h6 class="card-title mt-2 opacity-75">حالة النظام</h6>
+                            <p class="card-text fw-bold fs-5">{% if license %}ساري ويعمل{% else %}منتهي / متوقف{% endif %}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4 mb-3">
+                    <div class="card text-white {% if license.is_online_active %}bg-success{% else %}bg-secondary{% endif %} h-100 shadow-sm border-0">
+                        <div class="card-body text-center">
+                            <h1 class="display-6"><i class="bi bi-cloud-check"></i></h1>
+                            <h6 class="card-title mt-2 opacity-75">خدمات الأونلاين</h6>
+                            <p class="card-text fw-bold fs-5">{% if license.is_online_active %}نشطة{% else %}غير مفعلة{% endif %}</p>
+                            {% if license.is_online_active %}
+                            <small class="badge bg-white text-success rounded-pill px-3">تنتهي: {{ license.online_expiry_date|date:"d/m/Y" }}</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-success mb-4">
+                <div class="card-header bg-success text-white fw-bold d-flex justify-content-between">
+                    <span>⚡ تفعيل وتجديد الباقات</span>
+                    <i class="bi bi-key-fill fs-5"></i>
+                </div>
+                <div class="card-body py-4 text-center">
+                    <form method="POST" id="dashForm">
+                        {% csrf_token %}
+                        <input type="hidden" name="activate_license_btn" value="1">
+                        <label class="mb-3 text-muted fw-bold fs-5">أدخل كود التفعيل / التجديد:</label>
+                        <div class="license-input-group mb-4">
+                            <input type="text" class="license-box form-control" maxlength="4" placeholder="XXXX">
+                            <span class="separator">-</span>
+                            <input type="text" class="license-box form-control" maxlength="4" placeholder="XXXX">
+                            <span class="separator">-</span>
+                            <input type="text" class="license-box form-control" maxlength="4" placeholder="XXXX">
+                            <span class="separator">-</span>
+                            <input type="text" class="license-box form-control" maxlength="4" placeholder="XXXX">
+                        </div>
+                        <input type="hidden" name="license_code" id="dash_full_code">
+                        <button type="submit" class="btn btn-success px-5 py-2 fw-bold fs-5 rounded-pill shadow"
+                            onclick="combineDashCode()">
+                            <i class="bi bi-magic"></i> تفعيل
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+</div>
+<script>
+    function copyDashMid() {
+        var copyText = document.getElementById("dashMid");
+        copyText.select();
+        copyText.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(copyText.value);
+        let btn = event.currentTarget;
+        let originalHTML = btn.innerHTML;
+        btn.innerHTML = 'تم النسخ <i class="bi bi-check-lg"></i>';
+        btn.classList.replace("btn-primary", "btn-success");
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+            btn.classList.replace("btn-success", "btn-primary");
+        }, 2000);
+    }
+
+    const dashInputs = document.querySelectorAll('.license-box');
+    const dashHidden = document.getElementById('dash_full_code');
+
+    if(dashInputs.length > 0) {
+        dashInputs.forEach((input, index) => {
+            input.addEventListener('input', (e) => {
+                if (e.target.value.length === 4 && index < dashInputs.length - 1) { dashInputs[index + 1].focus(); }
+                combineDashCode();
+            });
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace' && e.target.value.length === 0 && index > 0) {
+                    e.preventDefault();
+                    const prevInput = dashInputs[index - 1];
+                    prevInput.focus();
+                    let val = prevInput.value;
+                    prevInput.value = val.substring(0, val.length - 1);
+                    combineDashCode();
+                    const len = prevInput.value.length;
+                    prevInput.setSelectionRange(len, len);
+                }
+            });
+            input.addEventListener('paste', (e) => {
+                e.preventDefault();
+                const pasteData = e.clipboardData.getData('text').toUpperCase().replace(/[^A-Z0-9]/g, '');
+                let start = 0;
+                dashInputs.forEach((inp) => {
+                    if (start < pasteData.length) { inp.value = pasteData.substring(start, start + 4); start += 4; }
+                });
+                combineDashCode();
+                let filledCount = Math.ceil(pasteData.length / 4);
+                let focusIndex = Math.min(filledCount - 1, dashInputs.length - 1);
+                if (focusIndex >= 0) dashInputs[focusIndex].focus();
+            });
+        });
+    }
+
+    function combineDashCode() {
+        let full = "";
+        dashInputs.forEach((input, i) => {
+            full += input.value;
+            if (i < dashInputs.length - 1 && input.value.length > 0) full += "-";
+        });
+        if(dashHidden) { dashHidden.value = full.toUpperCase(); }
+    }
+</script>
+{% endblock %}

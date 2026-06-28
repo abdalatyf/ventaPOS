@@ -1,0 +1,29 @@
+{% extends 'salesapp/base.html' %}
+{% load static %}
+{% block title %}استيراد فواتير المندوبين{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0 fw-bold"><i class="bi bi-cloud-arrow-up"></i> استيراد فواتير المندوبين (JSON)</h4>
+        </div>
+        <div class="card-body">
+            <form id="uploadForm" hx-post="{% url 'mobile_import_preview' %}" hx-target="#preview-container" hx-encoding="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label fw-bold">ملف الـ JSON (الخاص بالمندوب)</label>
+                    <input type="file" name="json_file" accept=".json" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary fw-bold">رفع وعرض البيانات (معاينة)</button>
+            </form>
+
+            <hr class="my-4">
+            
+            <div id="preview-container">
+                <!-- جدول الفواتير سيظهر هنا -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

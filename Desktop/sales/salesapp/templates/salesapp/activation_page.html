@@ -1,0 +1,242 @@
+{% extends 'salesapp/base.html' %}
+
+{% block content %}
+<style>
+    /* تنسيق بصمة الجهاز لتظهر بالكامل */
+    .machine-id-container {
+        border: 2px dashed #0d6efd;
+        /* برواز منقط لتمييزها */
+        background-color: #f0f8ff;
+        /* لون خلفية فاتح ومريح */
+        border-radius: 10px;
+        padding: 5px;
+    }
+
+    .machine-id-text {
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        /* خط مخصص للأكواد */
+        font-size: 1.3rem;
+        /* حجم مناسب عشان الـ 36 حرف يظهروا */
+        font-weight: 900;
+        /* سميك جداً */
+        color: #000;
+        /* أسود داكن */
+        letter-spacing: 0.5px;
+        /* مسافة بسيطة بين الحروف */
+        background-color: transparent !important;
+        /* شفاف عشان ياخد لون الخلفية */
+        border: none !important;
+        /* إلغاء حدود الـ input نفسه */
+        box-shadow: none !important;
+    }
+
+    /* تنسيق مربعات كود التفعيل */
+    .license-input-group {
+        direction: ltr;
+        display: flex;
+        gap: 15px;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .license-box {
+        width: 100px;
+        height: 60px;
+        font-size: 1.5rem;
+        text-align: center;
+        border: 2px solid #ced4da;
+        border-radius: 8px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 3px;
+        transition: all 0.3s ease;
+        background-color: #f8f9fa;
+    }
+
+    .license-box:focus {
+        background-color: #fff;
+        border-color: #dc3545;
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+        outline: none;
+        transform: scale(1.05);
+    }
+
+    .separator {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #6c757d;
+        padding-top: 5px;
+    }
+</style>
+
+<div class="container d-flex justify-content-center align-items-center" style="min-height: 85vh;">
+    <div class="card shadow-lg p-5 border-0"
+        style="width: 750px; border-top: 6px solid #dc3545 !important; border-radius: 15px;">
+
+        <div class="text-center mb-4">
+            <h1 style="font-size: 4rem;">🔒</h1>
+            <h3 class="fw-bold text-dark mt-2">تفعيل النسخة</h3>
+            <p class="text-muted">أدخل كود التفعيل لفتح النظام.</p>
+        </div>
+
+        {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} shadow-sm text-center fw-bold">{{ message }}</div>
+        {% endfor %}
+        {% endif %}
+
+        <form method="POST" id="activationForm">
+            {% csrf_token %}
+
+            <div class="mb-5">
+                <label class="form-label fw-bold text-secondary">🆔 بصمة الجهاز (صور الشاشة أو انسخ الكود)</label>
+
+                <div class="input-group input-group-lg machine-id-container">
+                    <input type="text" class="form-control text-center machine-id-text" value="{{ machine_id }}"
+                        id="mid" readonly>
+
+                    <button type="button" class="btn btn-primary fw-bold px-4" style="border-radius: 8px;"
+                        onclick="copyMid()">
+                        نسخ <i class="bi bi-clipboard"></i>
+                    </button>
+                </div>
+                <div class="form-text text-center mt-2 text-muted small">هذا الكود فريد خاص بجهازك فقط</div>
+            </div>
+
+            <div class="mb-5 text-center">
+                <label class="form-label fw-bold text-secondary mb-3 fs-5">🔑 أدخل كود التفعيل هنا</label>
+
+                <div class="license-input-group">
+                    <input type="text" class="license-box form-control" maxlength="4" placeholder="XXXX">
+                    <span class="separator">-</span>
+                    <input type="text" class="license-box form-control" maxlength="4" placeholder="XXXX">
+                    <span class="separator">-</span>
+                    <input type="text" class="license-box form-control" maxlength="4" placeholder="XXXX">
+                    <span class="separator">-</span>
+                    <input type="text" class="license-box form-control" maxlength="4" placeholder="XXXX">
+                </div>
+
+                <input type="hidden" name="license_code" id="full_license_code">
+            </div>
+
+            <button type="submit" class="btn btn-danger btn-lg w-100 fw-bold shadow py-3 fs-5" onclick="combineCode()">
+                تفعيل البرنامج الآن 🚀
+            </button>
+        </form>
+
+        <div class="text-center mt-4 pt-3 border-top">
+            <small class="text-muted">للحصول على كود التفعيل:</small><br>
+            <a href="https://wa.me/+201114630467" class="text-decoration-none fw-bold text-success fs-5">
+                <i class="bi bi-whatsapp"></i> 01114630467
+            </a>
+            
+            <div class="mt-4 border-top pt-3 text-center">
+                <button type="button" class="btn btn-outline-secondary w-100 fw-bold" onclick="document.getElementById('viewerForm').style.display='block'; this.style.display='none';">
+                    ليس لديك كود؟ الدخول كجهاز فرعي (Viewer)
+                </button>
+            </div>
+
+            <form method="POST" id="viewerForm" class="mt-4 text-start" style="display: none; background-color: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #ced4da; text-align: right;">
+                {% csrf_token %}
+                <input type="hidden" name="is_viewer_login" value="1">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">اسم المستخدم أونلاين</label>
+                    <input type="text" name="cloud_username" class="form-control text-center" placeholder="1050-ahmed" required style="direction: ltr;">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">كلمة المرور</label>
+                    <input type="password" name="cloud_password" class="form-control text-center" required style="direction: ltr;">
+                </div>
+                <button type="submit" class="btn btn-dark w-100 fw-bold">تسجيل الدخول</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 1. نسخ بصمة الجهاز
+    function copyMid() {
+        var copyText = document.getElementById("mid");
+        copyText.select();
+        copyText.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(copyText.value);
+
+        let btn = event.currentTarget;
+        let originalHTML = btn.innerHTML;
+        btn.innerHTML = 'تم النسخ <i class="bi bi-check-lg"></i>';
+        btn.classList.replace("btn-primary", "btn-success");
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+            btn.classList.replace("btn-success", "btn-primary");
+        }, 2000);
+    }
+
+    // 2. منطق المربعات (مع ميزة الحذف الجديدة)
+    const inputs = document.querySelectorAll('.license-box');
+    const hiddenInput = document.getElementById('full_license_code');
+
+    inputs.forEach((input, index) => {
+        // التحرك للأمام عند الكتابة
+        input.addEventListener('input', (e) => {
+            if (e.target.value.length === 4 && index < inputs.length - 1) {
+                inputs[index + 1].focus();
+            }
+            combineCode();
+        });
+
+        // الرجوع والحذف (الميزة المطلوبة) ⬅️
+        input.addEventListener('keydown', (e) => {
+            // لو ضغط Backspace، والخانة فاضية، ومش أول خانة
+            if (e.key === 'Backspace' && e.target.value.length === 0 && index > 0) {
+                e.preventDefault(); // وقف السلوك الطبيعي
+
+                const prevInput = inputs[index - 1];
+
+                // 1. روح للي قبله
+                prevInput.focus();
+
+                // 2. احذف آخر حرف منه
+                let val = prevInput.value;
+                prevInput.value = val.substring(0, val.length - 1);
+
+                // 3. حدث الكود المخفي
+                combineCode();
+
+                // 4. خلي المؤشر في الآخر عشان يكمل مسح لو داس تاني
+                const len = prevInput.value.length;
+                prevInput.setSelectionRange(len, len);
+            }
+        });
+
+        // اللصق الذكي
+        input.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const pasteData = e.clipboardData.getData('text').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+            let start = 0;
+            inputs.forEach((inp) => {
+                if (start < pasteData.length) {
+                    inp.value = pasteData.substring(start, start + 4);
+                    start += 4;
+                }
+            });
+            combineCode();
+
+            let filledCount = Math.ceil(pasteData.length / 4);
+            let focusIndex = Math.min(filledCount - 1, inputs.length - 1);
+            if (focusIndex >= 0) inputs[focusIndex].focus();
+        });
+    });
+
+    function combineCode() {
+        let fullCode = "";
+        inputs.forEach((input, index) => {
+            fullCode += input.value;
+            if (index < inputs.length - 1 && input.value.length > 0) {
+                fullCode += "-";
+            }
+        });
+        hiddenInput.value = fullCode.toUpperCase();
+    }
+</script>
+{% endblock %}

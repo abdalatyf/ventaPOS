@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="col-md-7">
+        <div class="card p-5 text-center shadow-lg border-success">
+
+            <div class="mb-4">
+                <div style="font-size: 5rem;">🎉</div>
+                <h2 class="fw-bold text-success mt-2">تم إصدار الرخصة بنجاح!</h2>
+                <p class="text-muted">للعميل: <strong>{{ license.client.name }}</strong></p>
+            </div>
+
+            <div class="bg-light p-3 rounded mb-4 border">
+                <p class="mb-1 text-muted">كود التفعيل</p>
+                <h1 class="fw-bold text-dark" style="font-family: monospace; letter-spacing: 2px;" id="licenseCode">{{ license.generated_code }}</h1>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-6 border-end">
+                    <small class="text-muted">تاريخ البداية</small>
+                    <h5 class="fw-bold">{{ license.start_date|date:"Y-m-d" }}</h5>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted">تاريخ الانتهاء</small>
+                    {% if is_lifetime %}
+                    <h5 class="fw-bold text-success">مدى الحياة ∞</h5>
+                    {% elif expiry_date %}
+                    <h5 class="fw-bold text-danger">{{ expiry_date|date:"Y-m-d" }}</h5>
+                    {% else %}
+                    <h5 class="fw-bold text-primary">حسب الاستهلاك</h5>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="d-grid gap-3">
+                <button onclick="copyCode()" class="btn btn-outline-primary btn-lg">
+                    📋 نسخ الكود للحافظة
+                </button>
+
+                <a href="https://wa.me/+2{{ license.client.phone }}?text={{ whatsapp_msg }}" target="_blank"
+                    class="btn btn-success btn-lg">
+                    💬 إرسال للعميل عبر واتساب
+                </a>
+
+                <a href="{% url 'dashboard' %}" class="btn btn-link text-muted mt-2">
+                    العودة للرئيسية
+                </a>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    function copyCode() {
+        var codeText = document.getElementById("licenseCode").innerText;
+        navigator.clipboard.writeText(codeText).then(function () {
+            alert("تم نسخ الكود: " + codeText);
+        }, function (err) {
+            console.error('فشل النسخ: ', err);
+        });
+    }
+</script>
+{% endblock %}

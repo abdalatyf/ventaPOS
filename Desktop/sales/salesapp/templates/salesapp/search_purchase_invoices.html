@@ -1,0 +1,183 @@
+{% extends 'salesapp/base.html' %}
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h3 class="mb-4 text-center fw-bold text-success"><i class="bi bi-journal-text"></i> أرشيف المشتريات والمرتجعات</h3>
+
+    <ul class="nav nav-tabs nav-fill mb-4 fw-bold shadow-sm rounded-top">
+        <li class="nav-item">
+            <a class="nav-link text-dark" href="{% url 'manage_products' %}"><i class="bi bi-box-seam"></i> 1. المخزن</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link text-dark" href="{% url 'manage_suppliers' %}"><i class="bi bi-building"></i> 2. الموردين</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link text-dark" href="{% url 'manage_purchase_invoices' %}">
+                <i class="bi bi-receipt"></i> 3. فواتير الشراء ومرتجع المصنع
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link active bg-success text-white" href="{% url 'search_purchase_invoices' %}"><i class="bi bi-search"></i> 4. سجل الفواتير</a>
+        </li>
+    </ul>
+
+    <!-- كارت الفلاتر (بدون تغيير) -->
+    <div class="card shadow-sm border-0 mb-4 bg-light">
+        <div class="card-body">
+            <form method="GET" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">رقم الفاتورة</label>
+                    <input type="text" name="search_query" class="form-control fw-bold" placeholder="بحث بالرقم..." value="{{ current_search }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">المورد / المصنع</label>
+                    <select name="supplier_id" class="form-select fw-bold">
+                        <option value="">-- الكل --</option>
+                        {% for sup in suppliers %}
+                        <option value="{{ sup.id }}" {% if current_supplier == sup.id|stringformat:"s" %}selected{% endif %}>{{ sup.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">النوع</label>
+                    <select name="invoice_type" class="form-select fw-bold">
+                        <option value="">-- الكل --</option>
+                        <option value="PURCHASE" {% if current_type == 'PURCHASE' %}selected{% endif %}>شراء (+)</option>
+                        <option value="RETURN" {% if current_type == 'RETURN' %}selected{% endif %}>مرتجع (-)</option>
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label fw-bold">شهر</label>
+                    <input type="number" name="month" class="form-control text-center fw-bold" value="{% if current_month %}{{ current_month }}{% endif %}" min="1" max="12" placeholder="الكل">
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label fw-bold">سنة</label>
+                    <input type="number" name="year" class="form-control text-center fw-bold" value="{% if current_year %}{{ current_year }}{% endif %}" placeholder="الكل">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-success w-100 fw-bold"><i class="bi bi-funnel-fill"></i> فلترة</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- جدول النتائج والأزرار الجديدة -->
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover text-center align-middle mb-0">
+                    <thead class="table-dark text-white">
+                        <tr>
+                            <th>رقم الفاتورة</th>
+                            <th>النوع</th>
+                            <th>المورد</th>
+                            <th>التاريخ</th>
+                            <th>إجراءات الطباعة والـ PDF</th>
+                            <th>تعديل وحذف</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for invoice in invoices %}
+                        <tr>
+                            <td class="fw-bold fs-5">{{ invoice.invoice_number }}</td>
+                            <td>
+                                {% if invoice.invoice_type == 'PURCHASE' %}
+                                <span class="badge bg-success rounded-pill px-3">شراء</span>
+                                {% else %}
+                                <span class="badge bg-danger rounded-pill px-3">مرتجع</span>
+                                {% endif %}
+                            </td>
+                            <td class="fw-bold text-primary">{{ invoice.supplier.name }}</td>
+                            <td class="fw-bold text-muted">{{ invoice.invoice_month }} / {{ invoice.invoice_year }}</td>
+                            
+                            <!-- 🟢 أزرار الطباعة والـ PDF معتمدة على دوال base.html -->
+                            <td dir="ltr">
+                                <div class="btn-group shadow-sm">
+                                    <button type="button" 
+                                        onclick="openDynamicPrintModal('{% url 'search_purchase_invoices' %}?print_invoice_id={{ invoice.id }}', 'طباعة فاتورة ({{ invoice.invoice_number }})')" 
+                                        data-bs-toggle="modal" data-bs-target="#dynamicPrintModal" class="btn btn-secondary btn-sm fw-bold px-3" title="طباعة الفاتورة صامت">
+                                        <i class="bi bi-printer-fill"></i> طباعة A4
+                                    </button>
+                                    <button type="button" 
+                                        onclick="startPrintProcess('{% url 'search_purchase_invoices' %}?print_invoice_id={{ invoice.id }}&action=view', 1, 1000)" 
+                                        class="btn btn-outline-secondary btn-sm fw-bold px-3" title="عرض الملف PDF">
+                                        <i class="bi bi-file-earmark-pdf-fill"></i> عرض
+                                    </button>
+                                </div>
+                            </td>
+
+                            <!-- 🟡 أزرار الإجراءات العادية (عرض/تعديل/حذف) -->
+                            <td>
+                                <div class="d-flex justify-content-center gap-1">
+                                    <button type="button" class="btn btn-sm btn-outline-primary border-0" data-bs-toggle="modal" data-bs-target="#invoiceModal{{ invoice.id }}" title="عرض سريع للتفاصيل">
+                                        <i class="bi bi-eye-fill fs-5"></i>
+                                    </button>
+                                    <a href="{% url 'edit_purchase_invoice' invoice.id %}" class="btn btn-sm btn-outline-warning border-0" title="تعديل الفاتورة">
+                                        <i class="bi bi-pencil-square fs-5"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="confirmDeleteInvoice('{{ invoice.invoice_number }}', '{% url 'delete_purchase_invoice' invoice.id %}')" title="حذف وإرجاع للمخزن">
+                                        <i class="bi bi-trash3-fill fs-5"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="py-5 text-muted fw-bold fs-5">لا توجد فواتير مطابقة لعملية البحث.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div> 
+
+{% for invoice in invoices %}
+<!-- 🔴 Modal العرض السريع للفاتورة (كما هي) -->
+<div class="modal fade" id="invoiceModal{{ invoice.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-receipt"></i> تفاصيل فاتورة: {{ invoice.invoice_number }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <table class="table table-striped text-center mb-0">
+                    <thead class="table-secondary">
+                        <tr>
+                            <th>م</th>
+                            <th>اسم الصنف</th>
+                            <th>الكمية المسجلة</th>
+                            {% if invoice.invoice_type == 'PURCHASE' %}<th>سعر الشراء</th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in invoice.items.all %}
+                        <tr>
+                            <td class="fw-bold text-muted">{{ forloop.counter }}</td>
+                            <td class="fw-bold">{{ item.inventory_item.name }}</td>
+                            <td class="fs-5 fw-bold text-dark">{{ item.quantity }}</td>
+                            {% if invoice.invoice_type == 'PURCHASE' %}<td class="text-success fw-bold">{{ item.purchase_price }}</td>{% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">إغلاق</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<script>
+    function confirmDeleteInvoice(number, deleteUrl) {
+        if (confirm("⚠️ تحذير هام:\nهل أنت متأكد من حذف الفاتورة رقم (" + number + ")؟\nسيتم عكس جميع الكميات في المخزن وإعادة حساب الأسعار تلقائياً.")) {
+            window.location.href = deleteUrl;
+        }
+    }
+</script>
+{% endblock %}

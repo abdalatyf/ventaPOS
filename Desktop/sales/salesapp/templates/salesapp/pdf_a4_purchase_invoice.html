@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>فاتورة {{ type_name }} - رقم {{ invoice.invoice_number }}</title>
+    <style>
+        body { font-family: 'Arial', sans-serif; font-size: 14px; color: #333; margin: 0; padding: 20px; }
+        .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+        .header h1 { margin: 0; font-size: 26px; }
+        .header p { margin: 5px 0; font-size: 14px; color: #555; }
+        .invoice-info { width: 100%; margin-bottom: 20px; border-collapse: collapse; }
+        .invoice-info td { padding: 8px; border: 1px solid #ddd; }
+        .invoice-info td.label { font-weight: bold; background-color: #f9f9f9; width: 15%; }
+        .table-items { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .table-items th, .table-items td { border: 1px solid #000; padding: 10px; text-align: center; }
+        .table-items th { background-color: #f2f2f2; font-weight: bold; }
+        .total-box { float: left; width: 300px; border: 2px solid #000; padding: 15px; text-align: center; background-color: #f9f9f9; font-size: 18px; font-weight: bold; }
+        .footer { clear: both; text-align: center; font-size: 11px; color: #777; margin-top: 50px; border-top: 1px dashed #ccc; padding-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{{ company.name|default:"النظام لإدارة المبيعات" }}</h1>
+        {% if company.description %}<p>{{ company.description }}</p>{% endif %}
+        <p>هاتف: {{ company.phone1 }} {% if company.phone2 %} - {{ company.phone2 }}{% endif %}</p>
+    </div>
+
+    <h2 style="text-align: center; margin-bottom: 20px;">فاتورة {% if invoice.invoice_type == 'PURCHASE' %}مشتريات{% else %}مرتجع للمصنع{% endif %}</h2>
+
+    <table class="invoice-info">
+        <tr>
+            <td class="label">رقم الفاتورة:</td>
+            <td><b>{{ invoice.invoice_number }}</b></td>
+            <td class="label">تاريخ الفاتورة:</td>
+            <td dir="ltr"><b>{{ invoice.invoice_year }} / {{ invoice.invoice_month }}</b></td>
+        </tr>
+        <tr>
+            <td class="label">المورد / المصنع:</td>
+            <td colspan="3"><b>{{ invoice.supplier.name }}</b></td>
+        </tr>
+    </table>
+
+    <table class="table-items">
+        <thead>
+            <tr>
+                <th width="5%">م</th>
+                <th width="45%">اسم الصنف</th>
+                <th width="15%">الكمية</th>
+                {% if invoice.invoice_type == 'PURCHASE' %}
+                <th width="15%">السعر</th>
+                <th width="20%">الإجمالي</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td style="text-align: right;">{{ item.inventory_item.name }}</td>
+                <td><b>{{ item.quantity }}</b></td>
+                {% if invoice.invoice_type == 'PURCHASE' %}
+                <td>{{ item.purchase_price }}</td>
+                <td><b>{{ item.line_total }}</b></td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if invoice.invoice_type == 'PURCHASE' %}
+    <div class="total-box">
+        إجمالي الفاتورة: <br>
+        <span style="font-size: 24px; color: #d9534f; display: inline-block; margin-top: 5px;">{{ total_invoice_amount }} ج.م</span>
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        تمت الطباعة بواسطة النظام الآلي بتاريخ: {{ print_date }}
+    </div>
+</body>
+</html>

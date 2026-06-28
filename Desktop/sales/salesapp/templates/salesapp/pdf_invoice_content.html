@@ -1,0 +1,64 @@
+<div class="evl">
+        <div class="main">
+            <table class="table table-bordered table-sm mb-0">
+                <tbody>
+                    <tr>
+                        <td class="header-cell">رقم الوصل:</td>
+                        <td class="text-center number-bold">{{ receipt_number }}</td>
+                        <td colspan="1" class="text-center number-bold">{{ current_installment_index }}</td>
+                        <td class="text-center company-title" style="width: 45%;">{{ company_settings.name|default:"اسم المؤسسة" }}</td>
+                        <td class="header-cell">الإجمالي :</td>
+                        <td class="text-center number-bold">{{ total_amount }}</td>
+                    </tr>
+                    <tr>
+                        <td class="header-cell">المنطقة :</td>
+                        <td class="text-center">{{ area }}</td>
+                        <td colspan="1" class="text-center number-bold" style="min-width: 40px;">{{ total_installments_count }}</td>
+                        <td class="text-center ">{{ company_settings.description|default:"" }}</td>
+                        <td class="header-cell">المقدم :</td>
+                        <td class="text-center number-bold">{{ down_payment }}</td>
+                    </tr>
+                    <tr>
+                        <td class="header-cell">اسم العميل:</td>
+                        <td colspan="3" class="text-start font-weight-bold" style="padding-right: 10px !important;">{{ customer_name }}</td>
+                        <td class="header-cell" style="font-size: 15px; white-space: normal;">الباقي بعد <br>هذا
+                            الإيصال:</td>
+                        <td class="text-center number-bold">{{ remaining_amount }}</td>
+                    </tr>
+                    <tr>
+                        <td class="header-cell">العنوان :</td>
+                        <td colspan="3" class="text-start" style="padding-right: 10px !important;">{{ address }}</td>
+                        <td class="header-cell">هاتف :</td>
+                        <td class="text-center font-weight-bold">{{ phone_number }}</td>
+                    </tr>
+                    <tr>
+                        <td colspan="4" class="text-center" style="font-size: 16px;">
+                            بموجب هذا الإيصال أتعهد بأن أدفع مبلغ
+                            <span class="border px-1 mx-1 number-bold">{{ amount_to_pay }}</span>
+                            ({{ amount_in_words }}) جنيها فقط لا غير
+                        </td>
+                        <td class="header-cell">تاريخ الدفع :</td>
+                        <td class="text-center">{{ payment_date }}</td>
+                    </tr>
+                    <tr>
+                        <td rowspan="2" class="header-cell">الصنف:</td>
+                        <td colspan="3" rowspan="2" class="text-center" style="white-space: pre-wrap;">{{ products_text }}</td>
+                        <td class="header-cell">تاريخ البيع :</td>
+                        <td class="text-center">{{ sale_date }}</td>
+                    </tr>
+                    <tr>
+                        <td class="header-cell">نظام القسط :</td>
+                        <td class="text-center">{{ installment_system }}</td>
+                    </tr>
+                    <tr>
+                        <td class="header-cell">المندوب :</td>
+                        <td colspan="2" class="text-center">{{ salesperson_name }}</td>
+                        <td colspan="3" class="text-center small">
+                            {{ company_settings.footer_text|default:"" }} للإستعلام : {{ company_settings.phone1 }}
+                            {% if company_settings.phone2 %} - {{ company_settings.phone2 }} {% endif %}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>

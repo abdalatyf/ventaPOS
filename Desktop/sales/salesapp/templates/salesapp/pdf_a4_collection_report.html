@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <title>كشف تحصيل الأقساط</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            font-size: 14px;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* 🔴 هذه القاعدة تجبر الطابعة على بدء صفحة جديدة لكل مندوب */
+        .page-break {
+            page-break-before: always;
+        }
+
+        /* إخفاء فاصل الصفحة لأول مندوب فقط حتى لا نطبع صفحة بيضاء في البداية */
+        .page-break:first-of-type {
+            page-break-before: avoid;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .header h1 {
+            margin: 0 0 5px 0;
+            font-size: 24px;
+        }
+
+        .header p {
+            margin: 2px 0;
+            font-size: 16px;
+        }
+
+        .report-title {
+            text-align: center;
+            background-color: #f0f0f0;
+            padding: 8px;
+            font-weight: bold;
+            font-size: 18px;
+            border: 1px solid #ccc;
+            margin-bottom: 15px;
+        }
+
+        .salesperson-title {
+            font-size: 18px;
+            font-weight: bold;
+            background-color: #d9edf7;
+            padding: 10px;
+            border: 1px solid #bce8f1;
+            color: #31708f;
+            margin-bottom: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+
+        th,
+        td {
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        /* إجمالي المندوب الفردي */
+        .sp-total {
+            text-align: left;
+            font-weight: bold;
+            font-size: 16px;
+            padding: 10px;
+            background-color: #e8f5e9;
+            border: 1px solid #c3e6cb;
+            color: #3c763d;
+            margin-bottom: 20px;
+        }
+
+        /* الإجمالي الكلي للشركة */
+        .grand-total {
+            margin-top: 40px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 20px;
+            border: 2px solid #000;
+            padding: 15px;
+            background-color: #fff3cd;
+        }
+
+        .print-date {
+            font-size: 10px;
+            color: #777;
+            text-align: left;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- الدوران الأول: على كل مندوب لإنشاء صفحته الخاصة -->
+    {% for salesperson, data in report_data.items %}
+
+    <div class="page-break">
+        <!-- 1. الترويسة (تتكرر في كل صفحة ليكون الكشف مستقلاً) -->
+        <div class="header">
+            <h1>{{ company.name|default:"اسم الشركة غير محدد" }}</h1>
+            <p>{{ company.description|default:"" }}</p>
+            <p>هاتف: {{ company.phone1 }} {% if company.phone2 %} - {{ company.phone2 }}{% endif %}</p>
+        </div>
+
+        <div class="report-title">
+            كشف تحصيلات الأقساط
+            {% if req_month and req_year %}
+            لشهر ({{ req_month }} / {{ req_year }})
+            {% endif %}
+        </div>
+
+        <!-- 2. اسم المندوب -->
+        <div class="salesperson-title">المحصل / المندوب: {{ salesperson }}</div>
+
+        <!-- 3. جدول التحصيلات الخاص بهذا المندوب -->
+        <table>
+            <thead>
+                <tr>
+                    <th width="5%">م</th>
+                    <th width="10%">رقم الوصل</th>
+                    <th width="20%">اسم العميل</th>
+                    <th width="15%">رقم الهاتف</th>
+                    <th width="25%">العنوان / المنطقة</th>
+                    <th width="10%">شهر البيع</th>
+                    <th width="15%">المبلغ المستحق</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- الدوران الثاني: على الفواتير الخاصة بهذا المندوب فقط -->
+                {% for p in data.payments %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td><b>{{ p.receipt_num }}</b></td>
+                    <td class="text-right">{{ p.customer_name }}</td>
+                    <td>{{ p.phone }}</td>
+                    <td class="text-right">{{ p.address }}</td>
+                    <td>{{ p.sale_date }}</td>
+                    <td><b>{{ p.amount }} جنية</b></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- 4. إجمالي عهدة هذا المندوب فقط (تم حسابها مسبقاً في views.py) -->
+        <div class="sp-total">
+            إجمالي عهدة المندوب ({{ salesperson }}): <span style="font-size: 18px; color: #d9534f;">{{ data.sp_total }}
+                جنية</span>
+        </div>
+
+        <div class="print-date">
+            تاريخ الطباعة: {{ print_date }}
+        </div>
+    </div>
+
+    {% empty %}
+    <h3 style="text-align: center; color: red; margin-top: 50px;">لا توجد بيانات تطابق الفلاتر المختارة لطباعتها.</h3>
+    {% endfor %}
+
+    <!-- ============================================ -->
+    <!-- الصفحة الأخيرة: الإجمالي الكلي للشركة (ملخص الإدارة) -->
+    <!-- ============================================ -->
+    {% if total_amount > 0 %}
+    <div class="page-break">
+        <div class="header">
+            <h1>{{ company.name|default:"اسم الشركة غير محدد" }}</h1>
+            <p>ملخص الإدارة المالي</p>
+        </div>
+
+        <div class="grand-total">
+            الإجمالي الكلي المتوقع تحصيله لهذا الشهر (لجميع المناديب): <br>
+            <span style="font-size: 30px; color: #d9534f; display: block; margin-top: 10px;">{{ total_amount }}
+                جنية</span>
+        </div>
+
+        <div class="print-date" style="text-align: center; margin-top: 50px;">
+            تمت الطباعة بواسطة النظام بتاريخ: {{ print_date }}
+        </div>
+    </div>
+    {% endif %}
+
+</body>
+
+</html>

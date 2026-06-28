@@ -1,0 +1,22 @@
+<ul class="nav nav-tabs nav-fill mb-4 fw-bold shadow-sm rounded-top bg-white">
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_products' %}active bg-success text-white{% else %}text-dark{% endif %}" href="{% url 'manage_products' %}">
+            <i class="bi bi-box-seam"></i> 1. المخزن
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_suppliers' %}active bg-success text-white{% else %}text-dark{% endif %}" href="{% url 'manage_suppliers' %}">
+            <i class="bi bi-building"></i> 2. الموردين
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_purchase_invoices' %}active bg-success text-white{% else %}text-dark{% endif %}" href="{% url 'manage_purchase_invoices' %}">
+            <i class="bi bi-receipt"></i> 3. فواتير الشراء ومرتجع المصنع
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'search_purchase_invoices' %}active bg-success text-white{% else %}text-dark{% endif %}" href="{% url 'search_purchase_invoices' %}">
+            <i class="bi bi-search"></i> 4. سجل الفواتير
+        </a>
+    </li>
+</ul>

@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<h2 class="mb-4 fw-bold">📊 نظرة عامة على المشروع</h2>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card stat-card bg-success text-white p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="opacity-75">إجمالي الأرباح (Lifetime)</h6>
+                    <h2 class="fw-bold">{{ total_revenue }} جنية</h2>
+                </div>
+                <div style="font-size: 3rem;">💰</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card stat-card bg-primary text-white p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="opacity-75">عدد العملاء</h6>
+                    <h2 class="fw-bold">{{ total_clients }}</h2>
+                </div>
+                <div style="font-size: 3rem;">👥</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card stat-card bg-info text-white p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="opacity-75">رخص نشطة</h6>
+                    <h2 class="fw-bold">{{ active_licenses }}</h2>
+                </div>
+                <div style="font-size: 3rem;">✅</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h4 class="mb-3 mt-4 fw-bold text-secondary">📅 إحصائيات الشهر الحالي</h4>
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card stat-card bg-success bg-opacity-75 text-white p-3 border-0">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="opacity-75">أرباح الشهر الحالي</h6>
+                    <h2 class="fw-bold">{{ revenue_this_month }} جنية</h2>
+                </div>
+                <div style="font-size: 2.5rem;">📈</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card stat-card bg-primary bg-opacity-75 text-white p-3 border-0">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="opacity-75">عملاء جدد (هذا الشهر)</h6>
+                    <h2 class="fw-bold">{{ new_clients_this_month }}</h2>
+                </div>
+                <div style="font-size: 2.5rem;">🆕</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card stat-card bg-info bg-opacity-75 text-white p-3 border-0">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="opacity-75">تراخيص مُصدرة (هذا الشهر)</h6>
+                    <h2 class="fw-bold">{{ licenses_count_this_month }}</h2>
+                </div>
+                <div style="font-size: 2.5rem;">🔑</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if expiring_soon %}
+<div class="card mb-4 border-warning">
+    <div class="card-header bg-warning text-dark fw-bold">
+        ⚠️ اشتراكات تنتهي قريباً (أقل من شهر)
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>العميل</th>
+                    <th>الهاتف</th>
+                    <th>متبقي (يوم)</th>
+                    <th>ينتهي في</th>
+                    <th>إجراء</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in expiring_soon %}
+                <tr>
+                    <td>{{ item.client_name }}</td>
+                    <td>{{ item.phone }}</td>
+                    <td class="fw-bold text-danger">{{ item.days_left }} يوم</td>
+                    <td>{{ item.end_date }}</td>
+                    <td>
+                        <a href="https://wa.me/+2{{ item.phone }}?text=مرحباً {{ item.client_name }}، نود تذكيركم باقتراب انتهاء الاشتراك."
+                            target="_blank" class="btn btn-sm btn-success">
+                            إرسال واتساب 💬
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header bg-white fw-bold">
+        📝 آخر 5 رخص تم إصدارها
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-striped mb-0">
+            <thead>
+                <tr>
+                    <th>العميل</th>
+                    <th>الباقة</th>
+                    <th>السعر</th>
+                    <th>الكود</th>
+                    <th>التاريخ</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for lic in recent_licenses %}
+                <tr>
+                    <td>{{ lic.client.name }}</td>
+                    <td>{{ lic.get_product_id_display }}</td>
+                    <td class="text-success fw-bold">{{ lic.price }} جنية</td>
+                    <td><code>{{ lic.generated_code }}</code></td>
+                    <td>{{ lic.created_at|date:"Y-m-d" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

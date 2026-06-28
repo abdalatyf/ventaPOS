@@ -1,0 +1,124 @@
+{% extends 'salesapp/base.html' %}
+{% load static %}
+
+{% block title %}إعداد النظام لأول مرة{% endblock %}
+
+{% block content %}
+<div class="container d-flex justify-content-center align-items-center" style="min-height: 80vh;">
+
+    <div class="card shadow-lg border-0" style="width: 100%; max-width: 800px;">
+        <div class="card-header bg-primary text-white text-center py-4">
+            <h2 class="fw-bold mb-2"><i class="bi bi-rocket-takeoff-fill"></i> مرحباً بك!</h2>
+            <p class="mb-0 opacity-75">للبدء في استخدام التطبيق، يرجى إعداد حساب المدير وبيانات المؤسسة.</p>
+        </div>
+
+        <div class="card-body p-4 bg-light">
+
+            {% if form.errors %}
+            <div class="alert alert-danger shadow-sm">
+                <ul class="mb-0 small">
+                    {% for field in form %}
+                    {% for error in field.errors %}
+                    <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                    {% endfor %}
+                    {% endfor %}
+                    {% for error in form.non_field_errors %}
+                    <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <form method="POST">
+                {% csrf_token %}
+
+                <div class="row g-3">
+
+                    <div class="col-12">
+                        <div class="alert alert-info border-0 shadow-sm d-flex align-items-center">
+                            <i class="bi bi-person-badge-fill fs-3 me-3 text-info"></i>
+                            <div>
+                                <h6 class="alert-heading fw-bold mb-1">1. إنشاء حساب المدير (Admin)</h6>
+                                <p class="mb-0 small text-muted">هذا الحساب سيملك الصلاحية الكاملة للتحكم في النظام.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-bold text-dark">اسم المستخدم <span
+                                class="text-danger">*</span></label>
+                        {{ form.username }}
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">كلمة المرور <span
+                                class="text-danger">*</span></label>
+                        {{ form.password }}
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">تأكيد كلمة المرور <span
+                                class="text-danger">*</span></label>
+                        {{ form.confirm_password }}
+                    </div>
+
+                    <div class="col-12">
+                        <hr class="my-4">
+                    </div>
+
+                    <div class="col-12">
+                        <div class="d-flex align-items-center mb-2">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="badge bg-secondary rounded-circle me-2">2</span>
+                            <h6 class="fw-bold mb-0 text-dark">بيانات المؤسسة (للطباعة) والفرع</h6>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-bold text-dark">اسم الشركة / المؤسسة <span
+                                class="text-danger">*</span></label>
+                        {{ form.name }}
+                        <div class="form-text small">سيظهر بخط عريض أعلى الفاتورة.</div>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-bold text-dark">اسم الفرع الرئيسي <span
+                                class="text-danger">*</span></label>
+                        {{ form.branch_name }}
+                        <div class="form-text small">سيتم إنشاء هذا الفرع كفرع افتراضي للنظام.</div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">رقم تليفون 1 <span
+                                class="text-danger">*</span></label>
+                        {{ form.phone1 }}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">رقم تليفون 2</label>
+                        {{ form.phone2 }}
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-success btn-lg fw-bold shadow-sm py-3">
+                        <i class="bi bi-check-circle-fill me-2"></i> حفظ البيانات وبدء العمل
+                    </button>
+                    
+                    <a href="{% url 'login' %}?cloud=1" class="btn btn-outline-primary btn-lg fw-bold shadow-sm py-3 mt-3">
+                        <i class="bi bi-cloud-arrow-down-fill me-2"></i> أنا موظف على جهاز فرعي (دخول أونلاين)
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <div class="card-footer text-center bg-white py-3">
+            <small class="text-muted fw-bold">
+                <i class="bi bi-shield-lock"></i> بمجرد الحفظ، سيتم تأمين هذه البيانات ولن يمكن تعديلها إلا بإذن المطور.
+            </small>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

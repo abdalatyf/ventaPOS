@@ -1,0 +1,34 @@
+<ul class="nav nav-tabs nav-fill mb-4 fw-bold shadow-sm rounded-top bg-white">
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'general_settings' %}active{% endif %}" href="{% url 'general_settings' %}">
+            <i class="bi bi-gear-fill"></i> الإعدادات العامة
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_branches' %}active{% endif %}" href="{% url 'manage_branches' %}">
+            <i class="bi bi-shop"></i> إدارة الفروع
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_salespersons' %}active{% endif %}" href="{% url 'manage_salespersons' %}">
+            <i class="bi bi-people"></i> إدارة المناديب
+        </a>
+    </li>
+    {% if is_pro_plan %}
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_expenses' %}active{% endif %}" href="{% url 'manage_expenses' %}">
+            <i class="bi bi-wallet2"></i> إدارة المصروفات
+        </a>
+    </li>
+    {% endif %}
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'smart_import_wizard' %}active{% endif %}" href="{% url 'smart_import_wizard' %}">
+            <i class="bi bi-magic"></i> الاستيراد الذكي
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'subscription_dashboard' %}active{% endif %}" href="{% url 'subscription_dashboard' %}">
+            <i class="bi bi-shield-check"></i> الاشتراكات والتراخيص
+        </a>
+    </li>
+</ul>

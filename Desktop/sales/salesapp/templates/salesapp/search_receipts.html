@@ -1,0 +1,126 @@
+{% extends 'salesapp/base.html' %}
+{% load static %}
+{% load sales_filters %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h3 class="mt-4 mb-4 text-center text-primary fw-bold">
+        <i class="bi bi-search"></i> {{ page_title }} <span class="text-dark fs-6">- ({{ request.branch.name }})</span>
+    </h3>
+
+    <div class="card shadow-sm mb-4 border-0">
+        <div class="card-header bg-white py-3 border-bottom">
+            <h6 class="m-0 font-weight-bold text-primary"><i class="bi bi-funnel-fill"></i> تصفية النتائج</h6>
+        </div>
+        <div class="card-body bg-light">
+            <form id="search-form" hx-get="{% url 'search_receipts' %}" hx-target="#search-results-container"
+                hx-swap="outerHTML" hx-trigger="submit, change delay:300ms from:input, change from:select">
+                {% csrf_token %}
+                <div class="row g-2 mb-3">
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">المندوب</label>
+                        <select class="form-select form-select-sm" name="salesperson">
+                            <option value="">-- الكل --</option>
+                            {% for person in salespersons %}
+                            <option value="{{ person.id }}" {% if req_get.salesperson == person.id|stringformat:"s" %}selected{% endif %}>
+                                {{ person.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">السنة</label>
+                        <select name="year" class="form-select form-select-sm">
+                            <option value="">الكل</option>
+                            {% for y in available_years %}
+                            <option value="{{ y }}" {% if req_get.year == y|stringformat:"s" %}selected{% endif %}>{{ y }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">الشهر</label>
+                        <input type="number" class="form-control form-control-sm" name="month"
+                            value="{{ req_get.month }}" placeholder="1-12">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">من رقم وصل</label>
+                        <input type="number" class="form-control form-control-sm" name="receipt_from"
+                            value="{{ req_get.receipt_from }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">إلى رقم وصل</label>
+                        <input type="number" class="form-control form-control-sm" name="receipt_to"
+                            value="{{ req_get.receipt_to }}">
+                    </div>
+                </div>
+
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold text-success">اسم العميل</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text"><i class="bi bi-person"></i></span>
+                            <input type="text" class="form-control" name="customer" value="{{ req_get.customer }}"
+                                placeholder="اكتب للبحث..." autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold text-success">رقم الموبايل</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text"><i class="bi bi-phone"></i></span>
+                            <input type="text" class="form-control" name="phone" value="{{ req_get.phone }}"
+                                placeholder="اكتب للبحث..." autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold text-success">العنوان</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
+                            <input type="text" class="form-control" name="address" value="{{ req_get.address }}"
+                                placeholder="اكتب للبحث..." autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold text-success">المنطقة</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text"><i class="bi bi-map"></i></span>
+                            <input type="text" class="form-control" name="area" value="{{ req_get.area }}"
+                                placeholder="اكتب للبحث..." autocomplete="off">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-start mt-3">
+                    <button type="submit" class="btn btn-primary btn-sm px-4">
+                        <i class="bi bi-search"></i> بحث
+                    </button>
+                    <a href="{% url 'search_receipts' %}" class="btn btn-secondary btn-sm px-3">
+                        <i class="bi bi-x-circle"></i> إلغاء الفلاتر
+                    </a>
+
+                    <span class="htmx-indicator spinner-border spinner-border-sm text-primary ms-2"
+                        role="status"></span>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            {% include 'salesapp/includes/receipt_list_rows.html' %}
+        </div>
+    </div>
+</div>
+
+<script>
+    // للتأكد من تفعيل Select2 إذا كنت تستخدمه للقوائم المنسدلة (اختياري)
+    /*
+    document.addEventListener('htmx:afterSwap', function(evt) {
+        // إعادة تفعيل أي كود JS يحتاج للعمل بعد تحديث الجدول
+    });
+    */
+</script>
+
+{% endblock %}

@@ -1,0 +1,27 @@
+{
+    "receipts": [
+        {
+            "id": 999,
+            "sale_year": 2026,
+            "sale_month": 6,
+            "is_cash_sale": true,
+            "customer_name": "Test Customer",
+            "phone_number": "0123456789",
+            "address": "Cairo",
+            "area": "Nasr City",
+            "down_payment": 500,
+            "total_amount": 500,
+            "salesperson_id": null,
+            "installment_system": "",
+            "products_text": "1 x Item A",
+            "items": [
+                {
+                    "item_id": 1,
+                    "quantity": 1,
+                    "price": 500
+                }
+            ],
+            "installments": []
+        }
+    ]
+}

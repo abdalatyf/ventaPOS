@@ -1,0 +1,268 @@
+{% extends 'salesapp/base.html' %}
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4 px-4">
+    <h3 class="mb-4 text-center fw-bold text-primary"><i class="bi bi-magic"></i> المعالج الذكي لاستيراد البيانات
+        القديمة</h3>
+
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} shadow-sm fw-bold">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- الخطوة 1: رفع الملف -->
+    {% if step == 'upload' %}
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow border-0">
+                <div class="card-header bg-dark text-white fw-bold py-3 text-center">1. رفع ملف الإكسيل</div>
+                <div class="card-body p-5 text-center bg-light">
+                    <i class="bi bi-file-earmark-spreadsheet text-success" style="font-size: 4rem;"></i>
+                    <p class="text-muted mt-3 mb-4">ارفع ملف البيانات القديم (.xls أو .xlsx). سيقوم النظام بترتيبها
+                        وتوليد الأقساط تلقائياً دون التعدي على فترة اشتراكك الحالية.</p>
+                    <form method="POST" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <input type="hidden" name="step" value="upload">
+                        <input class="form-control form-control-lg mb-3" type="file" name="excel_file"
+                            accept=".xls,.xlsx" required>
+                        <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold shadow-sm">قراءة الملف <i
+                                class="bi bi-arrow-left"></i></button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- الخطوة 2: اختيار الدفتر -->
+    {% if step == 'select_sheet' %}
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow border-0">
+                <div class="card-header bg-primary text-white fw-bold py-3 text-center">2. اختيار الدفتر (Sheet)</div>
+                <div class="card-body p-5 bg-light text-center">
+                    <p class="fs-5 mb-4">لقد وجدنا أكثر من ورقة عمل في هذا الملف. أي دفتر تريد استيراده الآن؟</p>
+                    <form method="POST">
+                        {% csrf_token %}
+                        <input type="hidden" name="step" value="select_sheet">
+                        <select name="sheet_name" class="form-select form-select-lg mb-4 fw-bold text-center" required>
+                            {% for sheet in sheet_names %}
+                            <option value="{{ sheet }}">{{ sheet }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-success btn-lg w-100 fw-bold">تأكيد وعرض البيانات</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- الخطوة 3: المطابقة البصرية (20 صف) -->
+    {% if step == 'mapping' %}
+    <div class="card shadow border-0">
+        <div class="card-header bg-warning text-dark fw-bold py-3 d-flex justify-content-between align-items-center">
+            <span>3. مطابقة الأعمدة (عينة من 20 صف)</span>
+            <span class="badge bg-danger">تجاهل عمود "رقم الوصل" - النظام سيقوم بالترقيم تلقائياً</span>
+        </div>
+        <div class="card-body p-0">
+            <form method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="step" value="mapping">
+                <input type="hidden" name="sheet_name" value="{{ sheet_name }}">
+
+                <div class="table-responsive" style="overflow-x: auto; white-space: nowrap; max-height: 60vh;">
+                    <table class="table table-bordered table-striped text-center align-middle mb-0">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                {% for col in columns %}
+                                <th style="min-width: 180px;">
+                                    <div class="mb-2 text-warning small">عمود الإكسيل: [{{ col }}]</div>
+                                    <select class="form-select form-select-sm fw-bold border-0 shadow-sm"
+                                        name="map_col_{{ forloop.counter0 }}">
+                                        {% for key, label in mappable_fields.items %}
+                                        <option value="{{ key }}">{{ label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in preview_data %}
+                            <tr>
+                                {% for cell in row %}
+                                <td class="text-truncate" style="max-width: 180px;" title="{{ cell }}">{{ cell }}</td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="p-4 bg-light text-end border-top">
+                    <button type="submit" class="btn btn-success btn-lg px-5 fw-bold shadow">
+                        الخطوة التالية: مراجعة المناديب <i class="bi bi-arrow-left"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- الخطوة 4: غرفة عمليات المناديب -->
+    {% if step == 'salesperson_room' %}
+    <div class="card shadow border-0">
+        <div class="card-header bg-info text-dark fw-bold py-3">
+            <i class="bi bi-people-fill"></i> 4. غرفة معالجة المناديب (تأكيد الهوية)
+        </div>
+        <div class="card-body bg-light">
+            <div class="alert alert-primary shadow-sm mb-4">
+                <i class="bi bi-info-circle-fill me-2"></i> لقد استخرجنا هذه الأسماء من ملفك القديم. يرجى إخبارنا بما
+                نفعل بها لضمان دقة التقارير.
+            </div>
+
+            <form method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="step" value="process">
+                <input type="hidden" name="sheet_name" value="{{ sheet_name }}">
+                <input type="hidden" name="mapping_json" value="{{ mapping_json }}">
+
+                <div class="row g-4">
+                    {% for sp_name in unique_excel_sps %}
+                    <div class="col-md-6">
+                        <div class="card h-100 border-primary">
+                            <div class="card-header bg-primary text-white fw-bold">الاسم في الإكسيل: [ {{ sp_name }} ]</div>
+                            <div class="card-body">
+                    
+                                <!-- 🔴 حقل مخفي يحمل الاسم الأصلي بدقة متناهية للـ Backend -->
+                                <input type="hidden" name="sp_original_{{ forloop.counter }}" value="{{ sp_name }}">
+                    
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input sp-radio" type="radio" name="sp_action_{{ forloop.counter }}"
+                                        value="link" id="link_{{ forloop.counter }}" checked>
+                                    <label class="form-check-label fw-bold" for="link_{{ forloop.counter }}">ربط بمندوب مسجل حالياً:</label>
+                                    <select class="form-select mt-2 target-link" name="sp_link_{{ forloop.counter }}">
+                                        {% for db_sp in current_db_sps %}
+                                        <option value="{{ db_sp.id }}" {% if db_sp.name == sp_name %}selected{% endif %}>{{ db_sp.name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                    
+                                <hr>
+                    
+                                <div class="form-check">
+                                    <input class="form-check-input sp-radio" type="radio" name="sp_action_{{ forloop.counter }}"
+                                        value="create" id="create_{{ forloop.counter }}">
+                                    <label class="form-check-label fw-bold" for="create_{{ forloop.counter }}">إنشاء كمندوب جديد بالاسم
+                                        التالي:</label>
+                                    <input type="text" class="form-control mt-2 target-create" name="sp_create_{{ forloop.counter }}"
+                                        value="{{ sp_name }}" disabled>
+                                </div>
+                    
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+
+
+                </div>
+
+                <div class="text-center mt-5">
+                    <button type="submit" class="btn btn-danger btn-lg px-5 py-3 fw-bold shadow"
+                        onclick="this.innerHTML='جاري الحقن ومعالجة البيانات...'; this.style.pointerEvents='none';">
+                        <i class="bi bi-database-fill-check"></i> اعتماد وبدء الاستيراد النهائي
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // سكريبت بسيط لتفعيل وتعطيل الخانات بناءً على الـ Radio Button
+        document.querySelectorAll('.sp-radio').forEach(radio => {
+            radio.addEventListener('change', function () {
+                const cardBody = this.closest('.card-body');
+                const linkSelect = cardBody.querySelector('.target-link');
+                const createInput = cardBody.querySelector('.target-create');
+
+                if (this.value === 'link') {
+                    linkSelect.disabled = false;
+                    createInput.disabled = true;
+                } else {
+                    linkSelect.disabled = true;
+                    createInput.disabled = false;
+                }
+            });
+        });
+    </script>
+    {% endif %}
+
+    <!-- الخطوة 5: التقرير النهائي -->
+    {% if step == 'result' %}
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow border-0">
+                <div class="card-header bg-success text-white text-center py-3 fw-bold fs-4">
+                    <i class="bi bi-check-circle-fill"></i> تقرير عملية الاستيراد
+                </div>
+                <div class="card-body p-4">
+                    <div class="row text-center mb-4">
+                        <div class="col-6">
+                            <div class="p-3 bg-success-subtle text-success rounded border border-success">
+                                <h1>{{ success_count }}</h1>
+                                <h6>فاتورة ناجحة</h6>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 bg-secondary-subtle text-secondary rounded border border-secondary">
+                                <h1>{{ skipped_count }}</h1>
+                                <h6>صفوف متخطاة (فارغة)</h6>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if error_list %}
+                    <h5 class="fw-bold text-danger border-bottom pb-2 mb-3"><i class="bi bi-exclamation-triangle"></i>
+                        فواتير تم رفضها أو بها أخطاء ({{ error_list|length }}):</h5>
+                    <div class="table-responsive" style="max-height: 300px;">
+                        <table class="table table-sm table-bordered text-center">
+                            <thead class="table-danger">
+                                <tr>
+                                    <th>صف الإكسيل</th>
+                                    <th>العميل</th>
+                                    <th>سبب الرفض الدقيق</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for err in error_list %}
+                                <tr>
+                                    <td class="fw-bold">{{ err.row }}</td>
+                                    <td>{{ err.client }}</td>
+                                    <td class="text-danger text-start">{{ err.reason }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-success text-center fw-bold">
+                        🎉 لم يتم العثور على أي أخطاء! الدفتر نظيف تماماً.
+                    </div>
+                    {% endif %}
+
+                    <div class="text-center mt-4">
+                        <a href="{% url 'search_receipts' %}" class="btn btn-primary px-5 fw-bold">تصفح الفواتير
+                            الآن</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

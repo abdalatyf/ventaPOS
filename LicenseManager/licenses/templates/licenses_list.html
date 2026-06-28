@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-4 fw-bold">🔑 إدارة التراخيص</h2>
+
+<div class="card p-3 mb-4">
+    <form method="GET" class="row g-2">
+        <div class="col-md-8">
+            <input type="text" name="q" class="form-control" placeholder="بحث بالعميل أو كود التفعيل..." value="{{ request.GET.q }}">
+        </div>
+        <div class="col-md-2">
+            <select name="status" class="form-select">
+                <option value="">جميع الحالات</option>
+                <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>نشط</option>
+                <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>غير نشط</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary w-100" type="submit">فلترة وبحث 🔍</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="bg-light">
+                <tr>
+                    <th>العميل</th>
+                    <th>الباقة</th>
+                    <th>كود التفعيل</th>
+                    <th>حالة الانتهاء</th>
+                    <th>إجراءات</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for license in licenses %}
+                <tr>
+                    <td>{{ license.client.name }}</td>
+                    <td>{{ license.get_product_id_display }}</td>
+                    <td><code>{{ license.generated_code }}</code></td>
+                    <td>
+                        <span class="badge {% if license.get_expiry_date %}bg-success{% else %}bg-secondary{% endif %}">
+                            {{ license.get_whatsapp_date_str }}
+                        </span>
+                    </td>
+                    <td>
+                        <form action="{% url 'delete_license' license.id %}" method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من حذف هذه الرخصة؟');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-danger">حذف 🗑️</button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center py-4">لا يوجد تراخيص.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,364 @@
+{% extends 'salesapp/base.html' %}
+{% load static %}
+{% load humanize %}
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h3 class="mb-4 text-center fw-bold text-success"><i class="bi bi-box-seam"></i> إضافة للمخزن أول مرة</h3>
+
+    <ul class="nav nav-tabs nav-fill mb-4 fw-bold shadow-sm rounded-top">
+        <li class="nav-item">
+            <a class="nav-link active bg-success text-white" href="{% url 'manage_products' %}">
+                <i class="bi bi-box-seam"></i> 1. المخزن
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link text-dark" href="{% url 'manage_suppliers' %}">
+                <i class="bi bi-building"></i> 2. الموردين
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link text-dark" href="{% url 'manage_purchase_invoices' %}">
+                <i class="bi bi-receipt"></i> 3. فواتير الشراء ومرتجع المصنع
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link text-dark" href="{% url 'search_purchase_invoices' %}"><i
+                    class="bi bi-search"></i> 4. سجل الفواتير</a>
+        </li>
+    </ul>
+
+    <div class="card shadow-sm mb-4 border-0">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0 text-success fw-bold"><i class="bi bi-plus-circle"></i> تعريف منتج جديد</h5>
+        </div>
+        <div class="card-body bg-light">
+            {% if error_message %}
+            <div class="alert alert-danger">{{ error_message }}</div>
+            {% endif %}
+
+            <form method="POST" action="{% url 'manage_products' %}" class="row g-3 bg-white p-4 rounded shadow-sm border">
+                {% csrf_token %}
+
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">اسم المنتج</label>
+                    <input type="text" name="product_name" class="form-control" required placeholder="مثال: ثلاجة توشيبا">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">الكمية</label>
+                    <input type="number" name="initial_quantity" class="form-control" value="0" min="0">
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">سعر الشراء</label>
+                    <input type="number" name="initial_purchase_price" class="form-control" value="0" min="0">
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">المندبة</label>
+                    <input type="number" name="initial_commission" class="form-control" value="0" min="0">
+                </div>
+
+                <div class="col-md-3 mt-3">
+                    <label class="form-label fw-bold text-danger">شهر البداية</label>
+                    <select name="start_month" class="form-select fw-bold">
+                        {% for m in "123456789"|make_list %}
+                        <option value="{{ m }}" {% if m|add:"0" == current_month %}selected{% endif %}>شهر {{ m }}</option>
+                        {% endfor %}
+                        <option value="10" {% if current_month == 10 %}selected{% endif %}>شهر 10</option>
+                        <option value="11" {% if current_month == 11 %}selected{% endif %}>شهر 11</option>
+                        <option value="12" {% if current_month == 12 %}selected{% endif %}>شهر 12</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3 mt-3">
+                    <label class="form-label fw-bold text-danger">سنة البداية</label>
+                    <input type="number" name="start_year" class="form-control fw-bold" value="{{ current_year }}" required>
+                </div>
+
+                <div class="col-md-6 mt-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100 fw-bold"><i class="bi bi-save"></i> حفظ في المخزن</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div>
+                <h5 class="mb-0 fw-bold">الأصناف المسجلة</h5>
+                <span class="badge bg-primary rounded-pill mt-1">{{ products|length }} منتج</span>
+            </div>
+            <div class="input-group w-50" style="min-width: 250px;">
+                <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                <input type="text" id="productTableSearch" class="form-control border-start-0" placeholder="ابحث باسم المنتج فوراً...">
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle text-center mb-0" id="productsMainTable">
+                    <thead class="table-dark text-white">
+                        <tr>
+                            <th>م</th>
+                            <th>اسم المنتج</th>
+                            <th>الكمية</th>
+                            <th>سعر الشراء</th>
+                            <th>إجمالي التكلفة</th>
+                            <th>شهر البداية</th>
+                            <th>المندبة</th>
+                            <th>إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in products %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td class="fw-bold">{{ product.name }}</td>
+                            <td>
+                                {% if product.initial_quantity <= 5 %}
+                                    <span class="badge bg-danger rounded-pill px-3">{{ product.initial_quantity|default_if_none:0 }}</span>
+                                {% else %}
+                                    <span class="badge bg-success rounded-pill px-3">{{ product.initial_quantity|default_if_none:0 }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ product.initial_purchase_price|default_if_none:0 }}</td>
+                            <td class="fw-bold text-primary">{{ product.initial_total_cost|floatformat:0|intcomma }}</td>
+                            <td dir="ltr" class="fw-bold text-secondary">{{ product.initial_month }} / {{ product.initial_year }}</td>
+                            <td class="text-success fw-bold">{{ product.initial_commission_amount|default_if_none:0 }}</td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'product_ledger' product.id %}" class="btn btn-outline-info" title="كارت الصنف">
+                                        <i class="bi bi-card-list"></i>
+                                    </a>
+                                    
+                                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#updateCommissionModal{{ product.id }}" title="سجل المندبات والتعديل">
+                                        <i class="bi bi-currency-dollar"></i>
+                                    </button>
+
+                                    <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#editProductModal{{ product.id }}" title="تعديل تفاصيل المنتج">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
+
+                                    <form method="POST" action="{% url 'delete_product' product.pk %}" style="display: inline;" onsubmit="return confirm('هل أنت متأكد من حذف المنتج: {{ product.name }}؟');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-danger" title="حذف"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                </div>
+
+                                <!-- ===================================== -->
+                                <!-- 🔴 Modal إدارة سجل المندبات (المطور) -->
+                                <!-- ===================================== -->
+                                <div class="modal fade" id="updateCommissionModal{{ product.id }}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog modal-lg">
+                                        <div class="modal-content border-success">
+                                            
+                                            <div class="modal-header bg-success text-white">
+                                                <h5 class="modal-title fw-bold"><i class="bi bi-clock-history"></i> إدارة مندبة: {{ product.name }}</h5>
+                                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            
+                                            <div class="modal-body text-end p-4">
+                                                <!-- القسم الأول: إضافة مندبة جديدة لآلة الزمن -->
+                                                <div class="card shadow-sm mb-4 border-success">
+                                                    <div class="card-header bg-light fw-bold text-success">
+                                                        <i class="bi bi-plus-circle"></i> إضافة مندبة جديدة
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <form action="{% url 'update_commission' %}" method="POST" class="row g-2 align-items-end">
+                                                            {% csrf_token %}
+                                                            <input type="hidden" name="item_id" value="{{ product.id }}">
+                                                            
+                                                            <div class="col-md-4">
+                                                                <label class="form-label fw-bold text-success small">المندبة الجديدة</label>
+                                                                <input type="number" name="new_commission" class="form-control fw-bold" value="0" min="0" required>
+                                                            </div>
+                                                            <div class="col-md-3">
+                                                                <label class="form-label fw-bold small">شهر التطبيق</label>
+                                                                <select name="apply_month" class="form-select fw-bold">
+                                                                    {% for m in "123456789"|make_list %}
+                                                                    <option value="{{ m }}" {% if current_month == m|add:"0" %}selected{% endif %}>شهر {{ m }}</option>
+                                                                    {% endfor %}
+                                                                    <option value="10" {% if current_month == 10 %}selected{% endif %}>شهر 10</option>
+                                                                    <option value="11" {% if current_month == 11 %}selected{% endif %}>شهر 11</option>
+                                                                    <option value="12" {% if current_month == 12 %}selected{% endif %}>شهر 12</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-md-3">
+                                                                <label class="form-label fw-bold small">سنة التطبيق</label>
+                                                                <input type="number" name="apply_year" class="form-control fw-bold" value="{{ current_year }}" required>
+                                                            </div>
+                                                            <div class="col-md-2">
+                                                                <button type="submit" class="btn btn-success w-100 fw-bold">حفظ</button>
+                                                            </div>
+                                                        </form>
+                                                    </div>
+                                                </div>
+
+                                                <!-- القسم الثاني: سجل المندبات القديمة -->
+                                                <h6 class="fw-bold text-secondary mb-3 border-bottom pb-2">سجل التواريخ المحفوظة:</h6>
+                                                <div class="table-responsive">
+                                                    <table class="table table-bordered table-hover text-center align-middle text-nowrap">
+                                                        <thead class="table-light">
+                                                            <tr>
+                                                                <th>تاريخ التطبيق (شهر/سنة)</th>
+                                                                <th>قيمة المندبة</th>
+                                                                <th>إجراءات التعديل</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <!-- 🟢 هنا التعديل السحري: commission_records.all -->
+                                                            {% for record in product.commission_records.all %}
+                                                            <tr>
+                                                                <form id="edit-comm-form-{{ record.id }}" action="{% url 'edit_commission_record' record.id %}" method="POST">
+                                                                    {% csrf_token %}
+                                                                </form>
+                                                                
+                                                                <td dir="ltr">
+                                                                    <div class="input-group input-group-sm justify-content-center" style="max-width: 200px; margin: 0 auto;">
+                                                                        <select name="activation_month" form="edit-comm-form-{{ record.id }}" class="form-select text-center fw-bold">
+                                                                            {% for m in "123456789"|make_list %}
+                                                                            <option value="{{ m }}" {% if record.activation_month == m|add:"0" %}selected{% endif %}>{{ m }}</option>
+                                                                            {% endfor %}
+                                                                            <option value="10" {% if record.activation_month == 10 %}selected{% endif %}>10</option>
+                                                                            <option value="11" {% if record.activation_month == 11 %}selected{% endif %}>11</option>
+                                                                            <option value="12" {% if record.activation_month == 12 %}selected{% endif %}>12</option>
+                                                                        </select>
+                                                                        <span class="input-group-text bg-light border-start-0 border-end-0">/</span>
+                                                                        <input type="number" name="activation_year" form="edit-comm-form-{{ record.id }}" class="form-control text-center fw-bold" value="{{ record.activation_year }}" required>
+                                                                    </div>
+                                                                </td>
+                                                                <td>
+                                                                    <input type="number" name="commission_amount" form="edit-comm-form-{{ record.id }}" class="form-control form-control-sm text-center fw-bold text-success mx-auto" style="max-width: 120px;" value="{{ record.commission_amount }}" min="0" required>
+                                                                </td>
+                                                                <td>
+                                                                    <button type="submit" form="edit-comm-form-{{ record.id }}" class="btn btn-sm btn-outline-warning border-0" title="حفظ التعديلات في هذا الصف">
+                                                                        <i class="bi bi-save-fill fs-5"></i>
+                                                                    </button>
+                                                                    <a href="{% url 'delete_commission_record' record.id %}" class="btn btn-sm btn-outline-danger border-0" onclick="return confirm('هل أنت متأكد من حذف هذا السجل؟');" title="حذف السجل">
+                                                                        <i class="bi bi-trash-fill fs-5"></i>
+                                                                    </a>
+                                                                </td>
+                                                            </tr>
+                                                            {% empty %}
+                                                            <tr>
+                                                                <td colspan="3" class="text-danger fw-bold py-4">
+                                                                    <i class="bi bi-exclamation-triangle"></i> لم يتم العثور على أي سجلات! (أضف مندبة جديدة بالأعلى)
+                                                                </td>
+                                                            </tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer bg-light">
+                                                <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">إغلاق النافذة</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- ===================================== -->
+
+                                <!-- ===================================== -->
+                                <!-- 🔴 Modal التعديل الأساسي للمنتج -->
+                                <!-- ===================================== -->
+                                <div class="modal fade" id="editProductModal{{ product.id }}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content border-warning">
+                                            <form action="{% url 'manage_products' %}" method="POST">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="item_id" value="{{ product.id }}">
+
+                                                <div class="modal-header bg-warning-subtle">
+                                                    <h5 class="modal-title fw-bold">تعديل: {{ product.name }}</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <div class="modal-body text-end">
+                                                    <div class="mb-3">
+                                                        <label class="form-label fw-bold">الاسم</label>
+                                                        <input type="text" name="product_name" class="form-control" value="{{ product.name }}" required>
+                                                    </div>
+                                                    <div class="row">
+                                                        <div class="col-md-4 mb-3">
+                                                            <label class="form-label fw-bold">الكمية</label>
+                                                            <input type="number" name="initial_quantity" class="form-control" value="{{ product.initial_quantity|default_if_none:0 }}" min="0" required>
+                                                        </div>
+                                                        <div class="col-md-4 mb-3">
+                                                            <label class="form-label fw-bold">سعر الشراء</label>
+                                                            <input type="number" name="initial_purchase_price" class="form-control" value="{{ product.initial_purchase_price|default_if_none:0 }}" min="0" required>
+                                                        </div>
+                                                        <div class="col-md-4 mb-3">
+                                                            <label class="form-label fw-bold text-success">المندبة</label>
+                                                            <input type="number" name="initial_commission" class="form-control" value="{{ product.initial_commission_amount|default_if_none:0 }}" min="0" required>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <label class="form-label fw-bold">شهر البداية</label>
+                                                            <select name="start_month" class="form-select">
+                                                                {% for m in "123456789"|make_list %}
+                                                                <option value="{{ m }}" {% if product.initial_month == m|add:"0" %}selected{% endif %}>شهر {{ m }}</option>
+                                                                {% endfor %}
+                                                                <option value="10" {% if product.initial_month == 10 %}selected{% endif %}>شهر 10</option>
+                                                                <option value="11" {% if product.initial_month == 11 %}selected{% endif %}>شهر 11</option>
+                                                                <option value="12" {% if product.initial_month == 12 %}selected{% endif %}>شهر 12</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="col-md-6 mb-3">
+                                                            <label class="form-label fw-bold">سنة البداية</label>
+                                                            <input type="number" name="start_year" class="form-control" value="{{ product.initial_year }}" required>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer bg-light">
+                                                    <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">إلغاء</button>
+                                                    <button type="submit" class="btn btn-warning fw-bold text-dark">حفظ التغييرات</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- ===================================== -->
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-5">لا توجد منتجات مسجلة.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-light text-center py-3 border-top">
+            <h5 class="fw-bold text-dark m-0">
+                <i class="bi bi-cash-stack text-success"></i> إجمالي قيمة البضاعة:
+                <span class="text-success mx-2 fs-4 fw-bolder">{{ total_inventory_value|floatformat:0|intcomma }}</span>
+                <span class="text-muted fs-6">جنية</span>
+            </h5>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const searchInput = document.getElementById('productTableSearch');
+        if (searchInput) {
+            searchInput.addEventListener('keyup', function () {
+                let filterValue = this.value.toLowerCase().trim();
+                let rows = document.querySelectorAll('#productsMainTable tbody tr');
+
+                rows.forEach(row => {
+                    if (row.cells.length === 1) return;
+
+                    let productName = row.cells[1].textContent.toLowerCase();
+                    if (productName.includes(filterValue)) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            });
+        }
+    });
+</script>
+{% endblock %}

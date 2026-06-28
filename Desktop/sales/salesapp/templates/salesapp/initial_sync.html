@@ -1,0 +1,33 @@
+{% extends 'salesapp/base.html' %}
+
+{% block content %}
+<div class="container py-5 text-center">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-lg border-0">
+                <div class="card-body p-5">
+                    <div class="mb-4">
+                        <i class="fas fa-cloud-download-alt text-primary" style="font-size: 5rem;"></i>
+                    </div>
+                    <h3 class="fw-bold mb-3">مزامنة البيانات الأولية</h3>
+                    <p class="text-muted mb-4">
+                        هذه هي المرة الأولى التي تقوم فيها بتسجيل الدخول كجهاز فرعي (Cloud Viewer). 
+                        نحتاج إلى جلب بيانات الأصناف، الفروع، والمندوبين من السيرفر المركزي.
+                    </p>
+                    
+                    <form method="POST">
+                        {% csrf_token %}
+                        <input type="hidden" name="company_code" value="{{ request.session.cloud_company_code }}">
+                        
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg" onclick="this.innerHTML='<i class=\'fas fa-spinner fa-spin me-2\'></i> جاري المزامنة...'; this.disabled=true; this.form.submit();">
+                                <i class="fas fa-sync-alt me-2"></i> بدء المزامنة الآن
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

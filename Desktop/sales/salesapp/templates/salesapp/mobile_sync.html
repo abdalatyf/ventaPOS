@@ -1,0 +1,51 @@
+{% extends 'salesapp/base.html' %}
+{% load static %}
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Feature A: Export Setup JSON -->
+    <div class="card shadow mb-4">
+        <div class="card-header bg-success text-white">
+            <h4 class="mb-0 fw-bold"><i class="bi bi-download"></i> تصدير بيانات المندوب (setup.json)</h4>
+        </div>
+        <div class="card-body">
+            <form action="{% url 'export_setup_json' %}" method="GET" class="d-flex align-items-end gap-3 flex-wrap">
+                <div class="flex-grow-1" style="min-width: 250px;">
+                    <label class="form-label fw-bold">اختر المندوب</label>
+                    <select name="salesperson_id" class="form-select" required>
+                        <option value="">-- اختر المندوب --</option>
+                        {% for sp in salespersons %}
+                        <option value="{{ sp.id }}">{{ sp.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-success fw-bold px-4">تصدير الملف</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Feature B: File Upload UI -->
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0 fw-bold"><i class="bi bi-cloud-arrow-up"></i> استيراد فواتير المندوبين (JSON)</h4>
+        </div>
+        <div class="card-body">
+            <form id="uploadForm" hx-post="{% url 'mobile_import_preview' %}" hx-target="#preview-container" hx-encoding="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label fw-bold">ملف الـ JSON (الخاص بالمندوب - Sales_B...json)</label>
+                    <input type="file" name="json_file" accept=".json" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary fw-bold">رفع وعرض البيانات (معاينة)</button>
+            </form>
+
+            <hr class="my-4">
+            
+            <div id="preview-container">
+                <!-- جدول الفواتير سيظهر هنا -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

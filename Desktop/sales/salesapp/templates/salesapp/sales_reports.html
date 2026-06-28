@@ -1,0 +1,448 @@
+{% extends "salesapp/base.html" %}
+{% load humanize %}
+
+{% block title %}التقارير والجرد - {{ current_branch.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <!-- ============================================== -->
+    <!-- 🎛️ شريط الفلاتر الرئيسي -->
+    <!-- ============================================== -->
+    <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded shadow-sm border">
+        <div>
+            <h4 class="fw-bold text-dark mb-0"><i class="bi bi-box-seam"></i> التقارير والجرد الموحد</h4>
+            <span class="text-muted small">فرع {{ current_branch.name }} - عن شهر: <span class="fw-bold text-primary">{{ selected_month }} / {{ selected_year }}</span></span>
+        </div>
+
+        <form method="get" action="{% url 'sales_reports' %}" class="d-flex align-items-center gap-2">
+            <select name="salesperson" class="form-select form-select-sm" style="max-width: 150px;">
+                <option value="">كل المناديب</option>
+                {% for sp in salespersons %}
+                <option value="{{ sp.id }}" {% if selected_salesperson_id == sp.id %} selected {% endif %}>{{ sp.name }}
+                </option>
+                {% endfor %}
+            </select>
+            <select name="month" class="form-select form-select-sm fw-bold" style="width: 100px;">
+                {% for m in available_months %}
+                <option value="{{ m }}" {% if selected_month == m %} selected {% endif %}>شهر {{ m }}</option>
+                {% endfor %}
+            </select>
+            <select name="year" class="form-select form-select-sm fw-bold" style="width: 80px;">
+                {% for y in available_years %}
+                <option value="{{ y }}" {% if selected_year == y %} selected {% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> عرض</button>
+        </form>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- 🗂️ التبويبات (Tabs Navigation) -->
+    <!-- ============================================== -->
+    <ul class="nav nav-tabs nav-fill mb-4 fw-bold shadow-sm bg-white rounded-top" id="reportTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active text-dark" id="inventory-tab" data-bs-toggle="tab"
+                data-bs-target="#inventory" type="button" role="tab">
+                <i class="bi bi-boxes text-primary"></i> 1. حركة المخزن والتسويات
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link text-dark" id="profit-tab" data-bs-toggle="tab" data-bs-target="#profit"
+                type="button" role="tab">
+                <i class="bi bi-graph-up-arrow text-success"></i> 2. بيان الأرباح والخسائر
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link text-dark" id="details-tab" data-bs-toggle="tab" data-bs-target="#details"
+                type="button" role="tab">
+                <i class="bi bi-receipt text-secondary"></i> 3. السجل التفصيلي للفواتير
+            </button>
+        </li>
+    </ul>
+
+    <!-- ============================================== -->
+    <!-- 📦 محتوى التبويبات -->
+    <!-- ============================================== -->
+    <div class="tab-content" id="reportTabsContent">
+
+        <!-- 🟢 التاب الأول: المخزن -->
+        <div class="tab-pane fade show active" id="inventory" role="tabpanel">
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <div class="card bg-primary text-white h-100 shadow border-0">
+                        <div class="card-body p-3 text-center">
+                            <h6 class="small opacity-75 mb-1">إجمالي قيمة المخزن (حسب أسعار الشهر)</h6>
+                            <h3 class="fw-bold mb-0">{{ total_inventory_value|floatformat:0|intcomma }} جم</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card bg-warning text-dark h-100 shadow border-0">
+                        <div class="card-body p-3 text-center">
+                            <h6 class="small opacity-75 mb-1">إجمالي التسويات (عجز/زيادة) هذا الشهر</h6>
+                            <h3 class="fw-bold mb-0">{{ total_adjustments_count }} وحدة</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-0 table-responsive">
+                    <table class="table table-bordered table-hover text-center align-middle mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>اسم المنتج</th>
+                                <th>رصيد أول الشهر</th>
+                                <th class="text-primary">وارد (مشتريات)</th>
+                                <th class="text-warning">منصرف (مبيعات)</th>
+                                <th>تسويات (عجز/زيادة)</th>
+                                <th class="bg-success text-white">الرصيد النهائي</th>
+                                <th>سعر الشراء</th>
+                                <th>إجمالي القيمة</th>
+                                <th>إجراء</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in inventory_report_list %}
+                            <tr>
+                                <td class="fw-bold text-start">{{ row.item.name }}</td>
+                                <td class="bg-light">{{ row.opening }}</td>
+                                <td class="text-primary fw-bold">+ {{ row.purchases }}</td>
+                                <td class="text-warning fw-bold">- {{ row.sales }}</td>
+                                <td>
+                                    {% if row.surplus > 0 %}<span class="text-success fw-bold">+{{ row.surplus }}</span>{% endif %}
+                                    {% if row.deficit > 0 %}<span class="text-danger fw-bold">-{{ row.deficit }}</span>{% endif %}
+                                    {% if row.surplus == 0 and row.deficit == 0 %}-{% endif %}
+                                </td>
+                                <td class="bg-success-subtle text-success fw-bold fs-5">{{ row.final }}</td>
+                                <td>{{ row.price|floatformat:0|intcomma }}</td>
+                                <td class="fw-bold text-primary">{{ row.total_val|floatformat:0|intcomma }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-danger fw-bold"
+                                        onclick="openAdjustmentModal({{ row.item.id }}, '{{ row.item.name }}', {{ selected_month }}, {{ selected_year }})">تسوية
+                                        ⚖️</button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="9" class="text-muted py-4">لا توجد منتجات مسجلة.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🟢 التاب الثاني: الأرباح والخسائر -->
+        <div class="tab-pane fade" id="profit" role="tabpanel">
+            {% if grand_revenue > 0 or grand_cost > 0 %}
+            <div class="row g-3 mb-4">
+                <div class="col-md-4 col-xl-2">
+                    <div class="card bg-primary text-white h-100 shadow-sm border-0">
+                        <div class="card-body text-center p-3">
+                            <h6 class="small opacity-75 mb-1">إجمالي الإيرادات</h6>
+                            <h4 class="fw-bold mb-0">{{ grand_revenue|floatformat:0|intcomma }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 col-xl-2">
+                    <div class="card bg-secondary text-white h-100 shadow-sm border-0">
+                        <div class="card-body text-center p-3">
+                            <h6 class="small opacity-75 mb-1">تكلفة البضاعة المباعة</h6>
+                            <h4 class="fw-bold mb-0">- {{ grand_cost|floatformat:0|intcomma }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 col-xl-2">
+                    <div class="card bg-warning text-dark h-100 shadow-sm border-0">
+                        <div class="card-body text-center p-3">
+                            <h6 class="small opacity-75 mb-1">إجمالي العمولات الممنوحة</h6>
+                            <h4 class="fw-bold mb-0">- {{ grand_commission|floatformat:0|intcomma }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 col-xl-2">
+                    <div class="card bg-danger text-white h-100 shadow-sm border-0">
+                        <div class="card-body text-center p-3">
+                            <h6 class="small opacity-75 mb-1">المصروفات التشغيلية</h6>
+                            <h4 class="fw-bold mb-0">- {{ expenses_total|floatformat:0|intcomma }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-8 col-xl-4">
+                    <div class="card bg-success text-white h-100 shadow border-0"
+                        style="border-right: 5px solid #0f5132 !important;">
+                        <div class="card-body d-flex justify-content-between align-items-center p-3">
+                            <div>
+                                <h6 class="small opacity-75 mb-1">صافي الربح الحقيقي</h6>
+                                <h2 class="fw-bold mb-0">{{ net_profit_final|floatformat:0|intcomma }} <small
+                                        class="fs-6">جنيه</small></h2>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-5">
+                <div
+                    class="card-header bg-dark text-white fw-bold py-3 d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-table"></i> تحليل ربحية المنتجات (P&L)</span>
+                    <span class="badge bg-danger">يتضمن خصم 10% ديون على القسط</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover align-middle text-center mb-0"
+                            style="font-size: 0.9rem;">
+                            <thead class="table-light align-middle">
+                                <tr>
+                                    <th rowspan="2" class="bg-light">المنتج</th>
+                                    <th rowspan="2">الكمية</th>
+                                    <th colspan="5" class="table-primary border-primary">تحليل القطعة</th>
+                                    <th colspan="5" class="table-success border-success">تحليل الإجماليات</th>
+                                </tr>
+                                <tr>
+                                    <th class="small bg-primary-subtle text-primary">سعر البيع</th>
+                                    <th class="small bg-primary-subtle text-primary">سعر الشراء</th>
+                                    <th class="small bg-primary-subtle text-primary">عمولة البيع</th>
+                                    <th class="small bg-primary-subtle text-primary">عمولة التحصيل</th>
+                                    <th class="small bg-primary text-white fw-bold">الربح الصافي</th>
+                                    <th class="small bg-success-subtle text-success">المبيعات</th>
+                                    <th class="small bg-success-subtle text-success">الشراء</th>
+                                    <th class="small bg-success-subtle text-success">عمولة البيع</th>
+                                    <th class="small bg-success-subtle text-success">عمولة التحصيل</th>
+                                    <th class="small bg-success text-white fw-bold">الربح الصافي</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if cash_sales_list %}
+                                <tr>
+                                    <td colspan="12"
+                                        class="text-start fw-bold bg-light text-success border-success border-start border-4">
+                                        <i class="bi bi-cash-stack"></i> مبيعات الكاش</td>
+                                </tr>
+                                {% for row in cash_sales_list %}
+                                <tr>
+                                    <td class="text-start fw-bold">{{ row.name }}</td>
+                                    <td class="fw-bold fs-6">{{ row.qty }}</td>
+                                    <td>{{ row.avg_sell|floatformat:0|intcomma }}</td>
+                                    <td class="text-danger">{{ row.cost_per_unit|floatformat:0|intcomma }}</td>
+                                    <td class="text-warning text-dark">{{ row.sales_comm_per_unit|floatformat:0|intcomma }}</td>
+                                    <td class="text-muted bg-light">-</td>
+                                    <td class="fw-bold text-success bg-light">{{ row.avg_profit|floatformat:0|intcomma }}</td>
+                                    <td class="fw-bold">{{ row.total_rev|floatformat:0|intcomma }}</td>
+                                    <td class="text-danger">{{ row.total_cost|floatformat:0|intcomma }}</td>
+                                    <td class="text-warning text-dark">{{ row.total_sales_comm|floatformat:0|intcomma }}
+                                    </td>
+                                    <td class="text-muted bg-light">-</td>
+                                    <td class="fw-bold text-white bg-success">{{ row.total_profit|floatformat:0|intcomma }}</td>
+                                </tr>
+                                {% endfor %}
+                                {% endif %}
+
+                                {% if installment_sales_list %}
+                                <tr>
+                                    <td colspan="12"
+                                        class="text-start fw-bold bg-light text-primary border-primary border-start border-4">
+                                        <i class="bi bi-calendar-month"></i> مبيعات التقسيط</td>
+                                </tr>
+                                {% for row in installment_sales_list %}
+                                <tr>
+                                    <td class="text-start fw-bold">{{ row.name }}</td>
+                                    <td class="fw-bold fs-6">{{ row.qty }}</td>
+                                    <td>{{ row.avg_sell|floatformat:0|intcomma }}</td>
+                                    <td class="text-danger">{{ row.cost_per_unit|floatformat:0|intcomma }}</td>
+                                    <td class="text-warning text-dark">{{ row.sales_comm_per_unit|floatformat:0|intcomma }}</td>
+                                    <td class="text-danger">{{ row.coll_comm_per_unit|floatformat:0|intcomma }}</td>
+                                    <td class="fw-bold text-primary bg-light">{{ row.avg_profit|floatformat:0|intcomma }}</td>
+                                    <td class="fw-bold">{{ row.total_rev|floatformat:0|intcomma }}</td>
+                                    <td class="text-danger">{{ row.total_cost|floatformat:0|intcomma }}</td>
+                                    <td class="text-warning text-dark">{{ row.total_sales_comm|floatformat:0|intcomma }}
+                                    </td>
+                                    <td class="text-danger fw-bold">{{ row.total_coll_comm|floatformat:0|intcomma }}
+                                    </td>
+                                    <td class="fw-bold text-white bg-primary">{{ row.total_profit|floatformat:0|intcomma }}</td>
+                                </tr>
+                                {% endfor %}
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="card border-0 shadow-sm mt-4">
+                <div class="card-body text-center py-5 text-muted">
+                    <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                    <h5 class="fw-bold">لا توجد مبيعات مسجلة</h5>
+                    <p>لم يتم العثور على مبيعات في هذا الشهر.</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- 🟢 التاب الثالث: السجل التفصيلي -->
+<!-- 🟢 التاب الثالث: السجل التفصيلي -->
+<div class="tab-pane fade" id="details" role="tabpanel">
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white fw-bold py-3 text-secondary">
+            <i class="bi bi-clock-history"></i> السجل التفصيلي للمبيعات (مجمع)
+        </div>
+        <div class="card-body p-0 table-responsive">
+            <table class="table table-hover table-striped mb-0 text-center align-middle">
+                <thead class="table-secondary">
+                    <tr>
+                        <th width="50">#</th>
+                        <th class="text-start">اسم المنتج</th>
+                        <th>نوع البيع</th>
+                        <th>سعر البيع</th>
+                        <th>الكمية الإجمالية</th>
+                        <th class="text-dark border-start">الإجمالي</th>
+                        <th>الفواتير</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in raw_table_data %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td class="text-start fw-bold">{{ item.name }}</td>
+                        <td>
+                            {% if item.is_cash %}
+                            <span class="badge bg-success-subtle text-success border border-success">كاش</span>
+                            {% else %}
+                            <span class="badge bg-primary-subtle text-primary border border-primary">قسط</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.unit_price|floatformat:0|intcomma }}</td>
+                        <td class="fw-bold">{{ item.total_qty }}</td>
+                        <td class="fw-bold border-start text-primary">{{ item.total_price|floatformat:0|intcomma }} جم
+                        </td>
+                        <td>
+                            <!-- 🔴 زرار الـ Pop-up -->
+                            <button class="btn btn-sm btn-outline-info fw-bold"
+                                onclick="showReceiptsModal('{{ item.receipts_json|escapejs }}', '{{ item.name }}')">
+                                <i class="bi bi-list-ol"></i> تفاصيل
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-muted py-4">لا توجد حركات بيع.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+    </div>
+</div>
+
+<!-- ============================================== -->
+<!-- ⚙️ Modal التسويات الجردية -->
+<!-- ============================================== -->
+<div class="modal fade" id="adjustmentModal" tabindex="-1" aria-hidden="true" dir="rtl">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-scales"></i> تسوية جردية للمنتج</h5>
+                <button type="button" class="btn-close btn-close-white m-0" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{% url 'add_adjustment' %}"> <!-- لازم تعمل URL و View للحفظ -->
+                {% csrf_token %}
+                <div class="modal-body">
+                    <input type="hidden" name="item_id" id="adj_item_id">
+                    <input type="hidden" name="month" id="adj_month">
+                    <input type="hidden" name="year" id="adj_year">
+
+                    <h6 class="text-primary fw-bold mb-3" id="adj_item_name">اسم المنتج</h6>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">نوع التسوية</label>
+                        <select name="adjustment_type" class="form-select fw-bold" required>
+                            <option value="DEFICIT" class="text-danger">عجز (-) - خصم من المخزن</option>
+                            <option value="SURPLUS" class="text-success">زيادة (+) - إضافة للمخزن</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">الكمية</label>
+                        <input type="number" name="quantity" class="form-control fw-bold" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">السبب (اختياري)</label>
+                        <input type="text" name="reason" class="form-control"
+                            placeholder="مثال: بضاعة تالفة، خطأ جرد...">
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary fw-bold">حفظ التسوية</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // سكريبت صغير عشان يفتح المودال ويبعتله بيانات المنتج
+    function openAdjustmentModal(itemId, itemName, month, year) {
+        document.getElementById('adj_item_id').value = itemId;
+        document.getElementById('adj_item_name').innerText = itemName;
+        document.getElementById('adj_month').value = month;
+        document.getElementById('adj_year').value = year;
+        var modal = new bootstrap.Modal(document.getElementById('adjustmentModal'));
+        modal.show();
+    }
+</script>
+
+<!-- ============================================== -->
+<!-- ⚙️ Modal عرض الفواتير المدمجة -->
+<!-- ============================================== -->
+<div class="modal fade" id="receiptsModal" tabindex="-1" aria-hidden="true" dir="rtl">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-info text-white">
+                <h6 class="modal-title fw-bold"><i class="bi bi-receipt"></i> فواتير: <span
+                        id="modalProductName"></span></h6>
+                <button type="button" class="btn-close btn-close-white m-0" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <table class="table table-hover text-center mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>رقم الوصل</th>
+                            <th>الكمية في الوصل</th>
+                        </tr>
+                    </thead>
+                    <tbody id="receiptsTableBody">
+                        <!-- هيتم ملء الجدول بالجافاسكريبت -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // سكريبت تشغيل المودال الخاص بالفواتير
+    function showReceiptsModal(receiptsJson, productName) {
+        document.getElementById('modalProductName').innerText = productName;
+        var tbody = document.getElementById('receiptsTableBody');
+        tbody.innerHTML = '';
+
+        var receipts = JSON.parse(receiptsJson);
+        receipts.forEach(function (req) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td class="fw-bold text-primary">#' + req.receipt_no + '</td><td class="fw-bold">' + req.qty + '</td>';
+            tbody.appendChild(tr);
+        });
+
+        var modal = new bootstrap.Modal(document.getElementById('receiptsModal'));
+        modal.show();
+    }
+</script>
+
+{% endblock %}

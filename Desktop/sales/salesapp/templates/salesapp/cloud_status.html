@@ -1,0 +1,112 @@
+{% extends 'salesapp/base.html' %}
+{% load static %}
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <!-- Local Pending -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0 fw-bold"><i class="bi bi-hourglass-split"></i> فواتير محلية غير مزامنة</h4>
+                    <button class="btn btn-sm btn-dark fw-bold" onclick="forceCloudSync()">
+                        <i class="bi bi-arrow-repeat"></i> مزامنة الآن
+                    </button>
+                </div>
+                <div class="card-body">
+                    <script>
+                        function forceCloudSync() {
+                            const btn = event.currentTarget;
+                            const originalHTML = btn.innerHTML;
+                            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> جاري...';
+                            btn.disabled = true;
+                            
+                            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                            fetch('/tools/cloud-push-ajax/', {
+                                method: 'POST',
+                                headers: {
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                    'X-CSRFToken': csrfToken
+                                }
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.status === 'success') {
+                                    alert('تمت المزامنة بنجاح! تم رفع ' + data.synced_count + ' عنصر.');
+                                    window.location.reload();
+                                } else {
+                                    alert('حدث خطأ: ' + data.message);
+                                    btn.innerHTML = originalHTML;
+                                    btn.disabled = false;
+                                }
+                            })
+                            .catch(error => {
+                                alert('فشل الاتصال بالسيرفر.');
+                                btn.innerHTML = originalHTML;
+                                btn.disabled = false;
+                            });
+                        }
+                    </script>
+                    {% if local_pending %}
+                    <ul class="list-group list-group-flush">
+                        {% for receipt in local_pending %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div>
+                                <span class="d-block fw-bold text-primary">رقم الوصل: {{ receipt.receipt_number }}</span>
+                                <span class="d-block small text-muted">العميل: {{ receipt.customer_name|default:"بدون اسم" }}</span>
+                                <span class="d-block fw-bold text-success">الإجمالي: {{ receipt.total_amount }}</span>
+                            </div>
+                            <span class="badge bg-secondary rounded-pill px-3 py-2"><i class="bi bi-clock me-1"></i> في الانتظار</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-check-circle-fill display-4 text-success mb-3 d-block"></i>
+                        <h5>جميع الفواتير المحلية متزامنة</h5>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Server Pending -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0 fw-bold"><i class="bi bi-cloud-download"></i> فواتير أونلاينة بانتظار التأكيد</h4>
+                </div>
+                <div class="card-body">
+                    {% if server_pending %}
+                    <ul class="list-group list-group-flush">
+                        {% for item in server_pending %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div>
+                                <span class="d-block fw-bold text-primary">العميل: {{ item.data.customer_name|default:"بدون اسم" }}</span>
+                                <span class="d-block fw-bold text-success">الإجمالي: {{ item.data.total_amount }}</span>
+                                <span class="d-block small text-muted">المندوب: {{ item.data.salesperson_name|default:"غير محدد" }}</span>
+                            </div>
+                            <form action="{% url 'cloud_status' %}" method="POST" class="m-0">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="confirm_receipt">
+                                <input type="hidden" name="receipt_data" value="{{ item.json_str|escape }}">
+                                <button type="submit" class="btn btn-outline-primary btn-sm fw-bold">
+                                    <i class="bi bi-check-circle me-1"></i> تأكيد وحفظ
+                                </button>
+                            </form>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-cloud-check-fill display-4 text-info mb-3 d-block"></i>
+                        <h5>لا توجد فواتير أونلاينة بانتظار التأكيد</h5>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

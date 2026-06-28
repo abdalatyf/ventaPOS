@@ -1,0 +1,51 @@
+{% if has_errors %}
+<div class="alert alert-danger fw-bold">
+    يوجد أخطاء في الرصيد أو الأصناف، يرجى مراجعة الجدول. لا يمكن الإدراج.
+</div>
+{% else %}
+<form method="POST" action="{% url 'mobile_import_confirm' %}">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-success fw-bold w-100 mb-3">
+        تأكيد وحفظ الفواتير
+    </button>
+</form>
+{% endif %}
+
+<table class="table table-bordered table-striped text-center">
+    <thead class="table-dark">
+        <tr>
+            <th>العميل</th>
+            <th>الإجمالي</th>
+            <th>التاريخ</th>
+            <th>الأصناف المطلوبة</th>
+            <th>حالة الرصيد</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in preview_data %}
+        <tr class="{% if r.error %}table-danger{% endif %}">
+            <td>{{ r.customer_name }}</td>
+            <td>{{ r.total_amount }}</td>
+            <td>{{ r.sale_month }} / {{ r.sale_year }}</td>
+            <td>
+                <ul class="list-unstyled mb-0">
+                    {% for i in r.items %}
+                    <li>{{ i.quantity }} x {{ i.name }} (متاح: {{ i.safe_qty }})</li>
+                    {% endfor %}
+                </ul>
+            </td>
+            <td>
+                {% if r.error %}
+                    <ul class="list-unstyled mb-0 text-danger fw-bold">
+                        {% for err in r.error_messages %}
+                        <li>{{ err }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <span class="text-success fw-bold">الرصيد متوفر</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

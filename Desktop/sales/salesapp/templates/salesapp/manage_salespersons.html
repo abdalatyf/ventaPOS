@@ -1,0 +1,157 @@
+{% extends 'salesapp/base.html' %}
+{% load static %}
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h3 class="mb-4 text-center fw-bold text-primary">{{ page_title }}</h3>
+
+<ul class="nav nav-tabs nav-fill mb-4 fw-bold shadow-sm rounded-top">
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_branches' %}active{% endif %}"
+            href="{% url 'manage_branches' %}">
+            <i class="bi bi-shop"></i> الفروع
+        </a>
+    </li>
+
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_salespersons' %}active{% endif %}"
+            href="{% url 'manage_salespersons' %}">
+            <i class="bi bi-people"></i> الموظفين
+        </a>
+    </li>
+
+    {% if is_pro_plan %}
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'manage_expenses' %}active{% endif %}"
+            href="{% url 'manage_expenses' %}">
+            <i class="bi bi-wallet2"></i> المصروفات
+        </a>
+    </li>
+    {% endif %}
+
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'general_settings' %}active{% endif %}"
+            href="{% url 'general_settings' %}">
+            <i class="bi bi-gear-fill"></i> الإعدادات العامة
+        </a>
+    </li>
+
+    <!-- 🔴 Tab الاستيراد الذكي -->
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'smart_import_wizard' %}active{% endif %}"
+            href="{% url 'smart_import_wizard' %}">
+            <i class="bi bi-file-earmark-excel"></i> استيراد الإكسيل
+        </a>
+    </li>
+
+    <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'subscription_dashboard' %}active{% endif %}"
+            href="{% url 'subscription_dashboard' %}">
+            <i class="bi bi-shield-check"></i> الاشتراك والترخيص
+        </a>
+    </li>
+</ul>
+
+    <div class="card shadow-sm mb-4 border-0">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0 fw-bold text-success"><i class="bi bi-person-plus-fill"></i> إضافة موظف للفرع الحالي ({{ request.branch.name }})</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{% url 'manage_salespersons' %}" class="row g-3">
+                {% csrf_token %}
+                <div class="col-md-4">
+                    <label for="person_name" class="form-label fw-bold">اسم الموظف</label>
+                    <input type="text" class="form-control" id="person_name" name="person_name" required placeholder="اسم الكاشير أو المندوب">
+                </div>
+                <div class="col-md-3">
+                    <label for="cloud_username" class="form-label fw-bold">اسم المستخدم أونلاين (اختياري)</label>
+                    <input type="text" class="form-control" id="cloud_username" name="cloud_username" placeholder="يستخدم في الموبايل">
+                </div>
+                <div class="col-md-3">
+                    <label for="cloud_password" class="form-label fw-bold">كلمة المرور أونلاينة (اختياري)</label>
+                    <input type="password" class="form-control" id="cloud_password" name="cloud_password" placeholder="يستخدم في الموبايل">
+                </div>
+                <div class="col-md-2 align-self-end">
+                    <button type="submit" class="btn btn-success w-100 fw-bold">حفظ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0 fw-bold">الموظفون المسجلون</h5>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-striped table-hover mb-0 text-center align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th scope="col">الكود</th>
+                        <th scope="col">اسم الموظف</th>
+                        <th scope="col">اسم المستخدم أونلاين</th>
+                        <th scope="col">إجراء</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for person in salespersons %}
+                    <tr>
+                        <td>{{ person.id }}</td>
+                        <td class="fw-bold">{{ person.name }}</td>
+                        <td>{{ person.cloud_username|default:"-" }}</td>
+                        <td>
+                            <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editModal{{ person.id }}">
+                                <i class="bi bi-pencil"></i> تعديل
+                            </button>
+                            <form method="POST" action="{% url 'delete_salesperson' person.pk %}"
+                                style="display: inline;" onsubmit="return confirm('حذف الموظف؟');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-trash"></i>
+                                    حذف</button>
+                            </form>
+                        </td>
+                    </tr>
+
+                    <!-- Edit Modal -->
+                    <div class="modal fade" id="editModal{{ person.id }}" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">تعديل بيانات الموظف</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <form method="POST" action="{% url 'edit_salesperson' person.pk %}">
+                                    {% csrf_token %}
+                                    <div class="modal-body">
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">اسم الموظف</label>
+                                            <input type="text" class="form-control" name="person_name" value="{{ person.name }}" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">اسم المستخدم أونلاين (اختياري)</label>
+                                            <input type="text" class="form-control" name="cloud_username" value="{{ person.cloud_username|default:'' }}">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">كلمة المرور أونلاينة (اختياري)</label>
+                                            <input type="password" class="form-control" name="cloud_password" value="{{ person.cloud_password|default:'' }}">
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                                        <button type="submit" class="btn btn-primary">حفظ التغييرات</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center p-4 text-muted">لم يتم إضافة موظفين لهذا الفرع.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

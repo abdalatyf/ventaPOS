@@ -1,0 +1,87 @@
+/* 
+ * VentaPOS Custom Theme (Tabler Override)
+ * Based on UI Design Tokens
+ */
+
+:root, [data-bs-theme="light"], [data-bs-theme="dark"] {
+    /* Primary Branding (Blue Group) */
+    --tblr-primary: #1A4571; /* Primary Blue */
+    --tblr-primary-rgb: 26, 69, 113;
+    
+    --tblr-dark: #111827; /* Dark Text */
+    --tblr-dark-rgb: 17, 24, 39;
+
+    /* Actions & Success (Green Group) */
+    --tblr-success: #1DA068; /* Primary Green */
+    --tblr-success-rgb: 29, 160, 104;
+    
+    --tblr-green: #24B476; /* Highlight Green */
+    --tblr-green-rgb: 36, 180, 118;
+
+    /* Backgrounds & Neutrals */
+    --tblr-bg-surface: #FFFFFF;
+    --tblr-bg-surface-secondary: #F4F6F8;
+
+    /* Typography */
+    --tblr-font-sans-serif: 'Cairo', sans-serif;
+    --tblr-body-font-family: 'Cairo', sans-serif;
+    
+    /* Shapes & Shadows */
+    --tblr-border-radius: 8px;
+    --tblr-border-radius-sm: 4px;
+    --tblr-border-radius-lg: 12px;
+    --tblr-box-shadow: rgba(19, 49, 83, 0.08) 0 4px 12px 0;
+    --tblr-box-shadow-sm: 0 0.125rem 0.25rem rgba(19, 49, 83, 0.05);
+}
+
+/* Global Overrides */
+body {
+    background-color: var(--tblr-bg-surface-secondary);
+    color: var(--tblr-dark);
+}
+
+h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
+    color: var(--tblr-dark);
+    font-weight: 700;
+}
+
+.text-primary {
+    color: var(--tblr-primary) !important;
+}
+
+.btn-primary {
+    background-color: var(--tblr-primary);
+    border-color: var(--tblr-primary);
+    color: #ffffff;
+}
+.btn-primary:hover {
+    background-color: #133153;
+    border-color: #133153;
+}
+
+.btn-success {
+    background-color: var(--tblr-success);
+    border-color: var(--tblr-success);
+    color: #ffffff;
+}
+.btn-success:hover {
+    background-color: var(--tblr-green);
+    border-color: var(--tblr-green);
+}
+
+.card {
+    border: none;
+    box-shadow: var(--tblr-box-shadow);
+    border-radius: var(--tblr-border-radius-lg);
+}
+
+/* RTL Specific Overrides for Tabler if needed */
+body {
+    direction: rtl;
+    text-align: right;
+}
+
+.navbar-brand {
+    margin-right: 0;
+    margin-left: 1rem;
+}

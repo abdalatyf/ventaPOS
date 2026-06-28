@@ -1,0 +1,158 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>استعادة النظام - الطوارئ</title>
+    <link rel="stylesheet" href="{% static 'salesapp/vendor/bootstrap/css/bootstrap.rtl.min.css' %}">
+    <style>
+        body {
+            background-color: #212529;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: system-ui;
+        }
+
+        .reset-card {
+            width: 100%;
+            max-width: 650px;
+            padding: 2rem;
+            border-radius: 8px;
+            background: white;
+            border-top: 5px solid #dc3545;
+        }
+
+        .license-input-group {
+            direction: ltr;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+    
+        .license-box {
+            width: 100px;
+            height: 60px;
+            font-size: 1.5rem;
+            text-align: center;
+            border: 2px solid #ced4da;
+            border-radius: 8px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            background-color: #f8f9fa;
+        }
+    
+        .license-box:focus {
+            background-color: #fff;
+            border-color: #dc3545;
+            outline: none;
+            transform: scale(1.05);
+        }
+    
+        .separator {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #6c757d;
+            padding-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="reset-card">
+        <h4 class="mb-3 fw-bold text-danger text-center"><i class="bi bi-shield-lock"></i> الطوارئ واستعادة الحساب</h4>
+        <p class="text-muted small text-center mb-4">أدخل كود الطوارئ (شحن) المخصص لمرة واحدة لتغيير كلمة المرور.</p>
+
+        {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} small">{{ message }}</div>
+        {% endfor %}
+        {% endif %}
+
+        <form method="POST">
+            {% csrf_token %}
+            <div class="mb-4 text-center">
+                <label class="form-label fw-bold small mb-3">كود الطوارئ لمرة واحدة</label>
+                <div class="license-input-group">
+                    <input type="text" class="license-box form-control text-danger" maxlength="4" placeholder="XXXX">
+                    <span class="separator">-</span>
+                    <input type="text" class="license-box form-control text-danger" maxlength="4" placeholder="XXXX">
+                    <span class="separator">-</span>
+                    <input type="text" class="license-box form-control text-danger" maxlength="4" placeholder="XXXX">
+                    <span class="separator">-</span>
+                    <input type="text" class="license-box form-control text-danger" maxlength="4" placeholder="XXXX">
+                </div>
+                <input type="hidden" name="master_key" id="dash_full_code">
+            </div>
+            <div class="row g-2 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">اسم المستخدم الجديد للمدير</label>
+                    {{ form.new_username }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">كلمة المرور الجديدة للمدير</label>
+                    {{ form.new_password }}
+                </div>
+            </div>
+            <div class="d-flex gap-2 mt-4">
+                <a href="{% url 'login' %}" class="btn btn-secondary flex-grow-1">إلغاء</a>
+                <button type="submit" class="btn btn-danger flex-grow-1 fw-bold" onclick="combineDashCode()">تحديث بيانات المدير</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const dashInputs = document.querySelectorAll('.license-box');
+        const dashHidden = document.getElementById('dash_full_code');
+
+        if (dashInputs.length > 0) {
+            dashInputs.forEach((input, index) => {
+                input.addEventListener('input', (e) => {
+                    if (e.target.value.length === 4 && index < dashInputs.length - 1) { dashInputs[index + 1].focus(); }
+                    combineDashCode();
+                });
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Backspace' && e.target.value.length === 0 && index > 0) {
+                        e.preventDefault();
+                        const prevInput = dashInputs[index - 1];
+                        prevInput.focus();
+                        let val = prevInput.value;
+                        prevInput.value = val.substring(0, val.length - 1);
+                        combineDashCode();
+                        const len = prevInput.value.length;
+                        prevInput.setSelectionRange(len, len);
+                    }
+                });
+                input.addEventListener('paste', (e) => {
+                    e.preventDefault();
+                    const pasteData = e.clipboardData.getData('text').toUpperCase().replace(/[^A-Z0-9]/g, '');
+                    let start = 0;
+                    dashInputs.forEach((inp) => {
+                        if (start < pasteData.length) { inp.value = pasteData.substring(start, start + 4); start += 4; }
+                    });
+                    combineDashCode();
+                    let filledCount = Math.ceil(pasteData.length / 4);
+                    let focusIndex = Math.min(filledCount - 1, dashInputs.length - 1);
+                    if (focusIndex >= 0) dashInputs[focusIndex].focus();
+                });
+            });
+        }
+        function combineDashCode() {
+            let full = "";
+            dashInputs.forEach((input, i) => {
+                full += input.value;
+                if (i < dashInputs.length - 1 && input.value.length > 0) full += "-";
+            });
+            if (dashHidden) {
+                dashHidden.value = full.toUpperCase();
+            }
+        }
+    </script>
+</body>
+
+</html>
