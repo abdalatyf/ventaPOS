@@ -445,10 +445,9 @@ export default function SearchReceipts() {
               style={{ height: '100%' }}
               data={receipts}
               firstItemIndex={firstItemIndex}
-              initialTopMostItemIndex={{ index: receipts.length > 0 ? receipts.length - 1 : 0, align: 'end' }}
-              alignToBottom={true}
+              initialTopMostItemIndex={999999}
               defaultItemHeight={50}
-              overscan={100}
+              overscan={200}
               rangeChanged={({ startIndex }) => {
                 if (startIndex <= firstItemIndex + 10) {
                   if (nextPageUrl && !loadingMore) {
