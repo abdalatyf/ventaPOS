@@ -438,7 +438,7 @@ export default function SearchReceipts() {
             <h4 className="text-muted fw-bold">لا توجد فواتير مطابقة لمعايير البحث</h4>
           </div>
         ) : (
-          <div style={{ height: 'calc(100vh - 270px)', width: '100%', position: 'relative', border: '1px solid #dee2e6' }} className="rounded">
+          <div style={{ height: 'calc(100vh - 350px)', width: '100%', position: 'relative', border: '1px solid #dee2e6', overflowY: 'auto' }} className="rounded">
             <TableVirtuoso
               data={receipts}
               firstItemIndex={firstItemIndex}
