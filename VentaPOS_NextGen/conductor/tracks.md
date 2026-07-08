@@ -8,4 +8,4 @@ This file acts as a registry of all active and completed work units in the proje
 
 ## Completed Tracks
 
-*(None yet)*
+- `[COMPLETED]` **002-ui-performance-optimization**: Fixed UI jitter, flex container blow-outs, and implemented React.memo with True Bulk Selection.

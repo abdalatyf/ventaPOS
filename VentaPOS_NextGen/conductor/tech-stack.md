@@ -15,6 +15,10 @@
 - **Single Source of Truth (Database):** The database schema is strictly defined and managed by the backend. Do not hallucinate table structures. Refer to `docs/database_schema.md` for current relationships.
 - **API Contracts:** The frontend communicates with the backend via REST endpoints. Refer to `docs/api_contract.md`.
 
+## UI Constraints
+- **Tables & Scrolling**: Avoid virtualized tables (like `react-virtuoso`) for standard Bootstrap tabular data due to severe CSS height calculation jittering. Use native `overflow-auto` with strict Holy Grail flexbox layouts (`min-height: 0`) and manual `position: sticky` headers.
+- **Performance**: Use `React.memo` for list rows to prevent O(N) re-renders during bulk selections.
+
 ## Active Skills
 - `django-pro`: Utilize for any backend/ORM/Django modifications.
 - `react-modernization`: Utilize for any frontend React hooks/state optimization.
