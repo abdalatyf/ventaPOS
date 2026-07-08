@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { TableVirtuoso } from 'react-virtuoso';
 import api from '../api';
 import {
   IconSearch, IconRefresh, IconPlus, IconEye, IconReceipt, IconPrinter, IconFilter,
@@ -56,7 +55,6 @@ export default function SearchReceipts() {
   const [totalAmountSum, setTotalAmountSum] = useState(0);
   const [nextPageUrl, setNextPageUrl] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [firstItemIndex, setFirstItemIndex] = useState(100000);
 
   const [selectedIds, setSelectedIds] = useState([]);
 
@@ -116,8 +114,7 @@ export default function SearchReceipts() {
 
       const res = await api.get(`/receipts/?${params.toString()}`);
       if (res.data && res.data.results) {
-        setReceipts(res.data.results.reverse());
-        setFirstItemIndex(100000 - res.data.results.length);
+        setReceipts(res.data.results);
         setNextPageUrl(res.data.next);
         setTotalInvoicesCount(res.data.count || 0);
         setTotalAmountSum(res.data.aggregate?.total_sales || 0);
@@ -135,8 +132,7 @@ export default function SearchReceipts() {
     try {
       const res = await api.get(nextPageUrl);
       if (res.data && res.data.results) {
-        setReceipts(prev => [...res.data.results.reverse(), ...prev]);
-        setFirstItemIndex(prev => prev - res.data.results.length);
+        setReceipts(prev => [...prev, ...res.data.results]);
         setNextPageUrl(res.data.next);
       }
     } catch (error) {
@@ -235,13 +231,13 @@ export default function SearchReceipts() {
 
 
 
-  const VirtuosoComponents = {
-    Table: React.forwardRef((props, ref) => (
-      <table {...props} ref={ref} className="table table-bordered table-vcenter table-hover mb-0" style={{ ...props.style, margin: 0 }} />
-    )),
-    TableHead: React.forwardRef((props, ref) => <thead {...props} ref={ref} />),
-    TableRow: React.forwardRef((props, ref) => <tr {...props} ref={ref} />),
-    TableBody: React.forwardRef((props, ref) => <tbody {...props} ref={ref} />),
+  const handleScroll = (e) => {
+    const { scrollTop, clientHeight, scrollHeight } = e.target;
+    if (scrollHeight - scrollTop <= clientHeight + 100) {
+      if (nextPageUrl && !loadingMore) {
+        loadMoreReceipts();
+      }
+    }
   };
 
   const stickyThStyle = {
@@ -440,116 +436,109 @@ export default function SearchReceipts() {
             <h4 className="text-muted fw-bold">لا توجد فواتير مطابقة لمعايير البحث</h4>
           </div>
         ) : (
-          <div style={{ position: 'relative', border: '1px solid #dee2e6', height: '100%', flex: '1 1 auto' }} className="rounded overflow-hidden">
-            <TableVirtuoso
-              style={{ height: '100%' }}
-              data={receipts}
-              firstItemIndex={firstItemIndex}
-              initialTopMostItemIndex={999999}
-              defaultItemHeight={50}
-              overscan={200}
-              rangeChanged={({ startIndex }) => {
-                if (startIndex <= firstItemIndex + 10) {
-                  if (nextPageUrl && !loadingMore) {
-                    loadMoreReceipts();
-                  }
-                }
-              }}
-              components={VirtuosoComponents}
-              context={{ handleContextMenu, selectedIds, toggleSelect, toggleSelectAll, receipts }}
-              fixedHeaderContent={() => {
-                const allSelected = receipts.length > 0 && selectedIds.length === receipts.length;
-                return (
-                  <tr>
-                    <th className="text-center w-1" style={stickyThStyle}>
-                      <input 
-                        type="checkbox" 
-                        className="form-check-input" 
-                        checked={allSelected} 
-                        onChange={toggleSelectAll} 
-                      />
-                    </th>
-                    <th className="text-center w-1" style={stickyThStyle}>إجراءات</th>
-                    <th className="text-center" style={stickyThStyle}>#</th>
-                    <th className="text-center" style={stickyThStyle}>التاريخ</th>
-                    <th className="text-center" style={stickyThStyle}>المندوب</th>
-                    <th className="text-start px-2" style={stickyThStyle}>العميل</th>
-                    <th className="text-center" style={stickyThStyle}>الهاتف</th>
-                    <th className="text-center" style={stickyThStyle}>المنطقة</th>
-                    <th className="text-start px-2" style={stickyThStyle}>العنوان</th>
-                    <th className="text-start px-2" style={stickyThStyle}>الأصناف</th>
-                    <th className="text-center" style={stickyThStyle}>المقدم</th>
-                    <th className="text-center" style={stickyThStyle}>النظام</th>
-                    <th className="text-center" style={stickyThStyle}>الإجمالي</th>
-                  </tr>
-                );
-              }}
-              itemContent={(index, r) => {
-                const rowKey = r.id || r.local_id || index;
-                const rNum = r.receipt_number || r.local_id || r.id;
-                const isCash = r.is_cash_sale !== false && r.sale_type !== 'INSTALLMENT';
-                const phone = r.phone_number || r.customer_phone || r.phone || '—';
-                const area = r.area || r.customer_area || '—';
-                const addr = r.address || r.customer_address || '—';
-                const productsText = r.products_text || '—';
-                const custName = r.customer_name || 'عميل نقدي';
-                const salespersonName = getSalespersonName(r.salesperson);
-                const isSelected = selectedIds.includes(r.id);
+          <div 
+            className="table-responsive flex-grow-1 overflow-auto rounded" 
+            style={{ border: '1px solid #dee2e6', height: '100%' }}
+            onScroll={handleScroll}
+          >
+            <table className="table table-bordered table-vcenter table-hover mb-0">
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                <tr>
+                  <th className="text-center w-1" style={stickyThStyle}>
+                    <input 
+                      type="checkbox" 
+                      className="form-check-input" 
+                      checked={receipts.length > 0 && selectedIds.length === receipts.length} 
+                      onChange={toggleSelectAll} 
+                    />
+                  </th>
+                  <th className="text-center w-1" style={stickyThStyle}></th>
+                  <th className="text-center" style={stickyThStyle}>#</th>
+                  <th className="text-center" style={stickyThStyle}>التاريخ</th>
+                  <th className="text-center" style={stickyThStyle}>المندوب</th>
+                  <th className="text-start px-2" style={stickyThStyle}>العميل</th>
+                  <th className="text-center" style={stickyThStyle}>الهاتف</th>
+                  <th className="text-center" style={stickyThStyle}>المنطقة</th>
+                  <th className="text-start px-2" style={stickyThStyle}>العنوان</th>
+                  <th className="text-start px-2" style={stickyThStyle}>الأصناف</th>
+                  <th className="text-center" style={stickyThStyle}>المقدم</th>
+                  <th className="text-center" style={stickyThStyle}>النظام</th>
+                  <th className="text-center" style={stickyThStyle}>الإجمالي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {receipts.map((r, index) => {
+                  const rowKey = r.id || r.local_id || index;
+                  const rNum = r.receipt_number || r.local_id || r.id;
+                  const isCash = r.is_cash_sale !== false && r.sale_type !== 'INSTALLMENT';
+                  const phone = r.phone_number || r.customer_phone || r.phone || '—';
+                  const area = r.area || r.customer_area || '—';
+                  const addr = r.address || r.customer_address || '—';
+                  const productsText = r.products_text || '—';
+                  const custName = r.customer_name || 'عميل نقدي';
+                  const salespersonName = getSalespersonName(r.salesperson);
+                  const isSelected = selectedIds.includes(r.id);
 
-                return (
-                  <>
-                    <td className="text-center align-middle border-secondary-subtle">
-                      <input 
-                        type="checkbox" 
-                        className="form-check-input border-secondary-subtle" 
-                        checked={isSelected}
-                        onChange={() => toggleSelect(r.id)}
-                      />
-                    </td>
-                    <td className="text-center align-middle border-secondary-subtle">
-                      <button 
-                        className="btn btn-sm btn-icon btn-light border-secondary-subtle"
-                        onClick={(e) => handleContextMenu(e, r.id, rNum)}
-                      >
-                        <IconDotsVertical size={16} />
-                      </button>
-                    </td>
-                    <td className="text-center align-middle border-secondary-subtle" dir="ltr">{toArabic(rNum)}</td>
-                    <td className="text-center align-middle border-secondary-subtle" dir="ltr">
-                      {(() => {
-                        const d = new Date(r.created_at || r.date);
-                        return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-                      })()}
-                    </td>
-                    <td className="text-center align-middle border-secondary-subtle">
-                      {salespersonName}
-                    </td>
-                    <td className="text-start px-2 align-middle border-secondary-subtle">
-                      {custName}
-                    </td>
-                    <td className="text-center align-middle border-secondary-subtle" dir="ltr">{toArabic(phone)}</td>
-                    <td className="text-center align-middle border-secondary-subtle">
-                      {area}
-                    </td>
-                    <td className="text-start px-2 align-middle border-secondary-subtle text-truncate" style={{ maxWidth: '150px' }} title={addr}>
-                      {addr}
-                    </td>
-                    <td className="text-start px-2 align-middle border-secondary-subtle text-truncate" style={{ maxWidth: '200px' }} title={productsText}>
-                      {productsText}
-                    </td>
-                    <td className="text-center align-middle border-secondary-subtle">
-                      {isCash ? '—' : toArabic(formatCurrency(r.down_payment))}
-                    </td>
-                    <td className="text-center align-middle border-secondary-subtle" dir="ltr">
-                      {isCash ? 'كاش' : toArabic(r.installment_system)}
-                    </td>
-                    <td className="text-center align-middle border-secondary-subtle">
-                      {toArabic(formatCurrency(r.total_amount))}
-                    </td>
-                  </>
-                );
-              }}
-            />
+                  return (
+                    <tr key={rowKey}>
+                      <td className="text-center align-middle border-secondary-subtle">
+                        <input 
+                          type="checkbox" 
+                          className="form-check-input border-secondary-subtle" 
+                          checked={isSelected}
+                          onChange={() => toggleSelect(r.id)}
+                        />
+                      </td>
+                      <td className="text-center align-middle border-secondary-subtle">
+                        <button 
+                          className="btn btn-sm btn-icon btn-light border-secondary-subtle"
+                          onClick={(e) => handleContextMenu(e, r.id, rNum)}
+                        >
+                          <IconDotsVertical size={16} />
+                        </button>
+                      </td>
+                      <td className="text-center align-middle border-secondary-subtle" dir="ltr">{toArabic(rNum)}</td>
+                      <td className="text-center align-middle border-secondary-subtle" dir="ltr">
+                        {(() => {
+                          const d = new Date(r.created_at || r.date);
+                          return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                        })()}
+                      </td>
+                      <td className="text-center align-middle border-secondary-subtle">
+                        {salespersonName}
+                      </td>
+                      <td className="text-start px-2 align-middle border-secondary-subtle">
+                        {custName}
+                      </td>
+                      <td className="text-center align-middle border-secondary-subtle" dir="ltr">{toArabic(phone)}</td>
+                      <td className="text-center align-middle border-secondary-subtle">
+                        {area}
+                      </td>
+                      <td className="text-start px-2 align-middle border-secondary-subtle text-truncate" style={{ maxWidth: '150px' }} title={addr}>
+                        {addr}
+                      </td>
+                      <td className="text-start px-2 align-middle border-secondary-subtle text-truncate" style={{ maxWidth: '200px' }} title={productsText}>
+                        {productsText}
+                      </td>
+                      <td className="text-center align-middle border-secondary-subtle">
+                        {isCash ? '—' : toArabic(formatCurrency(r.down_payment))}
+                      </td>
+                      <td className="text-center align-middle border-secondary-subtle" dir="ltr">
+                        {isCash ? 'كاش' : toArabic(r.installment_system)}
+                      </td>
+                      <td className="text-center align-middle border-secondary-subtle">
+                        {toArabic(formatCurrency(r.total_amount))}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {loadingMore && (
+              <div className="text-center py-3">
+                <div className="spinner-border text-primary"></div>
+              </div>
+            )}
           </div>
         )}
       </div>
