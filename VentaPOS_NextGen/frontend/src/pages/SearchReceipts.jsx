@@ -246,7 +246,7 @@ export default function SearchReceipts() {
     position: 'sticky',
     top: 0,
     backgroundColor: '#f8f9fa',
-    zIndex: 1,
+    zIndex: 10,
     boxShadow: 'inset 0 -1px 0 #dee2e6'
   };
 
@@ -438,12 +438,12 @@ export default function SearchReceipts() {
             <h4 className="text-muted fw-bold">لا توجد فواتير مطابقة لمعايير البحث</h4>
           </div>
         ) : (
-          <div style={{ height: '65vh', width: '100%', position: 'relative', border: '1px solid #dee2e6' }} className="rounded">
+          <div style={{ height: 'calc(100vh - 270px)', width: '100%', position: 'relative', border: '1px solid #dee2e6' }} className="rounded">
             <TableVirtuoso
               data={receipts}
               firstItemIndex={firstItemIndex}
               initialTopMostItemIndex={receipts.length > 0 ? receipts.length - 1 : 0}
-              overscan={400}
+              overscan={100}
               rangeChanged={({ startIndex }) => {
                 if (startIndex - firstItemIndex <= 30) {
                   if (nextPageUrl && !loadingMore) {
@@ -510,46 +510,34 @@ export default function SearchReceipts() {
                         <IconDotsVertical size={16} />
                       </button>
                     </td>
-                    <td className="text-center align-middle text-primary fw-bold border-secondary-subtle" dir="ltr">{toArabic(rNum)}</td>
-                    <td className="text-center align-middle text-muted fw-bold border-secondary-subtle">
+                    <td className="text-center align-middle border-secondary-subtle" dir="ltr">{toArabic(rNum)}</td>
+                    <td className="text-center align-middle border-secondary-subtle">
                       {new Date(r.created_at || r.date).toLocaleDateString('ar-EG')}
                     </td>
-                    <td className="text-center align-middle fw-bold border-secondary-subtle">
-                      <span className="badge bg-secondary text-white rounded-pill px-2">{salespersonName}</span>
+                    <td className="text-center align-middle border-secondary-subtle">
+                      {salespersonName}
                     </td>
-                    <td className="text-start px-2 align-middle fw-bolder border-secondary-subtle text-dark">
-                      <div className="d-flex align-items-center gap-1">
-                        <IconUser size={16} className="text-muted" />
-                        {custName}
-                      </div>
+                    <td className="text-start px-2 align-middle border-secondary-subtle">
+                      {custName}
                     </td>
-                    <td className="text-center align-middle text-muted fw-bold border-secondary-subtle" dir="ltr">{toArabic(phone)}</td>
-                    <td className="text-center align-middle fw-bold border-secondary-subtle">
-                      <span className="badge bg-light text-dark border border-secondary-subtle">{area}</span>
+                    <td className="text-center align-middle border-secondary-subtle" dir="ltr">{toArabic(phone)}</td>
+                    <td className="text-center align-middle border-secondary-subtle">
+                      {area}
                     </td>
-                    <td className="text-start px-2 align-middle border-secondary-subtle text-muted text-truncate" style={{ maxWidth: '150px' }} title={addr}>
-                      {addr !== '—' && <IconMapPin size={14} className="me-1" />}
+                    <td className="text-start px-2 align-middle border-secondary-subtle text-truncate" style={{ maxWidth: '150px' }} title={addr}>
                       {addr}
                     </td>
-                    <td className="text-start px-2 align-middle border-secondary-subtle text-muted small text-truncate" style={{ maxWidth: '200px' }} title={productsText}>
+                    <td className="text-start px-2 align-middle border-secondary-subtle text-truncate" style={{ maxWidth: '200px' }} title={productsText}>
                       {productsText}
                     </td>
-                    <td className="text-center align-middle fw-bold border-secondary-subtle">
-                      {isCash ? (
-                        <span className="text-muted">—</span>
-                      ) : (
-                        <span className="text-success">{toArabic(formatCurrency(r.down_payment))}</span>
-                      )}
+                    <td className="text-center align-middle border-secondary-subtle">
+                      {isCash ? '—' : toArabic(formatCurrency(r.down_payment))}
                     </td>
-                    <td className="text-center align-middle fw-bold border-secondary-subtle">
-                      {isCash ? (
-                        <span className="badge bg-success text-white rounded-pill px-2 py-1">كاش</span>
-                      ) : (
-                        <span className="badge bg-warning text-dark rounded-pill px-2 py-1">قسط</span>
-                      )}
+                    <td className="text-center align-middle border-secondary-subtle" dir="ltr">
+                      {isCash ? 'كاش' : toArabic(r.installment_system)}
                     </td>
                     <td className="text-center align-middle border-secondary-subtle">
-                      <span className="fw-bolder text-dark fs-4">{toArabic(formatCurrency(r.total))}</span>
+                      {toArabic(formatCurrency(r.total_amount))}
                     </td>
                   </>
                 );
