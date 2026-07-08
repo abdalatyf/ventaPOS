@@ -391,7 +391,7 @@ export default function SearchReceipts() {
       )}
 
       {/* ── Results Table ── */}
-      <div className="card shadow-sm flex-grow-1 d-flex flex-column overflow-hidden" style={{ border: '1px solid #dee2e6' }}>
+      <div className="card shadow-sm flex-grow-1 d-flex flex-column overflow-hidden" style={{ border: '1px solid #dee2e6', height: '100%' }}>
         <div className="card-header bg-light d-flex flex-wrap justify-content-between align-items-center py-2 gap-2" style={{ borderColor: '#dee2e6 !important' }}>
           <div className="d-flex align-items-center gap-3">
             <div className="text-dark fw-bold fs-3 d-flex align-items-center gap-2">
@@ -440,9 +440,9 @@ export default function SearchReceipts() {
             <h4 className="text-muted fw-bold">لا توجد فواتير مطابقة لمعايير البحث</h4>
           </div>
         ) : (
-          <div style={{ position: 'relative', border: '1px solid #dee2e6' }} className="rounded flex-grow-1 d-flex flex-column overflow-hidden">
+          <div style={{ position: 'relative', border: '1px solid #dee2e6', height: '100%', flex: '1 1 auto' }} className="rounded overflow-hidden">
             <TableVirtuoso
-              style={{ flex: 1 }}
+              style={{ height: '100%' }}
               data={receipts}
               firstItemIndex={firstItemIndex}
               initialTopMostItemIndex={{ index: receipts.length > 0 ? receipts.length - 1 : 0, align: 'end' }}
