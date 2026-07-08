@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import '@tabler/core/dist/css/tabler.rtl.min.css'
+import '@tabler/core/dist/js/tabler.min.js'
 import './index.css'
 import App from './App.jsx'
 

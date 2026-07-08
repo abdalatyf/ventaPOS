@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+import { fmt } from '../utils/formatUtils';
 
 const MOCK_INVENTORY = [
   { id: 1, name: 'لاب توب ديل', quantity: 15, purchase_price: 10000 },
@@ -28,7 +29,13 @@ const Inventory = () => {
       setLoading(true);
       const res = await api.get('/api/v1/inventory-items/');
       const data = res.data.results || res.data;
-      setItems(Array.isArray(data) ? data : []);
+      const mappedData = (Array.isArray(data) ? data : []).map(item => ({
+        ...item,
+        quantity: item.initial_quantity,
+        purchase_price: item.initial_purchase_price,
+        commission: item.initial_commission_amount
+      }));
+      setItems(mappedData);
     } catch (err) {
       console.warn("Backend not ready, using mock data.", err);
       setItems(MOCK_INVENTORY);
@@ -52,10 +59,29 @@ const Inventory = () => {
   const handleSave = async (e) => {
     e.preventDefault();
     try {
+      const payload = { ...formData };
+      if ('quantity' in payload) {
+        payload.initial_quantity = fmt(payload.quantity) || 0;
+        delete payload.quantity;
+      }
+      if ('purchase_price' in payload) {
+        payload.initial_purchase_price = fmt(payload.purchase_price) || 0;
+        delete payload.purchase_price;
+      }
+      if ('initial_commission_amount' in payload) {
+        payload.initial_commission_amount = fmt(payload.initial_commission_amount) || 0;
+      }
+      if ('initial_month' in payload) {
+        payload.initial_month = fmt(payload.initial_month) || new Date().getMonth() + 1;
+      }
+      if ('initial_year' in payload) {
+        payload.initial_year = fmt(payload.initial_year) || new Date().getFullYear();
+      }
+
       if (modalType === 'add') {
-        await api.post('/api/v1/inventory-items/', formData);
+        await api.post('/api/v1/inventory-items/', payload);
       } else if (modalType === 'edit') {
-        await api.put(`/api/v1/inventory-items/${selectedItem.id}/`, formData);
+        await api.put(`/api/v1/inventory-items/${selectedItem.id}/`, payload);
       } else if (modalType === 'delete') {
         await api.delete(`/api/v1/inventory-items/${selectedItem.id}/`);
       }
@@ -87,7 +113,7 @@ const Inventory = () => {
   return (
     <div className="page-wrapper">
       <div className="page-header d-print-none">
-        <div className="container-xl">
+        <div className="container-fluid">
           <div className="row g-2 align-items-center">
             <div className="col">
               <h2 className="page-title">
@@ -110,7 +136,7 @@ const Inventory = () => {
       </div>
       
       <div className="page-body">
-        <div className="container-xl">
+        <div className="container-fluid">
           <div className="card shadow-sm border-0 mb-3">
             <div className="card-body">
               <div className="row align-items-center">
@@ -131,7 +157,7 @@ const Inventory = () => {
                 </div>
                 <div className="col-md-6 text-md-end">
                   <h3 className="mb-0">
-                    إجمالي قيمة المخزون: <span className="text-primary">{totalInventoryValue.toLocaleString()} جنيه</span>
+                    إجمالي قيمة المخزون: <span className="text-primary">{totalInventoryValue.toLocaleString()}</span>
                   </h3>
                 </div>
               </div>
@@ -164,7 +190,7 @@ const Inventory = () => {
                             {item.quantity} حتة
                           </span>
                         </td>
-                        <td>{item.purchase_price} جنيه</td>
+                        <td>{item.purchase_price}</td>
                         <td className="text-end">
                           <Link to={`/inventory/${item.id}`} className="btn btn-sm btn-outline-info me-2">
                             كارت الصنف

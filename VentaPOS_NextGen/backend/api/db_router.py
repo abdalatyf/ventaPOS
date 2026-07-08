@@ -4,7 +4,7 @@ class SystemDBRouter:
     auth, contenttypes, sessions, admin applications, and specific api models.
     """
     
-    system_apps = {'auth', 'contenttypes', 'sessions', 'admin'}
+    system_apps = {'auth', 'contenttypes', 'sessions', 'admin', 'authtoken'}
     system_models = {'clientlicense', 'usedlicense', 'licensehistory', 'actionlog'}
 
     def db_for_read(self, model, **hints):
@@ -23,6 +23,9 @@ class SystemDBRouter:
 
     def allow_relation(self, obj1, obj2, **hints):
         # Allow relations if both objects are in the system db, or both in default db
+        # Or if one of them is Tenant
+        if obj1._meta.model_name == 'tenant' or obj2._meta.model_name == 'tenant':
+            return True
         obj1_db = 'system' if (obj1._meta.app_label in self.system_apps or (obj1._meta.app_label == 'api' and obj1._meta.model_name in self.system_models)) else 'default'
         obj2_db = 'system' if (obj2._meta.app_label in self.system_apps or (obj2._meta.app_label == 'api' and obj2._meta.model_name in self.system_models)) else 'default'
         

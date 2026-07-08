@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
+import { fmt } from '../utils/formatUtils';
 
 const Purchases = () => {
   const navigate = useNavigate();
@@ -29,8 +30,8 @@ const Purchases = () => {
     const fetchInitialData = async () => {
       try {
         const [suppliersRes, productsRes] = await Promise.all([
-          api.get('/api/v1/suppliers/').catch(() => ({ data: [] })),
-          api.get('/api/v1/inventory-items/').catch(() => ({ data: [] }))
+          api.get('/suppliers/').catch(() => ({ data: [] })),
+          api.get('/inventory-items/').catch(() => ({ data: [] }))
         ]);
         const suppData = suppliersRes.data?.results || suppliersRes.data;
         const prodData = productsRes.data?.results || productsRes.data;
@@ -51,15 +52,15 @@ const Purchases = () => {
       return;
     }
 
-    const product = products.find(p => p.id === parseInt(selectedProductId));
+    const product = products.find(p => p.id === fmt(selectedProductId));
     if (!product) return;
 
     const newItem = {
       id: Date.now(), // temporary id for UI
-      inventory_item: parseInt(selectedProductId),
+      inventory_item: fmt(selectedProductId),
       productName: product.name,
-      quantity: parseFloat(quantity),
-      purchase_price: parseFloat(purchasePrice)
+      quantity: fmt(quantity),
+      purchase_price: fmt(purchasePrice)
     };
 
     setItems([...items, newItem]);
@@ -87,10 +88,10 @@ const Purchases = () => {
     }
 
     const payload = {
-      supplier: parseInt(supplierId),
+      supplier: fmt(supplierId),
       invoice_type: invoiceType,
-      invoice_month: parseInt(invoiceMonth),
-      invoice_year: parseInt(invoiceYear),
+      invoice_month: fmt(invoiceMonth),
+      invoice_year: fmt(invoiceYear),
       items: items.map(item => ({
         inventory_item: item.inventory_item,
         quantity: item.quantity,
@@ -100,7 +101,7 @@ const Purchases = () => {
 
     try {
       setSaving(true);
-      await api.post('/api/v1/purchase-invoices/', payload);
+      await api.post('/purchase-invoices/', payload);
       alert('تم حفظ الفاتورة بنجاح!');
       navigate('/');
     } catch (err) {
@@ -114,7 +115,7 @@ const Purchases = () => {
   return (
     <div className="page-wrapper">
       <div className="page-header d-print-none">
-        <div className="container-xl">
+        <div className="container-fluid">
           <div className="row g-2 align-items-center">
             <div className="col">
               <h2 className="page-title">
@@ -131,7 +132,7 @@ const Purchases = () => {
       </div>
 
       <div className="page-body">
-        <div className="container-xl">
+        <div className="container-fluid">
           
           {/* Invoice Basic Data Card */}
           <div className="card mb-3">
@@ -193,7 +194,7 @@ const Purchases = () => {
                     className="form-control"
                     list="products-list"
                     placeholder="-- ابحث واختار الصنف --"
-                    value={products.find(p => p.id === parseInt(selectedProductId))?.name || selectedProductId}
+                    value={products.find(p => p.id === fmt(selectedProductId))?.name || selectedProductId}
                     onChange={(e) => {
                       const val = e.target.value;
                       const prod = products.find(p => p.name === val);
@@ -247,7 +248,7 @@ const Purchases = () => {
                       <td>{item.productName}</td>
                       <td>{item.quantity}</td>
                       <td>{item.purchase_price}</td>
-                      <td>{(item.quantity * item.purchase_price).toFixed(2)}</td>
+                      <td>{(item.quantity * item.purchase_price)}</td>
                       <td>
                         <button className="btn btn-sm btn-outline-danger" onClick={() => handleRemoveItem(item.id)}>مسح</button>
                       </td>
@@ -262,7 +263,7 @@ const Purchases = () => {
               </table>
             </div>
             <div className="card-footer d-flex justify-content-between align-items-center">
-              <h4 className="m-0">إجمالي الفاتورة: {totalAmount.toFixed(2)} جنيه</h4>
+              <h4 className="m-0">إجمالي الفاتورة: {totalAmount}</h4>
               <button className="btn btn-success" onClick={handleSaveInvoice} disabled={saving || items.length === 0}>
                 {saving ? 'جاري الحفظ...' : 'حفظ الفاتورة وتحديث المخزن'}
               </button>

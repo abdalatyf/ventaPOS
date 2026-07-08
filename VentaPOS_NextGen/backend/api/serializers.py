@@ -8,7 +8,7 @@ Design decisions:
   view from the authenticated request context, not supplied by the client).
 - Nested writable serializers are used only where the API contract specifies
   embedded creation (PurchaseInvoice → items, Receipt → sale_items + installments).
-- Financial fields (DecimalField) are serialized as strings to preserve
+- Financial fields (IntegerField) are serialized as strings to preserve
   precision across JSON boundaries.
 - The `is_deleted` field is read-only everywhere; soft-delete happens via a
   dedicated action, never via direct PATCH.
@@ -16,7 +16,6 @@ Design decisions:
   documented in api_contract.md §3.
 """
 
-from decimal import Decimal
 from django.db import transaction
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
@@ -245,33 +244,54 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
 
 class SaleItemSerializer(serializers.ModelSerializer):
     tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    product_name = serializers.CharField(source="inventory_item.name", read_only=True)
 
     class Meta:
         model = SaleItem
         fields = [
-            "id", "tenant_id", "receipt", "inventory_item",
+            "id", "tenant_id", "receipt", "inventory_item", "product_name",
             "quantity", "unit_price", "is_deleted", "created_at",
         ]
-        read_only_fields = ["id", "tenant_id", "receipt", "is_deleted", "created_at"]
+        read_only_fields = ["id", "tenant_id", "receipt", "product_name", "is_deleted", "created_at"]
 
     def to_internal_value(self, data):
         # Allow the API contract field alias `inventory_item_id`
         if "inventory_item_id" in data and "inventory_item" not in data:
             data = data.copy()
             data["inventory_item"] = data.pop("inventory_item_id")
+        # Allow `sell_price` alias for `unit_price` (used by POS frontend)
+        if "sell_price" in data and "unit_price" not in data:
+            data = data.copy() if not isinstance(data, dict) else dict(data)
+            data["unit_price"] = data.pop("sell_price")
         return super().to_internal_value(data)
 
 
 class InstallmentPaymentSerializer(serializers.ModelSerializer):
     tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    # Virtual write-only fields for POS frontend convenience
+    payment_month = serializers.IntegerField(write_only=True, required=False)
+    payment_year = serializers.IntegerField(write_only=True, required=False)
 
     class Meta:
         model = InstallmentPayment
         fields = [
             "id", "tenant_id", "receipt", "payment_date",
+            "payment_month", "payment_year",
             "amount", "is_deleted", "created_at",
         ]
         read_only_fields = ["id", "tenant_id", "receipt", "is_deleted", "created_at"]
+        extra_kwargs = {
+            "payment_date": {"required": False},
+        }
+
+    def to_internal_value(self, data):
+        # Build payment_date from payment_month + payment_year if not provided
+        data = dict(data) if not isinstance(data, dict) else dict(data)
+        if "payment_date" not in data and "payment_month" in data and "payment_year" in data:
+            month = int(data["payment_month"])
+            year = int(data["payment_year"])
+            data["payment_date"] = f"{year}-{month:02d}-25"
+        return super().to_internal_value(data)
 
 
 class ReceiptSerializer(serializers.ModelSerializer):
@@ -306,22 +326,60 @@ class ReceiptSerializer(serializers.ModelSerializer):
             "id", "tenant_id", "receipt_hash", "is_confirmed",
             "is_deleted", "created_at",
         ]
+        extra_kwargs = {
+            "local_id": {"required": False},
+            "receipt_number": {"required": False},
+            "client_uuid": {"required": False},
+            "created_at_local": {"required": False},
+            "products_text": {"required": False},
+            "address": {"required": False, "allow_blank": True},
+            "area": {"required": False, "allow_blank": True},
+            "phone_number": {"required": False, "allow_blank": True},
+            "installment_system": {"required": False, "allow_blank": True},
+        }
 
     def to_internal_value(self, data):
-        # Support the push payload alias `items` → `sale_items`
+        data = data.copy() if hasattr(data, "copy") else dict(data)
+        
+        # Field aliases
+        if "customer_phone" in data:
+            data["phone_number"] = data.pop("customer_phone")
+        if "customer_address" in data:
+            data["address"] = data.pop("customer_address")
+        if "customer_area" in data:
+            data["area"] = data.pop("customer_area")
+            
+        # Map items -> sale_items
         if "items" in data and "sale_items" not in data:
-            data = data.copy()
             data["sale_items"] = data.pop("items")
-        # Support the push payload alias `installments` → `installment_payments`
+        # Map installments -> installment_payments
         if "installments" in data and "installment_payments" not in data:
-            data = data.copy()
             data["installment_payments"] = data.pop("installments")
+            
+        # Support id -> local_id conversion for client compatibility
+        if "id" in data and "local_id" not in data:
+            data["local_id"] = data.pop("id")
+
+        # If is_cash_sale is True and customer_name is empty/blank/None, default to "عميل نقدي"
+        is_cash = data.get("is_cash_sale")
+        if isinstance(is_cash, str):
+            is_cash = is_cash.lower() in ("true", "1")
+        if is_cash and not data.get("customer_name"):
+            data["customer_name"] = "عميل نقدي"
+            
         return super().to_internal_value(data)
 
     def create(self, validated_data):
         items_data = validated_data.pop("sale_items", [])
         installments_data = validated_data.pop("installment_payments", [])
-        tenant = self.context["tenant"]
+        tenant = validated_data.get("tenant") or self.context.get("tenant")
+        if not tenant:
+            branch = validated_data.get("branch")
+            if branch:
+                tenant = branch.tenant
+            else:
+                tenant = Tenant.objects.using("default").first()
+        validated_data["tenant"] = tenant
 
         with transaction.atomic():
             # Deduct from license balance (pessimistic lock)
@@ -357,12 +415,48 @@ class ReceiptSerializer(serializers.ModelSerializer):
                     (last.receipt_number + 1) if last else 1
                 )
 
-            receipt = Receipt.objects.create(tenant=tenant, **validated_data)
+            # Auto-assign local time if not provided by frontend
+            if "created_at_local" not in validated_data:
+                from django.utils import timezone
+                validated_data["created_at_local"] = timezone.now()
+                
+            # Auto-assign client_uuid if not provided
+            if "client_uuid" not in validated_data:
+                import uuid
+                validated_data["client_uuid"] = uuid.uuid4()
+
+            # Stock validation
+            from api.views import get_default_date_for_tenant, calculate_safe_stock_limit
+            default_year, default_month = get_default_date_for_tenant(tenant)
+            target_year = validated_data["sale_year"]
+            target_month = validated_data["sale_month"]
+            for item_data in items_data:
+                item = item_data["inventory_item"]
+                qty = item_data["quantity"]
+                safe_limit = calculate_safe_stock_limit(item, default_year, default_month, target_year, target_month)
+                if qty > safe_limit:
+                    raise ValidationError({
+                        "error": f"عفواً، لا يمكن البيع! أقصى كمية يمكن بيعها بأثر رجعي للصنف '{item.name}' هي ({safe_limit}) لتجنب حدوث رصيد سالب في الشهور اللاحقة."
+                    })
+
+            if "local_id" not in validated_data:
+                last_receipt = Receipt.objects.filter(tenant=tenant).order_by('-local_id').first()
+                validated_data["local_id"] = (last_receipt.local_id + 1) if last_receipt else 1
+
+            if "products_text" not in validated_data and items_data:
+                validated_data["products_text"] = " + ".join([f"{i['inventory_item'].name}" if i['quantity'] == 1 else f"{i['quantity']} {i['inventory_item'].name}" for i in items_data])
+
+            receipt = Receipt.objects.create(**validated_data)
 
             for item_data in items_data:
                 SaleItem.objects.create(tenant=tenant, receipt=receipt, **item_data)
 
             for inst_data in installments_data:
+                payment_month = inst_data.pop("payment_month", 1)
+                payment_year = inst_data.pop("payment_year", 2026)
+                if "payment_date" not in inst_data:
+                    import datetime
+                    inst_data["payment_date"] = datetime.date(payment_year, payment_month, 25)
                 InstallmentPayment.objects.create(
                     tenant=tenant, receipt=receipt, **inst_data
                 )
@@ -399,10 +493,53 @@ class ReceiptSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             for attr, value in validated_data.items():
                 setattr(instance, attr, value)
+
+            from dateutil.relativedelta import relativedelta
+            from datetime import date
+            active_lic = ClientLicense.objects.filter(
+                tenant=tenant, is_active=True, is_deleted=False
+            ).first()
+            if not active_lic:
+                raise ValidationError({"license": "لا يوجد ترخيص ساري."})
+                
+            try:
+                invoice_date = date(instance.sale_year, instance.sale_month, 1)
+            except:
+                raise ValidationError({"error": "تاريخ الفاتورة غير صحيح."})
+                
+            lic_start_month = active_lic.start_date.replace(day=1)
+            if invoice_date < lic_start_month:
+                raise ValidationError({"error": "التاريخ يسبق بداية الاشتراك."})
+                
+            if active_lic.expiry_date:
+                last_allowed_month = (active_lic.expiry_date - relativedelta(months=2)).replace(day=1)
+                if invoice_date > last_allowed_month:
+                    raise ValidationError({"error": "التاريخ بعد انتهاء الاشتراك."})
+                grace_end = active_lic.expiry_date + relativedelta(days=25)
+                if date.today() > grace_end:
+                    raise ValidationError({"error": "انتهت فترة الاشتراك."})
+
             instance.save()
 
             if items_data is not None:
+                # Soft delete old items BEFORE calculating safe limits
                 instance.sale_items.all().update(is_deleted=True)
+
+                # Stock validation
+                from api.views import get_default_date_for_tenant, calculate_safe_stock_limit
+                default_year, default_month = get_default_date_for_tenant(tenant)
+                target_year = instance.sale_year
+                target_month = instance.sale_month
+                
+                for item_data in items_data:
+                    item = item_data["inventory_item"]
+                    qty = item_data["quantity"]
+                    safe_limit = calculate_safe_stock_limit(item, default_year, default_month, target_year, target_month)
+                    if qty > safe_limit:
+                        raise ValidationError({
+                            "error": f"عفواً، أقصى كمية يمكن بيعها أو تعديلها للصنف '{item.name}' في هذا التاريخ هي ({safe_limit})."
+                        })
+
                 for item_data in items_data:
                     SaleItem.objects.create(
                         tenant=tenant, receipt=instance, **item_data
@@ -411,6 +548,11 @@ class ReceiptSerializer(serializers.ModelSerializer):
             if installments_data is not None:
                 instance.installment_payments.all().update(is_deleted=True)
                 for inst_data in installments_data:
+                    payment_month = inst_data.pop("payment_month", 1)
+                    payment_year = inst_data.pop("payment_year", 2026)
+                    if "payment_date" not in inst_data:
+                        import datetime
+                        inst_data["payment_date"] = datetime.date(payment_year, payment_month, 25)
                     InstallmentPayment.objects.create(
                         tenant=tenant, receipt=instance, **inst_data
                     )
@@ -423,6 +565,9 @@ class ReceiptSerializer(serializers.ModelSerializer):
                     "quantity", "unit_price"
                 ))
             )
+            if items_data is not None:
+                instance.products_text = " + ".join([f"{i['inventory_item'].name}" if i['quantity'] == 1 else f"{i['quantity']} {i['inventory_item'].name}" for i in items_data])
+
             instance.receipt_hash = generate_receipt_signature(
                 instance.receipt_number,
                 instance.total_amount,
@@ -430,7 +575,10 @@ class ReceiptSerializer(serializers.ModelSerializer):
                 instance.sale_year,
                 current_items,
             )
-            instance.save(update_fields=["receipt_hash"])
+            update_fields = ["receipt_hash"]
+            if items_data is not None:
+                update_fields.append("products_text")
+            instance.save(update_fields=update_fields)
 
         return instance
 

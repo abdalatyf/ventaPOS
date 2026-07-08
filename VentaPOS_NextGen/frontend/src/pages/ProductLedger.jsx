@@ -79,14 +79,14 @@ const ProductLedger = () => {
   return (
       <div className="page-wrapper">
       <div className="page-header d-print-none">
-        <div className="container-xl">
+        <div className="container-fluid">
           <div className="row g-2 align-items-center">
             <div className="col">
               <h2 className="page-title">
                 كارت الصنف: {data.item.name} (#{data.item.id})
               </h2>
               <div className="text-muted mt-1">
-                الرصيد: {data.item.quantity} حتة | سعر الشراء: {data.item.purchase_price} جنيه
+                الرصيد: {data.item.quantity} حتة | سعر الشراء: {data.item.purchase_price}
               </div>
             </div>
             <div className="col-auto ms-auto d-print-none">
@@ -99,7 +99,7 @@ const ProductLedger = () => {
       </div>
       
       <div className="page-body">
-        <div className="container-xl">
+        <div className="container-fluid">
           <div className="card">
             <div className="card-header">
               <ul className="nav nav-tabs card-header-tabs" data-bs-toggle="tabs">
@@ -145,7 +145,7 @@ const ProductLedger = () => {
                                   أرباح الكاش
                                 </div>
                                 <div className="text-muted">
-                                  {data.dashboard.cash_profit.toLocaleString()} جنيه
+                                  {data.dashboard.cash_profit.toLocaleString()}
                                 </div>
                               </div>
                             </div>
@@ -167,7 +167,7 @@ const ProductLedger = () => {
                                   أرباح القسط
                                 </div>
                                 <div className="text-muted">
-                                  {data.dashboard.installment_profit.toLocaleString()} جنيه
+                                  {data.dashboard.installment_profit.toLocaleString()}
                                 </div>
                               </div>
                             </div>
@@ -189,7 +189,7 @@ const ProductLedger = () => {
                                   تأثير التسويات
                                 </div>
                                 <div className="text-muted">
-                                  {data.dashboard.adjustment_impact.toLocaleString()} جنيه
+                                  {data.dashboard.adjustment_impact.toLocaleString()}
                                 </div>
                               </div>
                             </div>
@@ -211,7 +211,7 @@ const ProductLedger = () => {
                                   إجمالي الأرباح
                                 </div>
                                 <div className="text-muted">
-                                  {data.dashboard.total_profit.toLocaleString()} جنيه
+                                  {data.dashboard.total_profit.toLocaleString()}
                                 </div>
                               </div>
                             </div>
@@ -238,10 +238,10 @@ const ProductLedger = () => {
                          {data.financials.map((fin, idx) => (
                             <tr key={idx}>
                               <td>{fin.month}</td>
-                              <td>{fin.revenue.toLocaleString()} جنيه</td>
-                              <td>{fin.cost.toLocaleString()} جنيه</td>
-                              <td><span className="text-success">{fin.profit.toLocaleString()} جنيه</span></td>
-                              <td>{fin.commission.toLocaleString()} جنيه</td>
+                              <td>{fin.revenue.toLocaleString()}</td>
+                              <td>{fin.cost.toLocaleString()}</td>
+                              <td><span className="text-success">{fin.profit.toLocaleString()}</span></td>
+                              <td>{fin.commission.toLocaleString()}</td>
                             </tr>
                          ))}
                        </tbody>
@@ -297,7 +297,7 @@ const ProductLedger = () => {
                             <tr key={comm.id}>
                               <td>{comm.month}</td>
                               <td>{comm.year}</td>
-                              <td>{comm.amount.toLocaleString()} جنيه</td>
+                              <td>{comm.amount.toLocaleString()}</td>
                               <td>
                                  <span className={`badge ${comm.status === 'مدفوعة' ? 'bg-success-lt' : 'bg-warning-lt'}`}>
                                     {comm.status}

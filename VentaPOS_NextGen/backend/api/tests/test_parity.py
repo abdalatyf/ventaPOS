@@ -30,7 +30,7 @@ from rest_framework.exceptions import ValidationError
 from api.models import (
     Branch, Salesperson, InventoryItem, CommissionHistory,
     InventoryAdjustment, Supplier, PurchaseInvoice, PurchaseInvoiceItem,
-    Receipt, SaleItem, InstallmentPayment, ClientLicense,
+    Receipt, SaleItem, InstallmentPayment, ClientLicense, Tenant,
 )
 from api.utils.security_utils import generate_receipt_signature, generate_record_signature
 from api.utils.license_validator import LicenseValidator
@@ -61,14 +61,20 @@ def _legacy_hash(receipt_number, total_amount, sale_month, sale_year):
 
 
 def _make_branch():
-    return Branch.objects.using("default").create(name="Main Branch")
+    # استخدام local_id=1 لضمان التوافق مع NOT NULL constraint
+    tenant = Tenant.objects.using("default").first() or Tenant.objects.using("default").create(company_code="TEST", name="Test Tenant")
+    return Branch.objects.using("default").create(tenant=tenant, name="Main Branch", local_id=1)
 
 
 def _make_item(branch, name="Test Product", initial_qty=100,
                initial_month=1, initial_year=2025):
+    tenant = branch.tenant
+    local_id = InventoryItem.objects.using("default").count() + 1
     return InventoryItem.objects.using("default").create(
-        name=name,
+        tenant=tenant,
         branch=branch,
+        local_id=local_id,
+        name=name,
         initial_quantity=initial_qty,
         initial_purchase_price=50,
         initial_commission_amount=5,
@@ -78,11 +84,18 @@ def _make_item(branch, name="Test Product", initial_qty=100,
 
 
 def _make_supplier():
-    return Supplier.objects.using("default").create(name="Factory A")
+    tenant = Tenant.objects.using("default").first() or Tenant.objects.using("default").create(company_code="TEST", name="Test Tenant")
+    return Supplier.objects.using("default").create(
+        tenant=tenant,
+        name="Factory A"
+    )
 
 
 def _make_purchase(branch, supplier, item, qty, month, year, inv_type="PURCHASE"):
+    tenant = branch.tenant
     inv = PurchaseInvoice.objects.using("default").create(
+        tenant=tenant,
+        branch=branch,
         invoice_number=PurchaseInvoice.objects.count() + 1,
         supplier=supplier,
         invoice_type=inv_type,
@@ -90,7 +103,8 @@ def _make_purchase(branch, supplier, item, qty, month, year, inv_type="PURCHASE"
         invoice_year=year,
     )
     PurchaseInvoiceItem.objects.using("default").create(
-        invoice=inv,
+        tenant=tenant,
+        purchase_invoice=inv,
         inventory_item=item,
         quantity=qty,
         purchase_price=50,
@@ -100,9 +114,21 @@ def _make_purchase(branch, supplier, item, qty, month, year, inv_type="PURCHASE"
 
 def _make_receipt(branch, sale_month, sale_year, is_cash=True):
     """Creates a bare Receipt WITHOUT touching license balance (used by stock tests)."""
+    import uuid
+    from django.utils import timezone
+    tenant = branch.tenant
+    local_id = Receipt.objects.using("default").count() + 1
+    receipt_number = Receipt.objects.count() + 1
+    receipt_hash = generate_receipt_signature(receipt_number, 1000, sale_month, sale_year, items_data=None)
     return Receipt.objects.using("default").create(
-        receipt_number=Receipt.objects.count() + 1,
+        tenant=tenant,
         branch=branch,
+        local_id=local_id,
+        receipt_number=receipt_number,
+        client_uuid=uuid.uuid4(),
+        receipt_hash=receipt_hash,
+        customer_name="عميل نقدي" if is_cash else "عميل آجل",
+        created_at_local=timezone.now(),
         sale_month=sale_month,
         sale_year=sale_year,
         is_cash_sale=is_cash,
@@ -113,6 +139,7 @@ def _make_receipt(branch, sale_month, sale_year, is_cash=True):
 
 def _make_sale(receipt, item, qty, unit_price=100):
     return SaleItem.objects.using("default").create(
+        tenant=receipt.tenant,
         receipt=receipt,
         inventory_item=item,
         quantity=qty,
@@ -120,17 +147,25 @@ def _make_sale(receipt, item, qty, unit_price=100):
     )
 
 
-def _make_active_license(balance=500, product_id=1, expiry=None):
+def _make_active_license(balance=500, product_id=1, expiry=None, tenant=None):
     """Creates a ClientLicense in the system DB with a given invoices_balance."""
+    from api.utils.security_utils import get_machine_id
+    mid = get_machine_id()
     if expiry is None:
         expiry = date.today() + timedelta(days=365)
+    if tenant is None:
+        tenant = Tenant.objects.using("default").first() or Tenant.objects.using("default").create(company_code="TEST", name="Test Tenant")
+    sig = generate_record_signature(str(expiry), balance, mid, product_id, True)
     return ClientLicense.objects.using("system").create(
+        tenant=tenant,
+        company_code=tenant.company_code,
         product_id=product_id,
         start_date=date.today(),
         expiry_date=expiry,
         invoices_balance=balance,
         is_active=True,
-        machine_id="TEST-MACHINE",
+        machine_id=mid,
+        license_code_hash=sig,
     )
 
 
@@ -251,7 +286,7 @@ class TimeMachineStockTests(TestCase):
     def test_surplus_adjustment_increases_stock(self):
         item = _make_item(self.branch, initial_qty=10, initial_month=1, initial_year=2025)
         InventoryAdjustment.objects.using("default").create(
-            item=item, adjustment_type="SURPLUS", quantity=25, month=3, year=2025
+            tenant=item.tenant, inventory_item=item, adjustment_type="SURPLUS", quantity=25, adjustment_month=3, adjustment_year=2025
         )
         self.assertEqual(item.get_stock_at_date(3, 2025), 35)
         self.assertEqual(item.get_stock_at_date(2, 2025), 10,
@@ -260,7 +295,7 @@ class TimeMachineStockTests(TestCase):
     def test_deficit_adjustment_decreases_stock(self):
         item = _make_item(self.branch, initial_qty=30, initial_month=1, initial_year=2025)
         InventoryAdjustment.objects.using("default").create(
-            item=item, adjustment_type="DEFICIT", quantity=8, month=5, year=2025
+            tenant=item.tenant, inventory_item=item, adjustment_type="DEFICIT", quantity=8, adjustment_month=5, adjustment_year=2025
         )
         self.assertEqual(item.get_stock_at_date(4, 2025), 30)
         self.assertEqual(item.get_stock_at_date(5, 2025), 22)
@@ -287,10 +322,10 @@ class TimeMachineStockTests(TestCase):
         receipt = _make_receipt(self.branch, sale_month=3, sale_year=2025)
         _make_sale(receipt, item, qty=30)
         InventoryAdjustment.objects.using("default").create(
-            item=item, adjustment_type="DEFICIT", quantity=10, month=4, year=2025
+            tenant=item.tenant, inventory_item=item, adjustment_type="DEFICIT", quantity=10, adjustment_month=4, adjustment_year=2025
         )
         InventoryAdjustment.objects.using("default").create(
-            item=item, adjustment_type="SURPLUS", quantity=5, month=5, year=2025
+            tenant=item.tenant, inventory_item=item, adjustment_type="SURPLUS", quantity=5, adjustment_month=5, adjustment_year=2025
         )
 
         self.assertEqual(item.get_stock_at_date(1, 2025), 100)
@@ -449,9 +484,13 @@ class InstallmentScheduleTests(TestCase):
 
     def _expected_due_dates(self, sale_year, sale_month, num_installments):
         """Pure Python implementation of the legacy schedule algorithm."""
-        from dateutil.relativedelta import relativedelta
-        start = date(sale_year, sale_month, 25)
-        return [start + relativedelta(months=i + 1) for i in range(num_installments)]
+        res = []
+        for i in range(num_installments):
+            m = sale_month - 1 + (i + 1)
+            y = sale_year + m // 12
+            m = m % 12 + 1
+            res.append(date(y, m, 25))
+        return res
 
     def setUp(self):
         self.branch = _make_branch()
@@ -559,15 +598,16 @@ class LicenseBalanceTests(TestCase):
         from api.serializers import ReceiptSerializer
         data = {
             "branch": self.branch.pk,
+            "local_id": 1,
             "sale_month": 6,
             "sale_year": 2025,
             "total_amount": 5000,
             "down_payment": 5000,
             "is_cash_sale": True,
         }
-        serializer = ReceiptSerializer(data=data)
+        serializer = ReceiptSerializer(data=data, context={"tenant": self.branch.tenant})
         serializer.is_valid(raise_exception=True)
-        return serializer.save()
+        return serializer.save(tenant=self.branch.tenant)
 
     # -------------------------------------------------------------------------
     # TC-LIC-01: Creating a receipt deducts exactly 1 from invoices_balance
@@ -597,16 +637,17 @@ class LicenseBalanceTests(TestCase):
         from api.serializers import ReceiptSerializer
         data = {
             "branch": self.branch.pk,
+            "local_id": 1,
             "sale_month": 6,
             "sale_year": 2025,
             "total_amount": 5000,
             "down_payment": 5000,
             "is_cash_sale": True,
         }
-        serializer = ReceiptSerializer(data=data)
+        serializer = ReceiptSerializer(data=data, context={"tenant": self.branch.tenant})
         serializer.is_valid(raise_exception=True)
         with self.assertRaises(ValidationError):
-            serializer.save()
+            serializer.save(tenant=self.branch.tenant)
 
     # -------------------------------------------------------------------------
     # TC-LIC-04: No active license at all -> creation fails
@@ -615,16 +656,17 @@ class LicenseBalanceTests(TestCase):
         from api.serializers import ReceiptSerializer
         data = {
             "branch": self.branch.pk,
+            "local_id": 1,
             "sale_month": 6,
             "sale_year": 2025,
             "total_amount": 2000,
             "down_payment": 2000,
             "is_cash_sale": True,
         }
-        serializer = ReceiptSerializer(data=data)
+        serializer = ReceiptSerializer(data=data, context={"tenant": self.branch.tenant})
         serializer.is_valid(raise_exception=True)
         with self.assertRaises(ValidationError):
-            serializer.save()
+            serializer.save(tenant=self.branch.tenant)
 
     # -------------------------------------------------------------------------
     # TC-LIC-05: Deleting a receipt does NOT restore the balance
@@ -646,28 +688,35 @@ class LicenseBalanceTests(TestCase):
     # TC-LIC-06: Inactive license with balance is ignored
     # -------------------------------------------------------------------------
     def test_inactive_license_with_balance_is_not_used(self):
+        tenant = Tenant.objects.using("default").first() or Tenant.objects.using("default").create(company_code="TEST", name="Test Tenant")
+        expiry = date.today() + timedelta(days=365)
+        sig = generate_record_signature(str(expiry), 5000, "TEST-MACHINE", 1, False)
         ClientLicense.objects.using("system").create(
+            tenant=tenant,
+            company_code="TEST",
             product_id=1,
             start_date=date.today(),
-            expiry_date=date.today() + timedelta(days=365),
+            expiry_date=expiry,
             invoices_balance=5000,
             is_active=False,
             machine_id="TEST-MACHINE",
+            license_code_hash=sig,
         )
         from api.serializers import ReceiptSerializer
         data = {
             "branch": self.branch.pk,
+            "local_id": 1,
             "sale_month": 6,
             "sale_year": 2025,
             "total_amount": 1000,
             "down_payment": 1000,
             "is_cash_sale": True,
         }
-        serializer = ReceiptSerializer(data=data)
+        serializer = ReceiptSerializer(data=data, context={"tenant": self.branch.tenant})
         serializer.is_valid(raise_exception=True)
         with self.assertRaises(ValidationError,
                 msg="Inactive license must be completely ignored."):
-            serializer.save()
+            serializer.save(tenant=self.branch.tenant)
 
     # -------------------------------------------------------------------------
     # TC-LIC-07: Last receipt (balance=1) succeeds but next fails
@@ -683,16 +732,17 @@ class LicenseBalanceTests(TestCase):
         from api.serializers import ReceiptSerializer
         data = {
             "branch": self.branch.pk,
+            "local_id": 2,
             "sale_month": 7,
             "sale_year": 2025,
             "total_amount": 1000,
             "down_payment": 1000,
             "is_cash_sale": True,
         }
-        serializer = ReceiptSerializer(data=data)
+        serializer = ReceiptSerializer(data=data, context={"tenant": self.branch.tenant})
         serializer.is_valid(raise_exception=True)
         with self.assertRaises(ValidationError):
-            serializer.save()
+            serializer.save(tenant=self.branch.tenant)
 
 
 # =============================================================================
@@ -811,7 +861,8 @@ class CommissionHistoryTests(TestCase):
     def test_returns_active_commission_at_date(self):
         item = _make_item(self.branch, initial_qty=10, initial_month=1, initial_year=2025)
         CommissionHistory.objects.using("default").create(
-            item=item,
+            tenant=item.tenant,
+            inventory_item=item,
             commission_amount=25,
             activation_month=3,
             activation_year=2025,
@@ -825,11 +876,138 @@ class CommissionHistoryTests(TestCase):
     def test_returns_latest_commission_when_multiple_records(self):
         item = _make_item(self.branch, initial_qty=10, initial_month=1, initial_year=2025)
         CommissionHistory.objects.using("default").create(
-            item=item, commission_amount=20, activation_month=2, activation_year=2025
+            tenant=item.tenant, inventory_item=item, commission_amount=20, activation_month=2, activation_year=2025
         )
         CommissionHistory.objects.using("default").create(
-            item=item, commission_amount=35, activation_month=5, activation_year=2025
+            tenant=item.tenant, inventory_item=item, commission_amount=35, activation_month=5, activation_year=2025
         )
         self.assertEqual(item.get_commission_at_date(4, 2025), 20)
         self.assertEqual(item.get_commission_at_date(5, 2025), 35)
         self.assertEqual(item.get_commission_at_date(12, 2025), 35)
+
+
+from rest_framework.test import APIClient
+from api.serializers import ReceiptSerializer
+
+class PosEntryParityTests(TestCase):
+    databases = ["default", "system"]
+
+    def setUp(self):
+        self.client = APIClient()
+        self.tenant = Tenant.objects.using("default").create(company_code="TESTSUG", name="Test Suggestion Tenant")
+        self.branch = Branch.objects.using("default").create(tenant=self.tenant, name="Main Branch", local_id=1)
+        self.license = _make_active_license(balance=100, tenant=self.tenant)
+
+    def test_product_suggestions_endpoint(self):
+        item = _make_item(self.branch, name="صنف تجربة", initial_qty=50, initial_month=1, initial_year=2026)
+        
+        response = self.client.get('/api/v1/product-suggestions/', {
+            "term": "تجربة",
+            "month": "7",
+            "year": "2026"
+        }, HTTP_X_COMPANY_CODE="TESTSUG")
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["id"], str(item.id))
+        self.assertEqual(data[0]["value"], "صنف تجربة")
+        self.assertEqual(data[0]["max"], 50)
+
+    def test_customer_suggestions_endpoint(self):
+        import uuid
+        from django.utils import timezone
+        Receipt.objects.using("default").create(
+            tenant=self.tenant,
+            branch=self.branch,
+            local_id=1,
+            receipt_number=1001,
+            client_uuid=uuid.uuid4(),
+            receipt_hash="dummyhash1",
+            customer_name="أحمد علي",
+            phone_number="0101234567",
+            address="شارع التحرير",
+            area="وسط البلد",
+            sale_month=7,
+            sale_year=2026,
+            created_at_local=timezone.now(),
+            total_amount=100,
+            down_payment=100,
+            is_cash_sale=True
+        )
+        
+        # Name search
+        response = self.client.get('/api/v1/customer-suggestions/', {
+            "field": "name",
+            "term": "أحمد"
+        }, HTTP_X_COMPANY_CODE="TESTSUG")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["value"], "أحمد علي")
+        
+        # Phone search
+        response = self.client.get('/api/v1/customer-suggestions/', {
+            "field": "phone",
+            "term": "010"
+        }, HTTP_X_COMPANY_CODE="TESTSUG")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["value"], "٠١٠١٢٣٤٥٦٧")
+
+    def test_retro_stock_validation_error(self):
+        item = _make_item(self.branch, name="صنف شحيح", initial_qty=5, initial_month=1, initial_year=2026)
+        
+        data = {
+            "branch": self.branch.id,
+            "sale_month": 7,
+            "sale_year": 2026,
+            "total_amount": 500,
+            "down_payment": 500,
+            "is_cash_sale": True,
+            "sale_items": [
+                {
+                    "inventory_item": item.id,
+                    "quantity": 10,
+                    "unit_price": 50
+                }
+            ]
+        }
+        
+        serializer = ReceiptSerializer(data=data, context={"tenant": self.tenant})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        
+        with self.assertRaises(ValidationError) as ctx:
+            serializer.save()
+            
+        self.assertIn("عفواً، لا يمكن البيع!", str(ctx.exception))
+        self.assertIn("أقصى كمية يمكن بيعها بأثر رجعي للصنف 'صنف شحيح' هي (5)", str(ctx.exception))
+
+    def test_installment_25th_day_billing_rule(self):
+        data = {
+            "branch": self.branch.id,
+            "sale_month": 6,
+            "sale_year": 2026,
+            "total_amount": 1000,
+            "down_payment": 500,
+            "is_cash_sale": False,
+            "customer_name": "عميل آجل",
+            "installment_payments": [
+                {
+                    "amount": 500,
+                    "payment_month": 7,
+                    "payment_year": 2026
+                }
+            ]
+        }
+        
+        serializer = ReceiptSerializer(data=data, context={"tenant": self.tenant})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        receipt = serializer.save()
+        
+        installment = receipt.installment_payments.first()
+        self.assertIsNotNone(installment)
+        self.assertEqual(installment.payment_date.day, 25)
+        self.assertEqual(installment.payment_date.month, 7)
+        self.assertEqual(installment.payment_date.year, 2026)

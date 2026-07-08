@@ -28,6 +28,21 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'x-company-code',
+    'x-machine-id',
+    'x-branch-id',
+]
 
 # Application definition
 
@@ -39,12 +54,15 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework.authtoken',
+    'corsheaders',
     'api',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -83,7 +101,7 @@ APPDATA_DIR = os.environ.get('APPDATA', os.path.join(os.path.expanduser('~'), 'A
 VENTAPOS_SYSTEM_DIR = os.path.join(APPDATA_DIR, 'VentaPOS')
 os.makedirs(VENTAPOS_SYSTEM_DIR, exist_ok=True)
 
-VENTAPOS_RUNTIME_DIR = os.path.join(tempfile.gettempdir(), 'VentaPOS')
+VENTAPOS_RUNTIME_DIR = os.path.join(BASE_DIR, 'db')
 os.makedirs(VENTAPOS_RUNTIME_DIR, exist_ok=True)
 
 DATABASES = {

@@ -106,7 +106,7 @@ class CloudUser(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="cloud_users"
+        Tenant, on_delete=models.CASCADE, related_name="cloud_users", db_constraint=False
     )
     username = models.CharField(max_length=150)
     password_hash = models.CharField(max_length=255)
@@ -130,7 +130,7 @@ class CloudUser(models.Model):
                 condition=models.Q(is_deleted=False),
             ),
             models.CheckConstraint(
-                check=models.Q(role__in=["ADMIN", "CASHIER", "VIEWER", "BRANCH_MANAGER"]),
+                condition=models.Q(role__in=["ADMIN", "CASHIER", "VIEWER", "BRANCH_MANAGER"]),
                 name="chk_cloud_user_role",
             ),
         ]
@@ -176,7 +176,7 @@ class Branch(models.Model):
                 condition=models.Q(is_deleted=False),
             ),
             models.CheckConstraint(
-                check=models.Q(local_id__gte=0),
+                condition=models.Q(local_id__gte=0),
                 name="chk_branch_local_id_gte_0",
             ),
         ]
@@ -222,7 +222,7 @@ class Salesperson(models.Model):
                 name="uq_tenant_salesperson_local_id",
             ),
             models.CheckConstraint(
-                check=models.Q(local_id__gte=0),
+                condition=models.Q(local_id__gte=0),
                 name="chk_salesperson_local_id_gte_0",
             ),
         ]
@@ -251,13 +251,11 @@ class InventoryItem(models.Model):
     local_id = models.IntegerField()
     name = models.CharField(max_length=200)
     initial_quantity = models.IntegerField(default=0, validators=[MinValueValidator(0)])
-    initial_purchase_price = models.DecimalField(
-        max_digits=12, decimal_places=2, default="0.00",
-        validators=[MinValueValidator("0.00")]
+    initial_purchase_price = models.IntegerField(
+        default=0, validators=[MinValueValidator(0)]
     )
-    initial_commission_amount = models.DecimalField(
-        max_digits=12, decimal_places=2, default="0.00",
-        validators=[MinValueValidator("0.00")]
+    initial_commission_amount = models.IntegerField(
+        default=0, validators=[MinValueValidator(0)]
     )
     initial_month = models.IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(12)]
@@ -279,33 +277,33 @@ class InventoryItem(models.Model):
                 name="uq_tenant_item_local_id",
             ),
             models.CheckConstraint(
-                check=models.Q(local_id__gte=0),
+                condition=models.Q(local_id__gte=0),
                 name="chk_inventory_item_local_id_gte_0",
             ),
             models.CheckConstraint(
-                check=models.Q(initial_quantity__gte=0),
+                condition=models.Q(initial_quantity__gte=0),
                 name="chk_inventory_item_initial_qty_gte_0",
             ),
             models.CheckConstraint(
-                check=models.Q(initial_purchase_price__gte=0),
+                condition=models.Q(initial_purchase_price__gte=0),
                 name="chk_inventory_item_purchase_price_gte_0",
             ),
             models.CheckConstraint(
-                check=models.Q(initial_commission_amount__gte=0),
+                condition=models.Q(initial_commission_amount__gte=0),
                 name="chk_inventory_item_commission_gte_0",
             ),
             models.CheckConstraint(
-                check=models.Q(initial_month__gte=1, initial_month__lte=12),
+                condition=models.Q(initial_month__gte=1, initial_month__lte=12),
                 name="chk_inventory_item_month_range",
             ),
             models.CheckConstraint(
-                check=models.Q(initial_year__gte=2025),
+                condition=models.Q(initial_year__gte=2025),
                 name="chk_inventory_item_year_gte_2025",
             ),
         ]
         indexes = [
             models.Index(
-                fields=["tenant", "branch"], name="idx_inventory_item_tenant_branch"
+                fields=["tenant", "branch"], name="idx_inv_item_ten_branch"
             ),
         ]
 
@@ -347,7 +345,7 @@ class InventoryItem(models.Model):
 
         purchases = (
             self.purchase_invoice_items.filter(
-                purchase_invoice__invoice_type="PURCHASE", is_deleted=False
+                purchase_invoice__invoice_type="PURCHASE", is_deleted=False, purchase_invoice__is_deleted=False
             )
             .filter(before_or_eq_invoice)
             .aggregate(total=Sum("quantity"))["total"] or 0
@@ -383,7 +381,26 @@ class InventoryItem(models.Model):
             .aggregate(total=Sum("quantity"))["total"] or 0
         )
 
-        return stock + purchases + adj_plus - sales - returns - adj_minus
+        return max(0, stock + purchases + adj_plus - sales - returns - adj_minus)
+
+    def get_price_at_date(self, month: int, year: int) -> int:
+        from django.db.models import Q
+        
+        latest_purchase = (
+            self.purchase_invoice_items.filter(
+                purchase_invoice__invoice_type="PURCHASE", is_deleted=False, purchase_invoice__is_deleted=False
+            )
+            .filter(
+                Q(purchase_invoice__invoice_year__lt=year)
+                | (Q(purchase_invoice__invoice_year=year) & Q(purchase_invoice__invoice_month__lte=month))
+            )
+            .order_by("-purchase_invoice__invoice_year", "-purchase_invoice__invoice_month", "-created_at")
+            .first()
+        )
+        
+        if latest_purchase:
+            return latest_purchase.purchase_price
+        return self.initial_purchase_price
 
     def get_commission_at_date(self, month: int, year: int):
         """Returns the active commission rate for this item as of the given period."""
@@ -420,9 +437,8 @@ class CommissionHistory(models.Model):
     inventory_item = models.ForeignKey(
         InventoryItem, on_delete=models.CASCADE, related_name="commission_history"
     )
-    commission_amount = models.DecimalField(
-        max_digits=12, decimal_places=2, default="0.00",
-        validators=[MinValueValidator("0.00")]
+    commission_amount = models.IntegerField(
+        default=0, validators=[MinValueValidator(0)]
     )
     activation_month = models.IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(12)]
@@ -440,15 +456,15 @@ class CommissionHistory(models.Model):
         verbose_name_plural = "سجل العمولات"
         constraints = [
             models.CheckConstraint(
-                check=models.Q(commission_amount__gte=0),
+                condition=models.Q(commission_amount__gte=0),
                 name="chk_commission_amount_gte_0",
             ),
             models.CheckConstraint(
-                check=models.Q(activation_month__gte=1, activation_month__lte=12),
+                condition=models.Q(activation_month__gte=1, activation_month__lte=12),
                 name="chk_commission_month_range",
             ),
             models.CheckConstraint(
-                check=models.Q(activation_year__gte=2025),
+                condition=models.Q(activation_year__gte=2025),
                 name="chk_commission_year_gte_2025",
             ),
         ]
@@ -503,19 +519,19 @@ class InventoryAdjustment(models.Model):
         verbose_name_plural = "تسويات المخزون"
         constraints = [
             models.CheckConstraint(
-                check=models.Q(adjustment_type__in=["DEFICIT", "SURPLUS"]),
+                condition=models.Q(adjustment_type__in=["DEFICIT", "SURPLUS"]),
                 name="chk_adjustment_type_valid",
             ),
             models.CheckConstraint(
-                check=models.Q(quantity__gte=0),
+                condition=models.Q(quantity__gte=0),
                 name="chk_adjustment_quantity_gte_0",
             ),
             models.CheckConstraint(
-                check=models.Q(adjustment_month__gte=1, adjustment_month__lte=12),
+                condition=models.Q(adjustment_month__gte=1, adjustment_month__lte=12),
                 name="chk_adjustment_month_range",
             ),
             models.CheckConstraint(
-                check=models.Q(adjustment_year__gte=2025),
+                condition=models.Q(adjustment_year__gte=2025),
                 name="chk_adjustment_year_gte_2025",
             ),
         ]
@@ -611,25 +627,25 @@ class PurchaseInvoice(models.Model):
                 name="uq_tenant_branch_invoice_num_type",
             ),
             models.CheckConstraint(
-                check=models.Q(invoice_number__gte=0),
+                condition=models.Q(invoice_number__gte=0),
                 name="chk_purchase_invoice_number_gte_0",
             ),
             models.CheckConstraint(
-                check=models.Q(invoice_type__in=["PURCHASE", "RETURN"]),
+                condition=models.Q(invoice_type__in=["PURCHASE", "RETURN"]),
                 name="chk_purchase_invoice_type_valid",
             ),
             models.CheckConstraint(
-                check=models.Q(invoice_month__gte=1, invoice_month__lte=12),
+                condition=models.Q(invoice_month__gte=1, invoice_month__lte=12),
                 name="chk_purchase_invoice_month_range",
             ),
             models.CheckConstraint(
-                check=models.Q(invoice_year__gte=2025),
+                condition=models.Q(invoice_year__gte=2025),
                 name="chk_purchase_invoice_year_gte_2025",
             ),
         ]
         indexes = [
             models.Index(
-                fields=["tenant", "branch"], name="idx_purchase_invoice_tenant_branch"
+                fields=["tenant", "branch"], name="idx_pur_inv_ten_branch"
             ),
         ]
 
@@ -655,9 +671,8 @@ class PurchaseInvoiceItem(models.Model):
         InventoryItem, on_delete=models.CASCADE, related_name="purchase_invoice_items"
     )
     quantity = models.IntegerField(validators=[MinValueValidator(0)])
-    purchase_price = models.DecimalField(
-        max_digits=12, decimal_places=2, default="0.00",
-        validators=[MinValueValidator("0.00")]
+    purchase_price = models.IntegerField(
+        default=0, validators=[MinValueValidator(0)]
     )
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -671,18 +686,18 @@ class PurchaseInvoiceItem(models.Model):
         verbose_name_plural = "أصناف فواتير الشراء"
         constraints = [
             models.CheckConstraint(
-                check=models.Q(quantity__gte=0),
+                condition=models.Q(quantity__gte=0),
                 name="chk_pi_item_quantity_gte_0",
             ),
             models.CheckConstraint(
-                check=models.Q(purchase_price__gte=0),
+                condition=models.Q(purchase_price__gte=0),
                 name="chk_pi_item_purchase_price_gte_0",
             ),
         ]
         indexes = [
             models.Index(
                 fields=["purchase_invoice"],
-                name="idx_purchase_invoice_item_invoice",
+                name="idx_pur_inv_item_inv",
             ),
         ]
 
@@ -719,13 +734,11 @@ class Receipt(models.Model):
     phone_number = models.CharField(max_length=50, blank=True, null=True)
     address = models.CharField(max_length=255, blank=True, null=True)
     area = models.CharField(max_length=150, blank=True, null=True)
-    total_amount = models.DecimalField(
-        max_digits=12, decimal_places=2, default="0.00",
-        validators=[MinValueValidator("0.00")]
+    total_amount = models.IntegerField(
+        default=0, validators=[MinValueValidator(0)]
     )
-    down_payment = models.DecimalField(
-        max_digits=12, decimal_places=2, default="0.00",
-        validators=[MinValueValidator("0.00")]
+    down_payment = models.IntegerField(
+        default=0, validators=[MinValueValidator(0)]
     )
     installment_system = models.CharField(max_length=255, blank=True, null=True)
     sale_year = models.IntegerField(validators=[MinValueValidator(2025)])
@@ -754,27 +767,27 @@ class Receipt(models.Model):
                 name="uq_tenant_receipt_client_uuid",
             ),
             models.CheckConstraint(
-                check=models.Q(local_id__gte=0),
+                condition=models.Q(local_id__gte=0),
                 name="chk_receipt_local_id_gte_0",
             ),
             models.CheckConstraint(
-                check=models.Q(receipt_number__gte=0),
+                condition=models.Q(receipt_number__gte=0),
                 name="chk_receipt_number_gte_0",
             ),
             models.CheckConstraint(
-                check=models.Q(total_amount__gte=0),
+                condition=models.Q(total_amount__gte=0),
                 name="chk_receipt_total_amount_gte_0",
             ),
             models.CheckConstraint(
-                check=models.Q(down_payment__gte=0),
+                condition=models.Q(down_payment__gte=0),
                 name="chk_receipt_down_payment_gte_0",
             ),
             models.CheckConstraint(
-                check=models.Q(sale_year__gte=2025),
+                condition=models.Q(sale_year__gte=2025),
                 name="chk_receipt_sale_year_gte_2025",
             ),
             models.CheckConstraint(
-                check=models.Q(sale_month__gte=1, sale_month__lte=12),
+                condition=models.Q(sale_month__gte=1, sale_month__lte=12),
                 name="chk_receipt_sale_month_range",
             ),
         ]
@@ -807,9 +820,8 @@ class SaleItem(models.Model):
         InventoryItem, on_delete=models.CASCADE, related_name="sale_items"
     )
     quantity = models.IntegerField(validators=[MinValueValidator(0)])
-    unit_price = models.DecimalField(
-        max_digits=12, decimal_places=2, default="0.00",
-        validators=[MinValueValidator("0.00")]
+    unit_price = models.IntegerField(
+        default=0, validators=[MinValueValidator(0)]
     )
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -823,11 +835,11 @@ class SaleItem(models.Model):
         verbose_name_plural = "الأصناف المباعة"
         constraints = [
             models.CheckConstraint(
-                check=models.Q(quantity__gte=0),
+                condition=models.Q(quantity__gte=0),
                 name="chk_sale_item_quantity_gte_0",
             ),
             models.CheckConstraint(
-                check=models.Q(unit_price__gte=0),
+                condition=models.Q(unit_price__gte=0),
                 name="chk_sale_item_unit_price_gte_0",
             ),
         ]
@@ -855,9 +867,8 @@ class InstallmentPayment(models.Model):
     )
     # Absolute due date (25th-of-month rule enforced by business logic layer)
     payment_date = models.DateField()
-    amount = models.DecimalField(
-        max_digits=12, decimal_places=2, default="0.00",
-        validators=[MinValueValidator("0.00")]
+    amount = models.IntegerField(
+        default=0, validators=[MinValueValidator(0)]
     )
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -871,13 +882,13 @@ class InstallmentPayment(models.Model):
         verbose_name_plural = "الأقساط"
         constraints = [
             models.CheckConstraint(
-                check=models.Q(amount__gte=0),
+                condition=models.Q(amount__gte=0),
                 name="chk_installment_amount_gte_0",
             ),
         ]
         indexes = [
             models.Index(
-                fields=["receipt"], name="idx_installment_payment_receipt"
+                fields=["receipt"], name="idx_inst_pay_receipt"
             ),
         ]
 
@@ -899,9 +910,8 @@ class Expense(models.Model):
     branch = models.ForeignKey(
         Branch, on_delete=models.CASCADE, related_name="expenses"
     )
-    amount = models.DecimalField(
-        max_digits=12, decimal_places=2, default="0.00",
-        validators=[MinValueValidator("0.00")]
+    amount = models.IntegerField(
+        default=0, validators=[MinValueValidator(0)]
     )
     description = models.CharField(max_length=255)
     expense_year = models.IntegerField(validators=[MinValueValidator(2025)])
@@ -922,15 +932,15 @@ class Expense(models.Model):
         verbose_name_plural = "المصروفات"
         constraints = [
             models.CheckConstraint(
-                check=models.Q(amount__gte=0),
+                condition=models.Q(amount__gte=0),
                 name="chk_expense_amount_gte_0",
             ),
             models.CheckConstraint(
-                check=models.Q(expense_year__gte=2025),
+                condition=models.Q(expense_year__gte=2025),
                 name="chk_expense_year_gte_2025",
             ),
             models.CheckConstraint(
-                check=models.Q(expense_month__gte=1, expense_month__lte=12),
+                condition=models.Q(expense_month__gte=1, expense_month__lte=12),
                 name="chk_expense_month_range",
             ),
         ]
@@ -953,7 +963,7 @@ class CompanySetting(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.OneToOneField(
-        Tenant, on_delete=models.CASCADE, related_name="company_setting"
+        Tenant, on_delete=models.CASCADE, related_name="company_setting", db_constraint=False
     )
     name = models.CharField(max_length=100)
     description = models.CharField(max_length=200, blank=True, null=True)
@@ -997,7 +1007,7 @@ class ClientLicense(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="client_licenses"
+        Tenant, on_delete=models.CASCADE, related_name="client_licenses", db_constraint=False
     )
     product_id = models.IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(16)]
@@ -1027,11 +1037,11 @@ class ClientLicense(models.Model):
         verbose_name_plural = "تراخيص العملاء"
         constraints = [
             models.CheckConstraint(
-                check=models.Q(product_id__gte=1, product_id__lte=16),
+                condition=models.Q(product_id__gte=1, product_id__lte=16),
                 name="chk_client_license_product_id_range",
             ),
             models.CheckConstraint(
-                check=models.Q(invoices_balance__gte=0),
+                condition=models.Q(invoices_balance__gte=0),
                 name="chk_client_license_balance_gte_0",
             ),
         ]
@@ -1055,7 +1065,7 @@ class UsedLicense(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="used_licenses"
+        Tenant, on_delete=models.CASCADE, related_name="used_licenses", db_constraint=False
     )
     code_hash = models.CharField(max_length=64, unique=True)
     used_at = models.DateTimeField(auto_now_add=True)
@@ -1085,7 +1095,7 @@ class LicenseHistory(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="license_histories"
+        Tenant, on_delete=models.CASCADE, related_name="license_histories", db_constraint=False
     )
     machine_id = models.CharField(max_length=255)
     product_name = models.CharField(max_length=100)
@@ -1145,7 +1155,7 @@ class PendingExternalReceipt(models.Model):
         verbose_name_plural = "الوصلات الخارجية المؤقتة"
         constraints = [
             models.CheckConstraint(
-                check=models.Q(source__in=["CLOUD", "USB", "FILE"]),
+                condition=models.Q(source__in=["CLOUD", "USB", "FILE"]),
                 name="chk_pending_receipt_source_valid",
             ),
         ]

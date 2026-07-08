@@ -6,7 +6,10 @@ from .views import (
     PurchaseInvoiceViewSet, PurchaseInvoiceItemViewSet, ReceiptViewSet,
     SaleItemViewSet, InstallmentPaymentViewSet, PendingExternalReceiptViewSet,
     ClientLicenseViewSet, UsedLicenseViewSet, LicenseHistoryViewSet, ActionLogViewSet,
-    LicenseStatusView, LicenseActivateView
+    LicenseStatusView, LicenseActivateView, SystemInitializationView, CustomAuthToken,
+    CustomerSuggestionsView, ProductSuggestionsView,
+    DashboardReportView, SalespersonPerformanceReportView, InventoryMovementReportView,
+    ProfitAndLossReportView, CashDrawerReportView, DefaultDateView
 )
 
 router = DefaultRouter()
@@ -29,7 +32,22 @@ router.register(r'license-history', LicenseHistoryViewSet)
 router.register(r'action-logs', ActionLogViewSet)
 
 urlpatterns = [
+    path('init/', SystemInitializationView.as_view(), name='system_init'),
+    path('auth/local/', CustomAuthToken.as_view(), name='auth_local'),
     path('license/status/', LicenseStatusView.as_view(), name='license-status'),
     path('license/activate/', LicenseActivateView.as_view(), name='license-activate'),
+    path('customer-suggestions/', CustomerSuggestionsView.as_view(), name='customer-suggestions'),
+    path('product-suggestions/', ProductSuggestionsView.as_view(), name='product-suggestions'),
+    path('default-date/', DefaultDateView.as_view(), name='default-date'),
+    path('reports/dashboard/summary/', DashboardReportView.as_view(), name='report-dashboard-summary'),
+    path('reports/dashboard/', DashboardReportView.as_view(), name='report-dashboard-alias'),
+    path('reports/salespersons/', SalespersonPerformanceReportView.as_view(), name='report-salespersons'),
+    path('reports/salesperson-performance/', SalespersonPerformanceReportView.as_view(), name='report-salesperson-performance-alias'),
+    path('reports/inventory-movement/', InventoryMovementReportView.as_view(), name='report-inventory-movement'),
+    path('reports/sales-pl/', ProfitAndLossReportView.as_view(), name='report-sales-pl'),
+    path('reports/profit-and-loss/', ProfitAndLossReportView.as_view(), name='report-profit-and-loss-alias'),
+    path('reports/cash-drawer-details/', CashDrawerReportView.as_view(), name='report-cash-drawer-details'),
+    path('reports/cash-drawer/', CashDrawerReportView.as_view(), name='report-cash-drawer-alias'),
     path('', include(router.urls)),
 ]
+
