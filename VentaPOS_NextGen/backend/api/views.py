@@ -672,11 +672,13 @@ class ReceiptPagination(PageNumberPagination):
     def get_paginated_response(self, data):
         from django.db.models import Sum
         total_sales = self.page.paginator.object_list.aggregate(total=Sum("total_amount"))["total"] or 0
+        all_ids = list(self.page.paginator.object_list.values_list('id', flat=True))
         return Response({
             "count": self.page.paginator.count,
             "next": self.get_next_link(),
             "previous": self.get_previous_link(),
             "aggregate": {"total_sales": total_sales},
+            "all_ids": all_ids,
             "results": data
         })
 
