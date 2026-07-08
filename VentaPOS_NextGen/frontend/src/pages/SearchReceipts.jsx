@@ -253,7 +253,7 @@ export default function SearchReceipts() {
   };
 
   return (
-    <div className="container-fluid pb-3 px-3 fs-3 d-flex flex-column overflow-hidden" dir="rtl" style={{ marginTop: '-16px', fontSize: '1.02rem', height: 'calc(100vh - 120px)' }}>
+    <div className="container-fluid px-3 fs-3 d-flex flex-column overflow-hidden" dir="rtl" style={{ marginTop: '-16px', marginBottom: 0, paddingBottom: 0, fontSize: '1.02rem', height: 'calc(100vh - 70px)' }}>
       
       {/* ── Page Header ── */}
       <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom border-secondary-subtle" style={{ borderColor: '#dee2e6 !important' }}>
@@ -445,7 +445,7 @@ export default function SearchReceipts() {
               style={{ flex: 1 }}
               data={receipts}
               firstItemIndex={firstItemIndex}
-              initialTopMostItemIndex={receipts.length > 0 ? receipts.length - 1 : 0}
+              initialTopMostItemIndex={{ index: receipts.length > 0 ? receipts.length - 1 : 0, align: 'end' }}
               alignToBottom={true}
               defaultItemHeight={50}
               overscan={100}
