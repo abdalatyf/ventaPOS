@@ -35,10 +35,21 @@ body {
 
 
 /* Ensure full height layout for Flexbox */
-html, body, #root, .page, .page-wrapper {
-  height: 100vh !important;
-  min-height: 100vh !important;
-  overflow: hidden !important;
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+.page {
   display: flex;
   flex-direction: column;
+  height: 100vh;
+}
+
+.page-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }

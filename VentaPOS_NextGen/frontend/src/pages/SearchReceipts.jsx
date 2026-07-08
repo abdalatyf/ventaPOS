@@ -249,7 +249,7 @@ export default function SearchReceipts() {
   };
 
   return (
-    <div className="px-3 pt-3 fs-3 d-flex flex-column flex-grow-1 overflow-hidden" dir="rtl" style={{ fontSize: '1.02rem', height: '100%' }}>
+    <div className="px-3 pt-3 fs-3 d-flex flex-column flex-grow-1" dir="rtl" style={{ fontSize: '1.02rem', minHeight: 0 }}>
       
       {/* ── Page Header ── */}
       <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom border-secondary-subtle" style={{ borderColor: '#dee2e6 !important' }}>
@@ -387,7 +387,7 @@ export default function SearchReceipts() {
       )}
 
       {/* ── Results Table ── */}
-      <div className="card shadow-sm flex-grow-1 d-flex flex-column overflow-hidden" style={{ border: '1px solid #dee2e6', height: '100%' }}>
+      <div className="card shadow-sm flex-grow-1 d-flex flex-column overflow-hidden" style={{ border: '1px solid #dee2e6', minHeight: 0 }}>
         <div className="card-header bg-light d-flex flex-wrap justify-content-between align-items-center py-2 gap-2" style={{ borderColor: '#dee2e6 !important' }}>
           <div className="d-flex align-items-center gap-3">
             <div className="text-dark fw-bold fs-3 d-flex align-items-center gap-2">
@@ -438,7 +438,7 @@ export default function SearchReceipts() {
         ) : (
           <div 
             className="table-responsive flex-grow-1 overflow-auto rounded" 
-            style={{ border: '1px solid #dee2e6', height: '100%' }}
+            style={{ border: '1px solid #dee2e6', minHeight: 0 }}
             onScroll={handleScroll}
           >
             <table className="table table-bordered table-vcenter table-hover mb-0">
