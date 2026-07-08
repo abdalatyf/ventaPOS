@@ -391,7 +391,7 @@ export default function SearchReceipts() {
       )}
 
       {/* ── Results Table ── */}
-      <div className="card shadow-sm" style={{ border: '1px solid #dee2e6' }}>
+      <div className="card shadow-sm flex-grow-1 d-flex flex-column overflow-hidden" style={{ border: '1px solid #dee2e6' }}>
         <div className="card-header bg-light d-flex flex-wrap justify-content-between align-items-center py-2 gap-2" style={{ borderColor: '#dee2e6 !important' }}>
           <div className="d-flex align-items-center gap-3">
             <div className="text-dark fw-bold fs-3 d-flex align-items-center gap-2">
