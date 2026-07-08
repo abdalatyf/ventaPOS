@@ -56,7 +56,7 @@ export default function SearchReceipts() {
   const [totalAmountSum, setTotalAmountSum] = useState(0);
   const [nextPageUrl, setNextPageUrl] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [firstItemIndex, setFirstItemIndex] = useState(0);
+  const [firstItemIndex, setFirstItemIndex] = useState(100000);
 
   const [selectedIds, setSelectedIds] = useState([]);
 
@@ -116,7 +116,8 @@ export default function SearchReceipts() {
 
       const res = await api.get(`/receipts/?${params.toString()}`);
       if (res.data && res.data.results) {
-        setReceipts(res.data.results);
+        setReceipts(res.data.results.reverse());
+        setFirstItemIndex(100000 - res.data.results.length);
         setNextPageUrl(res.data.next);
         setTotalInvoicesCount(res.data.count || 0);
         setTotalAmountSum(res.data.aggregate?.total_sales || 0);
@@ -134,7 +135,8 @@ export default function SearchReceipts() {
     try {
       const res = await api.get(nextPageUrl);
       if (res.data && res.data.results) {
-        setReceipts(prev => [...prev, ...res.data.results]);
+        setReceipts(prev => [...res.data.results.reverse(), ...prev]);
+        setFirstItemIndex(prev => prev - res.data.results.length);
         setNextPageUrl(res.data.next);
       }
     } catch (error) {
@@ -251,7 +253,7 @@ export default function SearchReceipts() {
   };
 
   return (
-    <div className="container-fluid pb-3 px-3 fs-3" dir="rtl" style={{ marginTop: '-16px', fontSize: '1.02rem' }}>
+    <div className="container-fluid pb-3 px-3 fs-3 d-flex flex-column" dir="rtl" style={{ marginTop: '-16px', fontSize: '1.02rem', height: 'calc(100vh - 64px)' }}>
       
       {/* ── Page Header ── */}
       <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom border-secondary-subtle" style={{ borderColor: '#dee2e6 !important' }}>
@@ -438,15 +440,16 @@ export default function SearchReceipts() {
             <h4 className="text-muted fw-bold">لا توجد فواتير مطابقة لمعايير البحث</h4>
           </div>
         ) : (
-          <div style={{ position: 'relative', border: '1px solid #dee2e6' }} className="rounded">
+          <div style={{ position: 'relative', border: '1px solid #dee2e6' }} className="rounded flex-grow-1 d-flex flex-column overflow-hidden">
             <TableVirtuoso
-              useWindowScroll={true}
+              style={{ flex: 1 }}
               data={receipts}
               firstItemIndex={firstItemIndex}
               initialTopMostItemIndex={receipts.length > 0 ? receipts.length - 1 : 0}
+              alignToBottom={true}
               overscan={100}
               rangeChanged={({ startIndex }) => {
-                if (startIndex - firstItemIndex <= 30) {
+                if (startIndex <= firstItemIndex + 10) {
                   if (nextPageUrl && !loadingMore) {
                     loadMoreReceipts();
                   }
@@ -512,8 +515,11 @@ export default function SearchReceipts() {
                       </button>
                     </td>
                     <td className="text-center align-middle border-secondary-subtle" dir="ltr">{toArabic(rNum)}</td>
-                    <td className="text-center align-middle border-secondary-subtle">
-                      {new Date(r.created_at || r.date).toLocaleDateString('ar-EG')}
+                    <td className="text-center align-middle border-secondary-subtle" dir="ltr">
+                      {(() => {
+                        const d = new Date(r.created_at || r.date);
+                        return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                      })()}
                     </td>
                     <td className="text-center align-middle border-secondary-subtle">
                       {salespersonName}

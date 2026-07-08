@@ -3,6 +3,7 @@
 ## 1. Terminology & Tone
 - **Language:** The entire application MUST be in Arabic and Right-to-Left (RTL).
 - **Tone:** "لغة سوق مهنية ومبسطة" (Professional but easy Egyptian Arabic).
+- **Dates:** Dates should be displayed in a monthly format exclusively as `MM/YYYY` (e.g., `07/2026`) across all screens, tables, and reports. Exact days should be hidden globally unless explicitly requested by the user.
 - **Style Rules:** 
   - Avoid overly strict corporate Arabic.
   - DO NOT use excessive street slang (like 'يا معلم').
