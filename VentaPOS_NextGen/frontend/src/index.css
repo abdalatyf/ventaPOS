@@ -33,3 +33,11 @@ body {
   background-color: #f8fafc;
 }
 
+
+/* Ensure full height layout for Flexbox */
+html, body, #root, .page, .page-wrapper {
+  height: 100vh !important;
+  min-height: 100vh !important;
+  display: flex;
+  flex-direction: column;
+}
