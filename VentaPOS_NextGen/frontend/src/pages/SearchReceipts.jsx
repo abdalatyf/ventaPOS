@@ -126,6 +126,7 @@ export default function SearchReceipts() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   const [selectedIds, setSelectedIds] = useState([]);
+  const [globalAllIds, setGlobalAllIds] = useState([]);
 
   useEffect(() => {
     fetchSalespersons();
@@ -187,6 +188,7 @@ export default function SearchReceipts() {
         setNextPageUrl(res.data.next);
         setTotalInvoicesCount(res.data.count || 0);
         setTotalAmountSum(res.data.aggregate?.total_sales || 0);
+        setGlobalAllIds(res.data.all_ids || []);
       }
     } catch (error) {
       console.error('Error fetching receipts:', error);
@@ -237,10 +239,11 @@ export default function SearchReceipts() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.length === receipts.length) {
+    const targetLength = globalAllIds.length > 0 ? globalAllIds.length : receipts.length;
+    if (selectedIds.length === targetLength) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(receipts.map(r => r.id));
+      setSelectedIds(globalAllIds.length > 0 ? globalAllIds : receipts.map(r => r.id));
     }
   };
 
@@ -517,7 +520,7 @@ export default function SearchReceipts() {
                     <input 
                       type="checkbox" 
                       className="form-check-input" 
-                      checked={receipts.length > 0 && selectedIds.length === receipts.length} 
+                      checked={receipts.length > 0 && selectedIds.length === (globalAllIds.length > 0 ? globalAllIds.length : receipts.length)} 
                       onChange={toggleSelectAll} 
                     />
                   </th>
