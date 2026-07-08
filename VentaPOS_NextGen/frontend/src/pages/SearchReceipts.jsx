@@ -7,6 +7,75 @@ import {
   IconMapPin, IconPhone, IconCheck, IconX, IconCreditCard, IconCash
 } from '@tabler/icons-react';
 
+const ReceiptRow = React.memo(({
+  r, index, isSelected, toggleSelect, handleContextMenu, toArabic, formatCurrency, getSalespersonName
+}) => {
+  const rowKey = r.id || r.local_id || index;
+  const rNum = r.receipt_number || r.local_id || r.id;
+  const isCash = r.is_cash_sale !== false && r.sale_type !== 'INSTALLMENT';
+  const phone = r.phone_number || r.customer_phone || r.phone || '—';
+  const area = r.area || r.customer_area || '—';
+  const addr = r.address || r.customer_address || '—';
+  const productsText = r.products_text || '—';
+  const custName = r.customer_name || 'عميل نقدي';
+  const salespersonName = getSalespersonName(r.salesperson);
+
+  return (
+    <tr>
+      <td className="text-center align-middle border-secondary-subtle">
+        <input 
+          type="checkbox" 
+          className="form-check-input border-secondary-subtle" 
+          checked={isSelected}
+          onChange={() => toggleSelect(r.id)}
+        />
+      </td>
+      <td className="text-center align-middle border-secondary-subtle">
+        <button 
+          className="btn btn-sm btn-icon btn-light border-secondary-subtle"
+          onClick={(e) => handleContextMenu(e, r.id, rNum)}
+        >
+          <IconDotsVertical size={16} />
+        </button>
+      </td>
+      <td className="text-center align-middle border-secondary-subtle" dir="ltr">{toArabic(rNum)}</td>
+      <td className="text-center align-middle border-secondary-subtle" dir="ltr">
+        {(() => {
+          const d = new Date(r.created_at || r.date);
+          return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+        })()}
+      </td>
+      <td className="text-center align-middle border-secondary-subtle">
+        {salespersonName}
+      </td>
+      <td className="text-start px-2 align-middle border-secondary-subtle">
+        {custName}
+      </td>
+      <td className="text-center align-middle border-secondary-subtle" dir="ltr">{toArabic(phone)}</td>
+      <td className="text-center align-middle border-secondary-subtle">
+        {area}
+      </td>
+      <td className="text-start px-2 align-middle border-secondary-subtle text-truncate" style={{ maxWidth: '150px' }} title={addr}>
+        {addr}
+      </td>
+      <td className="text-start px-2 align-middle border-secondary-subtle text-truncate" style={{ maxWidth: '200px' }} title={productsText}>
+        {productsText}
+      </td>
+      <td className="text-center align-middle border-secondary-subtle">
+        {isCash ? '—' : toArabic(formatCurrency(r.down_payment))}
+      </td>
+      <td className="text-center align-middle border-secondary-subtle" dir="ltr">
+        {isCash ? 'كاش' : toArabic(r.installment_system)}
+      </td>
+      <td className="text-center align-middle border-secondary-subtle">
+        {toArabic(formatCurrency(r.total_amount))}
+      </td>
+    </tr>
+  );
+}, (prevProps, nextProps) => {
+  return prevProps.isSelected === nextProps.isSelected && prevProps.r === nextProps.r;
+});
+
 export default function SearchReceipts() {
   const navigate = useNavigate();
 
@@ -467,71 +536,19 @@ export default function SearchReceipts() {
                 </tr>
               </thead>
               <tbody>
-                {receipts.map((r, index) => {
-                  const rowKey = r.id || r.local_id || index;
-                  const rNum = r.receipt_number || r.local_id || r.id;
-                  const isCash = r.is_cash_sale !== false && r.sale_type !== 'INSTALLMENT';
-                  const phone = r.phone_number || r.customer_phone || r.phone || '—';
-                  const area = r.area || r.customer_area || '—';
-                  const addr = r.address || r.customer_address || '—';
-                  const productsText = r.products_text || '—';
-                  const custName = r.customer_name || 'عميل نقدي';
-                  const salespersonName = getSalespersonName(r.salesperson);
-                  const isSelected = selectedIds.includes(r.id);
-
-                  return (
-                    <tr key={rowKey}>
-                      <td className="text-center align-middle border-secondary-subtle">
-                        <input 
-                          type="checkbox" 
-                          className="form-check-input border-secondary-subtle" 
-                          checked={isSelected}
-                          onChange={() => toggleSelect(r.id)}
-                        />
-                      </td>
-                      <td className="text-center align-middle border-secondary-subtle">
-                        <button 
-                          className="btn btn-sm btn-icon btn-light border-secondary-subtle"
-                          onClick={(e) => handleContextMenu(e, r.id, rNum)}
-                        >
-                          <IconDotsVertical size={16} />
-                        </button>
-                      </td>
-                      <td className="text-center align-middle border-secondary-subtle" dir="ltr">{toArabic(rNum)}</td>
-                      <td className="text-center align-middle border-secondary-subtle" dir="ltr">
-                        {(() => {
-                          const d = new Date(r.created_at || r.date);
-                          return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-                        })()}
-                      </td>
-                      <td className="text-center align-middle border-secondary-subtle">
-                        {salespersonName}
-                      </td>
-                      <td className="text-start px-2 align-middle border-secondary-subtle">
-                        {custName}
-                      </td>
-                      <td className="text-center align-middle border-secondary-subtle" dir="ltr">{toArabic(phone)}</td>
-                      <td className="text-center align-middle border-secondary-subtle">
-                        {area}
-                      </td>
-                      <td className="text-start px-2 align-middle border-secondary-subtle text-truncate" style={{ maxWidth: '150px' }} title={addr}>
-                        {addr}
-                      </td>
-                      <td className="text-start px-2 align-middle border-secondary-subtle text-truncate" style={{ maxWidth: '200px' }} title={productsText}>
-                        {productsText}
-                      </td>
-                      <td className="text-center align-middle border-secondary-subtle">
-                        {isCash ? '—' : toArabic(formatCurrency(r.down_payment))}
-                      </td>
-                      <td className="text-center align-middle border-secondary-subtle" dir="ltr">
-                        {isCash ? 'كاش' : toArabic(r.installment_system)}
-                      </td>
-                      <td className="text-center align-middle border-secondary-subtle">
-                        {toArabic(formatCurrency(r.total_amount))}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {receipts.map((r, index) => (
+                  <ReceiptRow 
+                    key={r.id || r.local_id || index}
+                    r={r}
+                    index={index}
+                    isSelected={selectedIds.includes(r.id)}
+                    toggleSelect={toggleSelect}
+                    handleContextMenu={handleContextMenu}
+                    toArabic={toArabic}
+                    formatCurrency={formatCurrency}
+                    getSalespersonName={getSalespersonName}
+                  />
+                ))}
               </tbody>
             </table>
             {loadingMore && (
