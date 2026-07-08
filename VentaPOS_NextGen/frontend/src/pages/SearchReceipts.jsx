@@ -108,7 +108,7 @@ export default function SearchReceipts() {
 
   const initialFilters = {
     receipt_number: '', salesperson_id: '', customer_name: '', phone: '',
-    address: '', area: '', month: '', year: currentYear.toString(),
+    address: '', area: '', month: '', year: '',
     sale_type: 'ALL', receipt_from: '', receipt_to: ''
   };
 
@@ -117,7 +117,7 @@ export default function SearchReceipts() {
   const [salespersons, setSalespersons] = useState([]);
   const [productsMap, setProductsMap] = useState({});
   const [loading, setLoading] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
   const [contextMenu, setContextMenu] = useState(null);
   
   const [totalInvoicesCount, setTotalInvoicesCount] = useState(0);
@@ -352,26 +352,7 @@ export default function SearchReceipts() {
           <form onSubmit={handleSearchSubmit}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '0.75rem', alignItems: 'center' }}>
               
-              {/* ── Row 1 (Sum: 8) ── */}
-              <div style={{ gridColumn: 'span 2' }}>
-                <div className="input-group input-group-sm">
-                  <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle" style={{ width: '70px' }}>المندوب</span>
-                  <select className="form-select fw-bold border-secondary-subtle" name="salesperson_id" value={filters.salesperson_id} onChange={handleSelectChange}>
-                    <option value="">جميع البائعين</option>
-                    {salespersons.map((sp) => (
-                      <option key={sp.id || sp.local_id} value={sp.id || sp.local_id}>{sp.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ gridColumn: 'span 2' }}>
-                <div className="input-group input-group-sm">
-                  <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">الهاتف</span>
-                  <input type="text" className="form-control fw-bold border-secondary-subtle text-center" dir="ltr" name="phone" value={toArabic(filters.phone)} onChange={handleFilterChange} />
-                </div>
-              </div>
-
+              {/* ── Row 1 (Sum: 7) ── */}
               <div style={{ gridColumn: 'span 1' }}>
                 <div className="input-group input-group-sm">
                   <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">الشهر</span>
@@ -410,6 +391,32 @@ export default function SearchReceipts() {
                 </div>
               </div>
 
+              <div style={{ gridColumn: 'span 2' }}>
+                <div className="input-group input-group-sm">
+                  <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle" style={{ width: '70px' }}>المندوب</span>
+                  <select className="form-select fw-bold border-secondary-subtle" name="salesperson_id" value={filters.salesperson_id} onChange={handleSelectChange}>
+                    <option value="">جميع البائعين</option>
+                    {salespersons.map((sp) => (
+                      <option key={sp.id || sp.local_id} value={sp.id || sp.local_id}>{sp.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ gridColumn: 'span 1' }}>
+                <div className="input-group input-group-sm">
+                  <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">النوع</span>
+                  <select className="form-select fw-bold border-secondary-subtle px-1 text-center" name="sale_type" value={filters.sale_type} onChange={handleSelectChange}>
+                    <option value="ALL">الكل</option>
+                    <option value="CASH">كاش</option>
+                    <option value="INSTALLMENT">قسط</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Empty placeholder to complete the 8-column row so the next row breaks cleanly */}
+              <div style={{ gridColumn: 'span 1' }}></div>
+
               {/* ── Row 2 (Sum: 8) ── */}
               <div style={{ gridColumn: 'span 3' }}>
                 <div className="input-group input-group-sm">
@@ -435,12 +442,8 @@ export default function SearchReceipts() {
               {/* ── Row 3 (Sum: 8) ── */}
               <div style={{ gridColumn: 'span 2' }}>
                 <div className="input-group input-group-sm">
-                  <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">النوع</span>
-                  <select className="form-select fw-bold border-secondary-subtle px-1 text-center" name="sale_type" value={filters.sale_type} onChange={handleSelectChange}>
-                    <option value="ALL">الكل</option>
-                    <option value="CASH">كاش</option>
-                    <option value="INSTALLMENT">قسط</option>
-                  </select>
+                  <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">الهاتف</span>
+                  <input type="text" className="form-control fw-bold border-secondary-subtle text-center" dir="ltr" name="phone" value={toArabic(filters.phone)} onChange={handleFilterChange} />
                 </div>
               </div>
 
