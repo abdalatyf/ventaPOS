@@ -442,7 +442,7 @@ export default function SearchReceipts() {
             onScroll={handleScroll}
           >
             <table className="table table-bordered table-vcenter table-hover mb-0">
-              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+              <thead className="sticky-top">
                 <tr>
                   <th className="text-center w-1" style={stickyThStyle}>
                     <input 
