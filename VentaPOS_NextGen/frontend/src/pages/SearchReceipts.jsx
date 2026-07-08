@@ -438,8 +438,9 @@ export default function SearchReceipts() {
             <h4 className="text-muted fw-bold">لا توجد فواتير مطابقة لمعايير البحث</h4>
           </div>
         ) : (
-          <div style={{ height: 'calc(100vh - 350px)', width: '100%', position: 'relative', border: '1px solid #dee2e6', overflowY: 'auto' }} className="rounded">
+          <div style={{ position: 'relative', border: '1px solid #dee2e6' }} className="rounded">
             <TableVirtuoso
+              useWindowScroll={true}
               data={receipts}
               firstItemIndex={firstItemIndex}
               initialTopMostItemIndex={receipts.length > 0 ? receipts.length - 1 : 0}
