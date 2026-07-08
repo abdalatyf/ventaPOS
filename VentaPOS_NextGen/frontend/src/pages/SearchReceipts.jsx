@@ -253,7 +253,7 @@ export default function SearchReceipts() {
   };
 
   return (
-    <div className="container-fluid px-3 fs-3 d-flex flex-column overflow-hidden" dir="rtl" style={{ marginTop: '-16px', marginBottom: 0, paddingBottom: 0, fontSize: '1.02rem', height: 'calc(100vh - 70px)' }}>
+    <div className="px-3 pt-3 fs-3 d-flex flex-column flex-grow-1 overflow-hidden" dir="rtl" style={{ fontSize: '1.02rem', height: '100%' }}>
       
       {/* ── Page Header ── */}
       <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom border-secondary-subtle" style={{ borderColor: '#dee2e6 !important' }}>
