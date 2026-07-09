@@ -178,7 +178,9 @@ export default function SearchReceipts() {
       if (currentFilters.phone) params.append('phone', currentFilters.phone);
       if (currentFilters.address) params.append('address', currentFilters.address);
       if (currentFilters.area) params.append('area', currentFilters.area);
-      if (currentFilters.sale_type && currentFilters.sale_type !== 'ALL') params.append('sale_type', currentFilters.sale_type);
+      if (currentFilters.sale_type && currentFilters.sale_type !== 'ALL') {
+        params.append('is_cash_sale', currentFilters.sale_type === 'CASH' ? 'true' : 'false');
+      }
       if (currentFilters.receipt_from) params.append('receipt_from', currentFilters.receipt_from);
       if (currentFilters.receipt_to) params.append('receipt_to', currentFilters.receipt_to);
 
