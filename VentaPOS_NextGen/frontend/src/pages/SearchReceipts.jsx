@@ -190,7 +190,9 @@ export default function SearchReceipts() {
         setNextPageUrl(res.data.next);
         setTotalInvoicesCount(res.data.count || 0);
         setTotalAmountSum(res.data.aggregate?.total_sales || 0);
-        setGlobalAllIds(res.data.all_ids || []);
+        const allIds = res.data.all_ids || [];
+        setGlobalAllIds(allIds);
+        setSelectedIds(allIds.length > 0 ? allIds : res.data.results.map(r => r.id));
       }
     } catch (error) {
       console.error('Error fetching receipts:', error);
