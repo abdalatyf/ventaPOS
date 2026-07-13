@@ -167,27 +167,8 @@ export default function ProfitAndLossReport() {
           <div className="card mb-3 d-print-none border-secondary-subtle">
             <div className="card-body py-3">
               <div className="row g-3 align-items-end">
-                <div className="col-md-2">
-                  <label className="form-label mb-1">الشهر</label>
-                  <input
-                    type="number"
-                    className="form-control form-control-sm border-secondary-subtle fw-bold"
-                    value={reportMonth}
-                    onChange={(e) => setReportMonth(e.target.value)}
-                    min="1" max="12"
-                  />
-                </div>
-                <div className="col-md-2">
-                  <label className="form-label mb-1">السنة</label>
-                  <input
-                    type="number"
-                    className="form-control form-control-sm border-secondary-subtle fw-bold"
-                    value={reportYear}
-                    onChange={(e) => setReportYear(e.target.value)}
-                  />
-                </div>
                 
-                <div className="col-md-2">
+                <div className="col-md-3">
                   <label className="form-label mb-1">المندوب</label>
                   <div className="input-icon">
                     <span className="input-icon-addon"><IconUser size={16} /></span>
@@ -204,7 +185,7 @@ export default function ProfitAndLossReport() {
                   </div>
                 </div>
 
-                <div className="col-md-2">
+                <div className="col-md-3">
                   <label className="form-label mb-1">نوع التقرير</label>
                   <div className="input-icon">
                     <span className="input-icon-addon"><IconFileAnalytics size={16} /></span>
@@ -220,7 +201,7 @@ export default function ProfitAndLossReport() {
                   </div>
                 </div>
 
-                <div className="col-md-2">
+                <div className="col-md-3">
                   <label className="form-label mb-1">نوع البيع</label>
                   <div className="input-icon">
                     <span className="input-icon-addon"><IconFilter size={16} /></span>
@@ -236,7 +217,7 @@ export default function ProfitAndLossReport() {
                   </div>
                 </div>
 
-                <div className="col-md-2">
+                <div className="col-md-3">
                   <label className="form-label mb-1">بحث بصنف</label>
                   <div className="input-icon">
                     <span className="input-icon-addon"><IconSearch size={16} /></span>
