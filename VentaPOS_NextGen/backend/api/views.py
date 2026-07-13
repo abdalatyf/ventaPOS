@@ -690,6 +690,43 @@ class ReceiptViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
     serializer_class = ReceiptSerializer
     pagination_class = ReceiptPagination
 
+    def perform_create(self, serializer):
+        from django.db import transaction
+        from api.models import ClientLicense
+        from api.utils.security_utils import generate_record_signature, get_machine_id
+        from rest_framework.exceptions import PermissionDenied
+
+        with transaction.atomic():
+            # Decrement license balance securely
+            tenant = self._get_tenant()
+            machine_id = get_machine_id()
+            
+            # Lock the active licenses for update to prevent race conditions
+            active_lics = ClientLicense.objects.select_for_update().filter(
+                tenant=tenant, is_active=True, is_deleted=False
+            ).order_by('expiry_date')
+
+            deducted = False
+            for lic in active_lics:
+                if lic.invoices_balance > 0:
+                    lic.invoices_balance -= 1
+                    # Recalculate signature to prevent tampering middleware from flagging it
+                    lic.license_code_hash = generate_record_signature(
+                        lic.expiry_date,
+                        lic.invoices_balance,
+                        lic.machine_id,
+                        lic.product_id,
+                        lic.is_active,
+                    )
+                    lic.save()
+                    deducted = True
+                    break
+            
+            if not deducted:
+                raise PermissionDenied("Invoice balance exhausted. Please renew your license.")
+
+            serializer.save(tenant=tenant)
+
     @action(detail=False, methods=["post"])
     def bulk_delete(self, request):
         receipt_ids = request.data.get("receipt_ids", [])
@@ -897,6 +934,11 @@ class ReceiptViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
             is_cash_str = str(is_cash).strip()
             if is_cash_str != "":
                 qs = qs.filter(is_cash_sale=(is_cash_str.lower() == "true"))
+
+        # has_down_payment: filter down_payment__gt=0
+        if (has_down_payment := params.get("has_down_payment")) is not None:
+            if str(has_down_payment).strip().lower() == "true":
+                qs = qs.filter(is_cash_sale=False, down_payment__gt=0)
 
         return qs.order_by("-created_at_local", "-local_id")
 
@@ -1555,16 +1597,22 @@ class LicenseStatusView(views.APIView):
         active_lics = ClientLicense.objects.filter(
             tenant=tenant, is_active=True, is_deleted=False
         )
+        from api.utils.security_utils import get_machine_id
+        machine_id = get_machine_id()
+
         if not active_lics.exists():
-            return Response({"status": "inactive", "message": "لا توجد تراخيص نشطة."})
+            return Response({"status": "inactive", "message": "لا توجد تراخيص نشطة.", "machine_id": machine_id})
 
         total_balance = sum(lic.invoices_balance for lic in active_lics)
         latest = active_lics.order_by("-expiry_date").first()
-
+        from api.utils.security_utils import get_machine_id
+        machine_id = get_machine_id()
+        
         return Response({
             "status": "active",
             "total_invoices_balance": total_balance,
             "expiry_date": latest.expiry_date if latest else None,
+            "machine_id": machine_id
         })
 
 
@@ -1577,7 +1625,8 @@ class LicenseActivateView(views.APIView):
     def post(self, request):
         license_code = request.data.get("license_code", "").strip()
         company_code = request.headers.get("X-Company-Code", "").strip()
-        machine_id = request.headers.get("X-Machine-ID", "").strip()
+        from api.utils.security_utils import get_machine_id
+        machine_id = get_machine_id()
 
         if not license_code:
             return Response(
@@ -1890,6 +1939,28 @@ class ProductSuggestionsView(TenantFromRequestMixin, views.APIView):
 # 9. Reports and Dashboard Views
 # ===========================================================================
 
+class DefaultDateView(TenantFromRequestMixin, views.APIView):
+    def get(self, request):
+        tenant = self._get_tenant()
+        branch_id_str = request.query_params.get("branch_id")
+        from django.utils import timezone
+        
+        try:
+            qs = Receipt.objects.filter(tenant=tenant, is_deleted=False)
+            if branch_id_str:
+                qs = qs.filter(branch_id=branch_id_str)
+
+            last_receipt = qs.order_by('-sale_year', '-sale_month').first()
+            if last_receipt:
+                return Response({"year": last_receipt.sale_year, "month": last_receipt.sale_month})
+
+            now = timezone.now()
+            return Response({"year": now.year, "month": now.month})
+        except Exception as e:
+            now = timezone.now()
+            return Response({"year": now.year, "month": now.month, "error": str(e)})
+
+
 class DashboardReportView(TenantFromRequestMixin, views.APIView):
     def get(self, request):
         
@@ -2010,6 +2081,8 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
             is_deleted=False
         )
         auto_salaries = 0
+        total_sales_commissions = 0
+        total_collection_commissions = 0
         for sp in salespersons:
             sp_sale_items = SaleItem.objects.filter(
                 receipt__salesperson=sp,
@@ -2037,14 +2110,28 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
             ).aggregate(s=Sum('amount'))['s'] or 0
             sp_comm_coll = sp_collected // 10
 
+            total_sales_commissions += sp_comm_sales
+            total_collection_commissions += sp_comm_coll
             auto_salaries += sp_comm_sales + sp_comm_coll
 
+        from django.db.models import F
+
+        total_purchases = PurchaseInvoiceItem.objects.filter(
+            purchase_invoice__branch_id=branch_id,
+            purchase_invoice__tenant=tenant,
+            purchase_invoice__invoice_year=year,
+            purchase_invoice__invoice_month=month,
+            purchase_invoice__invoice_type="PURCHASE",
+            is_deleted=False,
+            purchase_invoice__is_deleted=False
+        ).aggregate(s=Sum(F('quantity') * F('purchase_price')))['s'] or 0
+
         # 7. Net Cash in Hand and Safe Balance
-        net_cash_in_hand = total_cash_inflow - (operating_expenses + auto_salaries)
+        net_cash_in_hand = total_cash_inflow - (operating_expenses + auto_salaries + total_purchases)
         safe_balance = net_cash_in_hand
 
         # 8. Estimated Net Profit
-        estimated_net_profit = total_revenue - (total_cogs + total_sales_comm_fixed + reserve_deduction + operating_expenses)
+        estimated_net_profit = total_revenue - (total_cogs + total_sales_commissions + total_collection_commissions + operating_expenses)
 
         # 9. Current Inventory Value & Low Stock Count
         inventory_items = InventoryItem.objects.filter(
@@ -2118,6 +2205,8 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
                 "safe_balance": safe_balance,
                 "total_revenue": total_revenue,
                 "total_cogs": total_cogs,
+                "total_sales_commissions": total_sales_commissions,
+                "total_collection_commissions": total_collection_commissions,
                 "estimated_net_profit": estimated_net_profit,
                 "current_inventory_value": current_inventory_value,
                 "low_stock_count": low_stock_count,
@@ -2128,6 +2217,7 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
                 "down_payment_inflow": down_payment_inflow,
                 "collection_inflow": collection_inflow,
                 "total_cash_inflow": total_cash_inflow,
+                "total_purchases": total_purchases,
                 "operating_expenses": operating_expenses,
                 "auto_salaries": auto_salaries,
                 "net_cash_in_hand": net_cash_in_hand
@@ -2503,6 +2593,8 @@ class ProfitAndLossReportView(TenantFromRequestMixin, views.APIView):
             grand_commission += (total_sales_comm + total_coll_comm)
             
             cash_sales_profitability.append({
+                "id": str(item.id),
+                "local_id": getattr(item, 'local_id', 0),
                 "name": item.name,
                 "qty": int(qty),
                 "avg_sell": avg_sell,
@@ -2547,6 +2639,8 @@ class ProfitAndLossReportView(TenantFromRequestMixin, views.APIView):
             grand_commission += (total_sales_comm + total_coll_comm)
             
             installment_sales_profitability.append({
+                "id": str(item.id),
+                "local_id": getattr(item, 'local_id', 0),
                 "name": item.name,
                 "qty": int(qty),
                 "avg_sell": avg_sell,
@@ -2689,14 +2783,105 @@ class CashDrawerReportView(TenantFromRequestMixin, views.APIView):
         })
 
 
-
-from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
-from rest_framework.response import Response
-
-class DefaultDateView(APIView):
-    permission_classes = [AllowAny]
+class InstallmentsReportView(TenantFromRequestMixin, views.APIView):
     def get(self, request):
-        from datetime import datetime
-        now = datetime.now()
-        return Response({'default_month': now.month, 'default_year': now.year})
+        from django.db.models import Sum, F, ExpressionWrapper, IntegerField, Q
+        import uuid
+        from django.utils import timezone
+        
+        tenant = self._get_tenant()
+        
+        branch_id_str = request.query_params.get("branch_id")
+        if not branch_id_str:
+            raise ValidationError({"branch_id": ["This field is required."]})
+        try:
+            branch_id = uuid.UUID(branch_id_str)
+        except ValueError:
+            raise ValidationError({"branch_id": ["Invalid UUID format."]})
+            
+        try:
+            Branch.objects.get(id=branch_id, tenant=tenant, is_deleted=False)
+        except Branch.DoesNotExist:
+            raise ValidationError({"branch_id": ["Branch does not exist or does not belong to this tenant."]})
+
+        year_str = request.query_params.get("year")
+        month_str = request.query_params.get("month")
+        salesperson_id_str = request.query_params.get("salesperson_id")
+        
+        # Original Sale period filters
+        sale_from_year_str = request.query_params.get("sale_from_year")
+        sale_from_month_str = request.query_params.get("sale_from_month")
+        sale_to_year_str = request.query_params.get("sale_to_year")
+        sale_to_month_str = request.query_params.get("sale_to_month")
+        
+        now = timezone.now()
+        year = int(year_str) if year_str else None
+        month = int(month_str) if month_str else None
+
+        filters = Q(receipt__branch_id=branch_id, tenant=tenant, is_deleted=False, receipt__is_deleted=False)
+        
+        if year: filters &= Q(payment_date__year=year)
+        if month: filters &= Q(payment_date__month=month)
+        
+        if salesperson_id_str:
+            try:
+                sp_id = uuid.UUID(salesperson_id_str)
+                filters &= Q(receipt__salesperson_id=sp_id)
+            except ValueError:
+                pass
+
+        customer_name = request.query_params.get("customer_name")
+        phone = request.query_params.get("phone")
+        area = request.query_params.get("area")
+
+        if customer_name: filters &= Q(receipt__customer_name__icontains=customer_name)
+        if phone: filters &= Q(receipt__phone_number__icontains=phone)
+        if area: filters &= Q(receipt__area__icontains=area)
+
+        installments = InstallmentPayment.objects.filter(filters)
+
+        # Sale period filtering
+        if (sale_from_year_str and sale_from_month_str) or (sale_to_year_str and sale_to_month_str):
+            sale_period_expr = ExpressionWrapper(
+                F('receipt__sale_year') * 100 + F('receipt__sale_month'),
+                output_field=IntegerField()
+            )
+            installments = installments.annotate(sale_period=sale_period_expr)
+            
+            if sale_from_year_str and sale_from_month_str:
+                from_val = int(sale_from_year_str) * 100 + int(sale_from_month_str)
+                installments = installments.filter(sale_period__gte=from_val)
+                
+            if sale_to_year_str and sale_to_month_str:
+                to_val = int(sale_to_year_str) * 100 + int(sale_to_month_str)
+                installments = installments.filter(sale_period__lte=to_val)
+
+        installments = installments.select_related('receipt', 'receipt__salesperson').order_by('receipt__salesperson__name', 'payment_date')
+
+        installments_list = []
+        total_report_amount = 0
+
+        for payment in installments:
+            sp_name = payment.receipt.salesperson.name if payment.receipt.salesperson else "بدون مندوب"
+            
+            installments_list.append({
+                'payment_id': str(payment.id),
+                'receipt_id': str(payment.receipt.id),
+                'receipt_num': payment.receipt.receipt_number,
+                'customer_name': payment.receipt.customer_name or "بدون اسم",
+                'phone': payment.receipt.phone_number or "-",
+                'area': payment.receipt.area or "-",
+                'salesperson_name': sp_name,
+                'amount': payment.amount,
+                'date': payment.payment_date.isoformat(),
+                'sale_date': f"{payment.receipt.sale_year}/{payment.receipt.sale_month:02d}",
+                'inst_system': payment.receipt.installment_system or ""
+            })
+            total_report_amount += payment.amount
+
+        return Response({
+            "total_installments_amount": total_report_amount,
+            "installments_count": len(installments_list),
+            "installments": installments_list
+        })
+

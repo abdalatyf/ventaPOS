@@ -2,13 +2,12 @@ import useSmartScroll from '../../hooks/useSmartScroll';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../api';
-import { IconArrowRight, IconPrinter, IconSearch, IconFilter, IconUser, IconReceipt } from '@tabler/icons-react';
+import { IconSearch, IconFilter, IconUser, IconReceipt, IconSortAscending, IconSortDescending, IconFileAnalytics } from '@tabler/icons-react';
 import { fmt } from '../../utils/formatUtils';
 import { useDefaultDate } from '../../hooks/useDefaultDate';
 
 export default function ProfitAndLossReport() {
   const { setTableRef } = useSmartScroll();
-  const navigate = useNavigate();
   const { defaultMonth, defaultYear, loading: defaultLoading } = useDefaultDate();
 
   const [data, setData] = useState(null);
@@ -23,7 +22,13 @@ export default function ProfitAndLossReport() {
   const [salespersons, setSalespersons] = useState([]);
   const [saleTypeFilter, setSaleTypeFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [showTotalsOnly, setShowTotalsOnly] = useState(false);
+  
+  // Report Type: 'both', 'average', 'total'
+  const [reportType, setReportType] = useState('both');
+
+  // Sorting
+  const [sortColumn, setSortColumn] = useState('local_id');
+  const [sortDirection, setSortDirection] = useState('asc');
 
   // Initial Date
   useEffect(() => {
@@ -37,7 +42,7 @@ export default function ProfitAndLossReport() {
   useEffect(() => {
     const fetchSalespersons = async () => {
       try {
-        const res = await api.get('/inventory/salespersons/');
+        const res = await api.get('/salespersons/');
         if (res.data && res.data.results) {
           setSalespersons(res.data.results);
         } else if (Array.isArray(res.data)) {
@@ -76,8 +81,18 @@ export default function ProfitAndLossReport() {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortIcon = (column) => {
+    if (sortColumn !== column) return null;
+    return sortDirection === 'asc' ? <IconSortAscending size={16} className="ms-1" /> : <IconSortDescending size={16} className="ms-1" />;
   };
 
   // Process and Filter Data
@@ -85,28 +100,46 @@ export default function ProfitAndLossReport() {
     if (!data) return { items: [], totals: {} };
 
     // Combine cash and installment into one array
-    const combined = [
+    let combined = [
       ...(data.cash_sales_profitability || []).map(item => ({ ...item, sale_type: 'cash' })),
       ...(data.installment_sales_profitability || []).map(item => ({ ...item, sale_type: 'installment' }))
     ];
 
     // Apply Frontend Filters
-    const filtered = combined.filter(item => {
+    let filtered = combined.filter(item => {
       if (saleTypeFilter !== 'all' && item.sale_type !== saleTypeFilter) return false;
       if (searchQuery && !item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
       return true;
+    });
+
+    // Apply Sorting
+    filtered.sort((a, b) => {
+      let valA = a[sortColumn];
+      let valB = b[sortColumn];
+
+      if (typeof valA === 'string') valA = valA.toLowerCase();
+      if (typeof valB === 'string') valB = valB.toLowerCase();
+
+      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
     });
 
     // Recalculate Totals
     let grandRev = 0;
     let grandCost = 0;
     let grandComm = 0;
+    let grandSalesComm = 0;
+    let grandCollComm = 0;
 
     filtered.forEach(item => {
       grandRev += item.total_rev || 0;
       grandCost += item.total_cost || 0;
-      grandComm += (item.total_sales_comm || 0) + (item.total_coll_comm || 0);
+      grandSalesComm += item.total_sales_comm || 0;
+      grandCollComm += item.total_coll_comm || 0;
     });
+    
+    grandComm = grandSalesComm + grandCollComm;
 
     // Expenses are not filtered by frontend query, but we keep the fetched value
     const expenses = data.summary?.expenses_total || 0;
@@ -117,39 +150,20 @@ export default function ProfitAndLossReport() {
       totals: {
         revenue: grandRev,
         cost: grandCost,
-        commission: grandComm,
+        salesCommission: grandSalesComm,
+        collCommission: grandCollComm,
         expenses: expenses,
         profit: netProfit
       }
     };
-  }, [data, saleTypeFilter, searchQuery]);
+  }, [data, saleTypeFilter, searchQuery, sortColumn, sortDirection]);
 
   return (
     <div className="page-wrapper">
-      {/* Page Header */}
-      <div className="page-header d-print-none">
-        <div className="container-fluid">
-          <div className="row g-2 align-items-center">
-            <div className="col">
-              <h2 className="page-title">تقرير الأرباح والخسائر</h2>
-              <div className="text-muted mt-1">تفصيل المبيعات، التكاليف، وصافي المكسب</div>
-            </div>
-            <div className="col-auto ms-auto d-print-none">
-              <button className="btn btn-primary me-2" onClick={handlePrint}>
-                <IconPrinter className="me-2" /> طباعة
-              </button>
-              <Link to="/reports" className="btn btn-secondary">
-                <IconArrowRight className="me-2" /> رجوع
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="page-body">
+      <div className="page-body mt-3">
         <div className="container-fluid">
           
-          {/* Filters Row (Compact) */}
+          {/* Filters Row */}
           <div className="card mb-3 d-print-none border-secondary-subtle">
             <div className="card-body py-3">
               <div className="row g-3 align-items-end">
@@ -157,7 +171,7 @@ export default function ProfitAndLossReport() {
                   <label className="form-label mb-1">الشهر</label>
                   <input
                     type="number"
-                    className="form-control form-control-sm border-secondary-subtle"
+                    className="form-control form-control-sm border-secondary-subtle fw-bold"
                     value={reportMonth}
                     onChange={(e) => setReportMonth(e.target.value)}
                     min="1" max="12"
@@ -167,7 +181,7 @@ export default function ProfitAndLossReport() {
                   <label className="form-label mb-1">السنة</label>
                   <input
                     type="number"
-                    className="form-control form-control-sm border-secondary-subtle"
+                    className="form-control form-control-sm border-secondary-subtle fw-bold"
                     value={reportYear}
                     onChange={(e) => setReportYear(e.target.value)}
                   />
@@ -178,7 +192,7 @@ export default function ProfitAndLossReport() {
                   <div className="input-icon">
                     <span className="input-icon-addon"><IconUser size={16} /></span>
                     <select
-                      className="form-select form-select-sm border-secondary-subtle"
+                      className="form-select form-select-sm border-secondary-subtle fw-bold"
                       value={salespersonId}
                       onChange={(e) => setSalespersonId(e.target.value)}
                     >
@@ -191,11 +205,27 @@ export default function ProfitAndLossReport() {
                 </div>
 
                 <div className="col-md-2">
+                  <label className="form-label mb-1">نوع التقرير</label>
+                  <div className="input-icon">
+                    <span className="input-icon-addon"><IconFileAnalytics size={16} /></span>
+                    <select
+                      className="form-select form-select-sm border-secondary-subtle fw-bold"
+                      value={reportType}
+                      onChange={(e) => setReportType(e.target.value)}
+                    >
+                      <option value="both">التفاصيل والإجماليات</option>
+                      <option value="average">المتوسط للوحدة فقط</option>
+                      <option value="total">الإجماليات فقط</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="col-md-2">
                   <label className="form-label mb-1">نوع البيع</label>
                   <div className="input-icon">
                     <span className="input-icon-addon"><IconFilter size={16} /></span>
                     <select
-                      className="form-select form-select-sm border-secondary-subtle"
+                      className="form-select form-select-sm border-secondary-subtle fw-bold"
                       value={saleTypeFilter}
                       onChange={(e) => setSaleTypeFilter(e.target.value)}
                     >
@@ -206,30 +236,18 @@ export default function ProfitAndLossReport() {
                   </div>
                 </div>
 
-                <div className="col-md-3">
+                <div className="col-md-2">
                   <label className="form-label mb-1">بحث بصنف</label>
                   <div className="input-icon">
                     <span className="input-icon-addon"><IconSearch size={16} /></span>
                     <input
                       type="text"
-                      className="form-control form-control-sm border-secondary-subtle"
+                      className="form-control form-control-sm border-secondary-subtle fw-bold"
                       placeholder="ابحث باسم الصنف..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
                   </div>
-                </div>
-
-                <div className="col-md-1">
-                  <label className="form-check form-switch mt-3 mb-0" style={{ cursor: 'pointer' }}>
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      checked={showTotalsOnly}
-                      onChange={() => setShowTotalsOnly(!showTotalsOnly)}
-                    />
-                    <span className="form-check-label" style={{ fontSize: '0.85rem' }}>إجماليات</span>
-                  </label>
                 </div>
               </div>
             </div>
@@ -247,78 +265,60 @@ export default function ProfitAndLossReport() {
           {/* Report Content */}
           {!loading && !error && data ? (
             <>
-              {/* Compact Totals Cards */}
+              {/* 6 Compact Totals Cards in one row */}
               <div className="row g-2 mb-3">
-                <div className="col-sm-6 col-md-3">
+                <div className="col-2">
                   <div className="card card-sm border-secondary-subtle">
-                    <div className="card-body py-3">
-                      <div className="row align-items-center">
-                        <div className="col-auto">
-                          <span className="bg-azure text-white avatar avatar-sm">
-                            <IconReceipt size={18} />
-                          </span>
-                        </div>
-                        <div className="col">
-                          <div className="font-weight-medium text-muted">المبيعات</div>
-                          <div className="fs-3 fw-bolder text-azure">{fmt(processedData.totals.revenue)}</div>
-                        </div>
-                      </div>
+                    <div className="card-body p-2 text-center">
+                      <div className="font-weight-medium text-muted mb-1" style={{ fontSize: '0.8rem' }}>المبيعات</div>
+                      <div className="fs-4 fw-bolder text-azure">{fmt(processedData.totals.revenue)}</div>
                     </div>
                   </div>
                 </div>
 
-                <div className="col-sm-6 col-md-3">
+                <div className="col-2">
                   <div className="card card-sm border-secondary-subtle">
-                    <div className="card-body py-3">
-                      <div className="row align-items-center">
-                        <div className="col-auto">
-                          <span className="bg-danger text-white avatar avatar-sm">
-                            <IconReceipt size={18} />
-                          </span>
-                        </div>
-                        <div className="col">
-                          <div className="font-weight-medium text-muted">التكلفة</div>
-                          <div className="fs-3 fw-bolder text-danger">{fmt(processedData.totals.cost)}</div>
-                        </div>
-                      </div>
+                    <div className="card-body p-2 text-center">
+                      <div className="font-weight-medium text-muted mb-1" style={{ fontSize: '0.8rem' }}>سعر الشراء</div>
+                      <div className="fs-4 fw-bolder text-danger">{fmt(processedData.totals.cost)}</div>
                     </div>
                   </div>
                 </div>
 
-                <div className="col-sm-6 col-md-3">
+                <div className="col-2">
                   <div className="card card-sm border-secondary-subtle">
-                    <div className="card-body py-3">
-                      <div className="row align-items-center">
-                        <div className="col-auto">
-                          <span className="bg-warning text-white avatar avatar-sm">
-                            <IconReceipt size={18} />
-                          </span>
-                        </div>
-                        <div className="col">
-                          <div className="font-weight-medium text-muted">مصروفات</div>
-                          <Link to="/reports/expenses" className="fs-3 fw-bolder text-warning text-decoration-none">
-                            {fmt(processedData.totals.expenses)}
-                          </Link>
-                        </div>
-                      </div>
+                    <div className="card-body p-2 text-center">
+                      <div className="font-weight-medium text-muted mb-1" style={{ fontSize: '0.8rem' }}>إجمالي مندبة</div>
+                      <div className="fs-4 fw-bolder text-warning">{fmt(processedData.totals.salesCommission)}</div>
                     </div>
                   </div>
                 </div>
 
-                <div className="col-sm-6 col-md-3">
+                <div className="col-2">
                   <div className="card card-sm border-secondary-subtle">
-                    <div className="card-body py-3">
-                      <div className="row align-items-center">
-                        <div className="col-auto">
-                          <span className="bg-success text-white avatar avatar-sm">
-                            <IconReceipt size={18} />
-                          </span>
-                        </div>
-                        <div className="col">
-                          <div className="font-weight-medium text-muted">المكسب</div>
-                          <div className="fs-3 fw-bolder text-success">{fmt(processedData.totals.profit)}</div>
-                        </div>
-                      </div>
+                    <div className="card-body p-2 text-center">
+                      <div className="font-weight-medium text-muted mb-1" style={{ fontSize: '0.8rem' }}>إجمالي تحصيل</div>
+                      <div className="fs-4 fw-bolder text-warning">{fmt(processedData.totals.collCommission)}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="col-2">
+                  <div className="card card-sm border-secondary-subtle">
+                    <div className="card-body p-2 text-center">
+                      <div className="font-weight-medium text-muted mb-1" style={{ fontSize: '0.8rem' }}>المصروفات</div>
+                      <Link to="/reports/expenses" className="fs-4 fw-bolder text-muted text-decoration-none d-block">
+                        {fmt(processedData.totals.expenses)}
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="col-2">
+                  <div className="card card-sm border-secondary-subtle">
+                    <div className="card-body p-2 text-center bg-success-lt">
+                      <div className="font-weight-bold text-success mb-1" style={{ fontSize: '0.8rem' }}>المكسب النهائي</div>
+                      <div className="fs-4 fw-bolder text-success">{fmt(processedData.totals.profit)}</div>
                     </div>
                   </div>
                 </div>
@@ -329,40 +329,47 @@ export default function ProfitAndLossReport() {
                 <div ref={setTableRef} className="table-responsive hide-vertical-scroll">
                   <table className="table table-vcenter card-table table-bordered text-center align-middle mb-0">
                     <thead className="table-light sticky-top" style={{ zIndex: 2 }}>
-                      {showTotalsOnly ? (
-                        <tr>
-                          <th>الصنف</th>
-                          <th>نوع البيع</th>
-                          <th>الكمية</th>
-                          <th>إجمالي المبيعات</th>
-                          <th>إجمالي التكلفة</th>
-                          <th>إجمالي مندبة</th>
-                          <th>عمولة تحصيل</th>
-                          <th>المكسب النهائي</th>
-                        </tr>
-                      ) : (
-                        <tr>
-                          <th>الصنف</th>
-                          <th>نوع البيع</th>
-                          <th>الكمية</th>
-                          <th>سعر البيع / الإجمالي</th>
-                          <th>التكلفة / الإجمالي</th>
-                          <th>مندبة / الإجمالي</th>
-                          <th>عمولة تحصيل / الإجمالي</th>
-                          <th>المكسب / الإجمالي</th>
-                        </tr>
-                      )}
+                      <tr>
+                        <th onClick={() => handleSort('local_id')} style={{ cursor: 'pointer' }}>
+                          رقم الصنف {getSortIcon('local_id')}
+                        </th>
+                        <th onClick={() => handleSort('name')} style={{ cursor: 'pointer' }}>
+                          الصنف {getSortIcon('name')}
+                        </th>
+                        <th onClick={() => handleSort('sale_type')} style={{ cursor: 'pointer' }}>
+                          نوع البيع {getSortIcon('sale_type')}
+                        </th>
+                        <th onClick={() => handleSort('qty')} style={{ cursor: 'pointer' }}>
+                          الكمية {getSortIcon('qty')}
+                        </th>
+                        <th onClick={() => handleSort('total_rev')} style={{ cursor: 'pointer' }}>
+                          {reportType === 'both' ? 'سعر البيع / الإجمالي' : (reportType === 'total' ? 'إجمالي المبيعات' : 'سعر البيع')} {getSortIcon('total_rev')}
+                        </th>
+                        <th onClick={() => handleSort('total_cost')} style={{ cursor: 'pointer' }}>
+                          {reportType === 'both' ? 'التكلفة / الإجمالي' : (reportType === 'total' ? 'إجمالي التكلفة' : 'التكلفة')} {getSortIcon('total_cost')}
+                        </th>
+                        <th onClick={() => handleSort('total_sales_comm')} style={{ cursor: 'pointer' }}>
+                          {reportType === 'both' ? 'مندبة / الإجمالي' : (reportType === 'total' ? 'إجمالي مندبة' : 'عمولة مندبة')} {getSortIcon('total_sales_comm')}
+                        </th>
+                        <th onClick={() => handleSort('total_coll_comm')} style={{ cursor: 'pointer' }}>
+                          {reportType === 'both' ? 'عمولة تحصيل / الإجمالي' : (reportType === 'total' ? 'إجمالي تحصيل' : 'عمولة تحصيل')} {getSortIcon('total_coll_comm')}
+                        </th>
+                        <th onClick={() => handleSort('total_profit')} style={{ cursor: 'pointer' }}>
+                          {reportType === 'both' ? 'المكسب / الإجمالي' : (reportType === 'total' ? 'إجمالي المكسب' : 'المكسب')} {getSortIcon('total_profit')}
+                        </th>
+                      </tr>
                     </thead>
                     <tbody>
                       {processedData.items.length > 0 ? (
-                        processedData.items.map((item, index) => {
+                        processedData.items.map((item) => {
                           const isCash = item.sale_type === 'cash';
                           const typeBadgeClass = isCash ? "badge bg-success-lt" : "badge bg-warning-lt";
                           const typeText = isCash ? "كاش" : "قسط";
                           
-                          if (showTotalsOnly) {
+                          if (reportType === 'total') {
                             return (
                               <tr key={`${item.id}-${item.sale_type}`}>
+                                <td className="text-muted fw-bold">{item.local_id || '-'}</td>
                                 <td className="text-start px-3">
                                   <a href="#" onClick={(e) => e.preventDefault()} className="text-decoration-none fw-bold text-dark">
                                     {item.name}
@@ -381,41 +388,67 @@ export default function ProfitAndLossReport() {
                             );
                           }
                           
-                          return (
-                            <React.Fragment key={`${item.id}-${item.sale_type}`}>
-                              <tr className="bg-light">
-                                <td rowSpan={2} className="text-start px-3 bg-white border-bottom-0">
+                          if (reportType === 'average') {
+                            return (
+                              <tr key={`${item.id}-${item.sale_type}`} className="bg-white">
+                                <td className="text-muted fw-bold">{item.local_id || '-'}</td>
+                                <td className="text-start px-3">
                                   <a href="#" onClick={(e) => e.preventDefault()} className="text-decoration-none fw-bold fs-4 text-dark">
                                     {item.name}
                                   </a>
                                 </td>
-                                <td rowSpan={2} className="bg-white border-bottom-0">
+                                <td>
                                   <span className={typeBadgeClass}>{typeText}</span>
                                 </td>
-                                <td rowSpan={2} className="fw-bold fs-4 bg-white border-bottom-0">{fmt(item.qty)}</td>
-                                <td className="text-muted border-secondary-subtle fw-bold">{fmt(item.avg_sell)}</td>
-                                <td className="text-muted border-secondary-subtle fw-bold">{fmt(item.cost_per_unit)}</td>
-                                <td className="text-muted border-secondary-subtle fw-bold">{fmt(item.sales_comm_per_unit)}</td>
-                                <td className="text-muted border-secondary-subtle fw-bold">
+                                <td className="fw-bold fs-4">{fmt(item.qty)}</td>
+                                <td className="text-muted fw-bold">{fmt(item.avg_sell)}</td>
+                                <td className="text-muted fw-bold">{fmt(item.cost_per_unit)}</td>
+                                <td className="text-muted fw-bold">{fmt(item.sales_comm_per_unit)}</td>
+                                <td className="text-muted fw-bold">
                                   {isCash ? <span className="text-muted fs-5">كاش</span> : fmt(item.coll_comm_per_unit || 0)}
                                 </td>
-                                <td className="text-muted border-secondary-subtle fw-bold">{fmt(item.avg_profit)}</td>
+                                <td className="text-muted fw-bold">{fmt(item.avg_profit)}</td>
+                              </tr>
+                            );
+                          }
+
+                          // Both
+                          return (
+                            <React.Fragment key={`${item.id}-${item.sale_type}`}>
+                              <tr className="bg-light">
+                                <td rowSpan={2} className="text-muted fw-bold bg-white border-bottom-0 align-middle">{item.local_id || '-'}</td>
+                                <td rowSpan={2} className="text-start px-3 bg-white border-bottom-0 align-middle">
+                                  <a href="#" onClick={(e) => e.preventDefault()} className="text-decoration-none fw-bold fs-4 text-dark">
+                                    {item.name}
+                                  </a>
+                                </td>
+                                <td rowSpan={2} className="bg-white border-bottom-0 align-middle">
+                                  <span className={typeBadgeClass}>{typeText}</span>
+                                </td>
+                                <td rowSpan={2} className="fw-bold fs-4 bg-white border-bottom-0 align-middle">{fmt(item.qty)}</td>
+                                <td className="text-muted border-secondary-subtle fw-bold py-2">{fmt(item.avg_sell)}</td>
+                                <td className="text-muted border-secondary-subtle fw-bold py-2">{fmt(item.cost_per_unit)}</td>
+                                <td className="text-muted border-secondary-subtle fw-bold py-2">{fmt(item.sales_comm_per_unit)}</td>
+                                <td className="text-muted border-secondary-subtle fw-bold py-2">
+                                  {isCash ? <span className="text-muted fs-5">كاش</span> : fmt(item.coll_comm_per_unit || 0)}
+                                </td>
+                                <td className="text-muted border-secondary-subtle fw-bold py-2">{fmt(item.avg_profit)}</td>
                               </tr>
                               <tr>
-                                <td className="fw-bolder text-azure border-secondary-subtle bg-azure-lt">{fmt(item.total_rev)}</td>
-                                <td className="fw-bolder text-danger border-secondary-subtle bg-danger-lt">{fmt(item.total_cost)}</td>
-                                <td className="fw-bolder text-warning border-secondary-subtle bg-warning-lt">{fmt(item.total_sales_comm)}</td>
-                                <td className="fw-bolder text-warning border-secondary-subtle bg-warning-lt">
+                                <td className="fw-bolder text-azure border-secondary-subtle bg-azure-lt py-2">{fmt(item.total_rev)}</td>
+                                <td className="fw-bolder text-danger border-secondary-subtle bg-danger-lt py-2">{fmt(item.total_cost)}</td>
+                                <td className="fw-bolder text-warning border-secondary-subtle bg-warning-lt py-2">{fmt(item.total_sales_comm)}</td>
+                                <td className="fw-bolder text-warning border-secondary-subtle bg-warning-lt py-2">
                                   {isCash ? <span className="text-muted fs-5">كاش</span> : fmt(item.total_coll_comm || 0)}
                                 </td>
-                                <td className="fw-bolder text-success fs-3 border-secondary-subtle bg-success-lt">{fmt(item.total_profit)}</td>
+                                <td className="fw-bolder text-success border-secondary-subtle bg-success-lt py-2">{fmt(item.total_profit)}</td>
                               </tr>
                             </React.Fragment>
                           );
                         })
                       ) : (
                         <tr>
-                          <td colSpan={showTotalsOnly ? 8 : 8} className="text-center text-muted py-4">لا توجد بيانات مطابقة للبحث</td>
+                          <td colSpan="9" className="text-center text-muted py-4">لا توجد بيانات مطابقة للبحث</td>
                         </tr>
                       )}
                     </tbody>
