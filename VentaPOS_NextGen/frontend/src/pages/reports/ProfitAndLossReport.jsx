@@ -169,9 +169,10 @@ export default function ProfitAndLossReport() {
               <div className="row g-3 align-items-end">
                 
                 <div className="col-md-3">
-                  <label className="form-label mb-1">المندوب</label>
-                  <div className="input-icon">
-                    <span className="input-icon-addon"><IconUser size={16} /></span>
+                  <div className="input-group input-group-sm">
+                    <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle">
+                      <IconUser size={16} className="me-1" /> المندوب
+                    </span>
                     <select
                       className="form-select form-select-sm border-secondary-subtle fw-bold"
                       value={salespersonId}
@@ -186,9 +187,10 @@ export default function ProfitAndLossReport() {
                 </div>
 
                 <div className="col-md-3">
-                  <label className="form-label mb-1">نوع التقرير</label>
-                  <div className="input-icon">
-                    <span className="input-icon-addon"><IconFileAnalytics size={16} /></span>
+                  <div className="input-group input-group-sm">
+                    <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle">
+                      <IconFileAnalytics size={16} className="me-1" /> نوع التقرير
+                    </span>
                     <select
                       className="form-select form-select-sm border-secondary-subtle fw-bold"
                       value={reportType}
@@ -202,9 +204,10 @@ export default function ProfitAndLossReport() {
                 </div>
 
                 <div className="col-md-3">
-                  <label className="form-label mb-1">نوع البيع</label>
-                  <div className="input-icon">
-                    <span className="input-icon-addon"><IconFilter size={16} /></span>
+                  <div className="input-group input-group-sm">
+                    <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle">
+                      <IconFilter size={16} className="me-1" /> نوع البيع
+                    </span>
                     <select
                       className="form-select form-select-sm border-secondary-subtle fw-bold"
                       value={saleTypeFilter}
@@ -218,18 +221,20 @@ export default function ProfitAndLossReport() {
                 </div>
 
                 <div className="col-md-3">
-                  <label className="form-label mb-1">بحث بصنف</label>
-                  <div className="input-icon">
-                    <span className="input-icon-addon"><IconSearch size={16} /></span>
+                  <div className="input-group input-group-sm">
+                    <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle">
+                      <IconSearch size={16} className="me-1" /> بحث بصنف
+                    </span>
                     <input
                       type="text"
                       className="form-control form-control-sm border-secondary-subtle fw-bold"
-                      placeholder="ابحث باسم الصنف..."
+                      placeholder="اكتب اسم الصنف..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
                   </div>
                 </div>
+
               </div>
             </div>
           </div>
