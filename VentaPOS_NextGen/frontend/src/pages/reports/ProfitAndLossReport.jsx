@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import useSmartScroll from '../../hooks/useSmartScroll';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../../api';
-import { IconArrowRight, IconPrinter } from '@tabler/icons-react';
+import { IconArrowRight, IconPrinter, IconSearch, IconFilter, IconUser, IconReceipt } from '@tabler/icons-react';
 import { fmt } from '../../utils/formatUtils';
 import { useDefaultDate } from '../../hooks/useDefaultDate';
 
 export default function ProfitAndLossReport() {
+  const { setTableRef } = useSmartScroll();
+  const navigate = useNavigate();
   const { defaultMonth, defaultYear, loading: defaultLoading } = useDefaultDate();
 
   const [data, setData] = useState(null);
@@ -15,8 +18,14 @@ export default function ProfitAndLossReport() {
   const [reportMonth, setReportMonth] = useState('');
   const [reportYear, setReportYear] = useState('');
   
+  // Filters
+  const [salespersonId, setSalespersonId] = useState('');
+  const [salespersons, setSalespersons] = useState([]);
+  const [saleTypeFilter, setSaleTypeFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showTotalsOnly, setShowTotalsOnly] = useState(false);
 
+  // Initial Date
   useEffect(() => {
     if (!defaultLoading && reportMonth === '' && reportYear === '') {
       setReportMonth(defaultMonth);
@@ -24,17 +33,39 @@ export default function ProfitAndLossReport() {
     }
   }, [defaultLoading, defaultMonth, defaultYear]);
 
+  // Fetch Salespersons
+  useEffect(() => {
+    const fetchSalespersons = async () => {
+      try {
+        const res = await api.get('/inventory/salespersons/');
+        if (res.data && res.data.results) {
+          setSalespersons(res.data.results);
+        } else if (Array.isArray(res.data)) {
+          setSalespersons(res.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch salespersons', err);
+      }
+    };
+    fetchSalespersons();
+  }, []);
+
+  // Fetch Report Data
   useEffect(() => {
     if (reportMonth && reportYear) {
       fetchReport();
     }
-  }, [reportMonth, reportYear]);
+  }, [reportMonth, reportYear, salespersonId]);
 
   const fetchReport = async () => {
     setLoading(true);
     try {
       const branchId = localStorage.getItem('branchId');
-      const res = await api.get(`/reports/profit-and-loss/?branch_id=${branchId}&month=${reportMonth}&year=${reportYear}`);
+      let url = `/reports/profit-and-loss/?branch_id=${branchId}&month=${reportMonth}&year=${reportYear}`;
+      if (salespersonId) {
+        url += `&salesperson_id=${salespersonId}`;
+      }
+      const res = await api.get(url);
       setData(res.data);
       setError(null);
     } catch (err) {
@@ -49,14 +80,59 @@ export default function ProfitAndLossReport() {
     window.print();
   };
 
+  // Process and Filter Data
+  const processedData = useMemo(() => {
+    if (!data) return { items: [], totals: {} };
+
+    // Combine cash and installment into one array
+    const combined = [
+      ...(data.cash_sales_profitability || []).map(item => ({ ...item, sale_type: 'cash' })),
+      ...(data.installment_sales_profitability || []).map(item => ({ ...item, sale_type: 'installment' }))
+    ];
+
+    // Apply Frontend Filters
+    const filtered = combined.filter(item => {
+      if (saleTypeFilter !== 'all' && item.sale_type !== saleTypeFilter) return false;
+      if (searchQuery && !item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      return true;
+    });
+
+    // Recalculate Totals
+    let grandRev = 0;
+    let grandCost = 0;
+    let grandComm = 0;
+
+    filtered.forEach(item => {
+      grandRev += item.total_rev || 0;
+      grandCost += item.total_cost || 0;
+      grandComm += (item.total_sales_comm || 0) + (item.total_coll_comm || 0);
+    });
+
+    // Expenses are not filtered by frontend query, but we keep the fetched value
+    const expenses = data.summary?.expenses_total || 0;
+    const netProfit = grandRev - grandCost - grandComm - expenses;
+
+    return {
+      items: filtered,
+      totals: {
+        revenue: grandRev,
+        cost: grandCost,
+        commission: grandComm,
+        expenses: expenses,
+        profit: netProfit
+      }
+    };
+  }, [data, saleTypeFilter, searchQuery]);
+
   return (
     <div className="page-wrapper">
+      {/* Page Header */}
       <div className="page-header d-print-none">
         <div className="container-fluid">
           <div className="row g-2 align-items-center">
             <div className="col">
               <h2 className="page-title">تقرير الأرباح والخسائر</h2>
-              <div className="text-muted mt-1">تفصيل الإيرادات، التكاليف، وصافي الربح للمبيعات</div>
+              <div className="text-muted mt-1">تفصيل المبيعات، التكاليف، وصافي المكسب</div>
             </div>
             <div className="col-auto ms-auto d-print-none">
               <button className="btn btn-primary me-2" onClick={handlePrint}>
@@ -73,206 +149,275 @@ export default function ProfitAndLossReport() {
       <div className="page-body">
         <div className="container-fluid">
           
-          <div className="card mb-4 d-print-none">
-            <div className="card-body">
-              <div className="row align-items-end">
-                <div className="col-md-3 mb-3 mb-md-0">
-                  <label className="form-label">الشهر</label>
-                  <input type="number" className="form-control" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} min="1" max="12" />
+          {/* Filters Row (Compact) */}
+          <div className="card mb-3 d-print-none border-secondary-subtle">
+            <div className="card-body py-3">
+              <div className="row g-3 align-items-end">
+                <div className="col-md-2">
+                  <label className="form-label mb-1">الشهر</label>
+                  <input
+                    type="number"
+                    className="form-control form-control-sm border-secondary-subtle"
+                    value={reportMonth}
+                    onChange={(e) => setReportMonth(e.target.value)}
+                    min="1" max="12"
+                  />
                 </div>
-                <div className="col-md-3 mb-3 mb-md-0">
-                  <label className="form-label">السنة</label>
-                  <input type="number" className="form-control" value={reportYear} onChange={(e) => setReportYear(e.target.value)} min="2020" max="2050" />
+                <div className="col-md-2">
+                  <label className="form-label mb-1">السنة</label>
+                  <input
+                    type="number"
+                    className="form-control form-control-sm border-secondary-subtle"
+                    value={reportYear}
+                    onChange={(e) => setReportYear(e.target.value)}
+                  />
                 </div>
-                <div className="col-md-3 mb-3 mb-md-0">
-                  <label className="form-check form-switch mt-4">
-                    <input className="form-check-input" type="checkbox" checked={showTotalsOnly} onChange={(e) => setShowTotalsOnly(e.target.checked)} />
-                    <span className="form-check-label fw-bold">عرض الإجماليات فقط</span>
-                  </label>
+                
+                <div className="col-md-2">
+                  <label className="form-label mb-1">المندوب</label>
+                  <div className="input-icon">
+                    <span className="input-icon-addon"><IconUser size={16} /></span>
+                    <select
+                      className="form-select form-select-sm border-secondary-subtle"
+                      value={salespersonId}
+                      onChange={(e) => setSalespersonId(e.target.value)}
+                    >
+                      <option value="">كل المناديب</option>
+                      {salespersons.map(s => (
+                        <option key={s.id} value={s.id}>{s.name || s.username}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
+
+                <div className="col-md-2">
+                  <label className="form-label mb-1">نوع البيع</label>
+                  <div className="input-icon">
+                    <span className="input-icon-addon"><IconFilter size={16} /></span>
+                    <select
+                      className="form-select form-select-sm border-secondary-subtle"
+                      value={saleTypeFilter}
+                      onChange={(e) => setSaleTypeFilter(e.target.value)}
+                    >
+                      <option value="all">الكل</option>
+                      <option value="cash">كاش فقط</option>
+                      <option value="installment">قسط فقط</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div className="col-md-3">
-                  <button className="btn btn-primary w-100" onClick={fetchReport}>تحديث</button>
+                  <label className="form-label mb-1">بحث بصنف</label>
+                  <div className="input-icon">
+                    <span className="input-icon-addon"><IconSearch size={16} /></span>
+                    <input
+                      type="text"
+                      className="form-control form-control-sm border-secondary-subtle"
+                      placeholder="ابحث باسم الصنف..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="col-md-1">
+                  <label className="form-check form-switch mt-3 mb-0" style={{ cursor: 'pointer' }}>
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      checked={showTotalsOnly}
+                      onChange={() => setShowTotalsOnly(!showTotalsOnly)}
+                    />
+                    <span className="form-check-label" style={{ fontSize: '0.85rem' }}>إجماليات</span>
+                  </label>
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Error & Loading */}
           {error && <div className="alert alert-danger">{error}</div>}
-
-          {loading ? (
+          {loading && (
             <div className="text-center py-5">
               <div className="spinner-border text-primary" role="status"></div>
+              <div className="mt-2 text-muted">جاري تحميل التقرير...</div>
             </div>
-          ) : data ? (
+          )}
+
+          {/* Report Content */}
+          {!loading && !error && data ? (
             <>
-              {/* Summary Profitability Card */}
-              <div className="card mb-4 bg-primary-lt">
-                <div className="card-header font-weight-bold">
-                  <h3 className="card-title text-primary">ملخص الأرباح والخسائر العام للفترة</h3>
+              {/* Compact Totals Cards */}
+              <div className="row g-2 mb-3">
+                <div className="col-sm-6 col-md-3">
+                  <div className="card card-sm border-secondary-subtle">
+                    <div className="card-body py-3">
+                      <div className="row align-items-center">
+                        <div className="col-auto">
+                          <span className="bg-azure text-white avatar avatar-sm">
+                            <IconReceipt size={18} />
+                          </span>
+                        </div>
+                        <div className="col">
+                          <div className="font-weight-medium text-muted">المبيعات</div>
+                          <div className="fs-3 fw-bolder text-azure">{fmt(processedData.totals.revenue)}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="card-body">
-                  <div className="row text-center">
-                    <div className="col-md-2 col-6 mb-3">
-                      <div className="text-muted font-weight-medium">إجمالي الإيرادات</div>
-                      <div className="text-xl font-bold text-azure">{fmt(data.summary.grand_revenue)}</div>
+
+                <div className="col-sm-6 col-md-3">
+                  <div className="card card-sm border-secondary-subtle">
+                    <div className="card-body py-3">
+                      <div className="row align-items-center">
+                        <div className="col-auto">
+                          <span className="bg-danger text-white avatar avatar-sm">
+                            <IconReceipt size={18} />
+                          </span>
+                        </div>
+                        <div className="col">
+                          <div className="font-weight-medium text-muted">التكلفة</div>
+                          <div className="fs-3 fw-bolder text-danger">{fmt(processedData.totals.cost)}</div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="col-md-2 col-6 mb-3">
-                      <div className="text-muted font-weight-medium">إجمالي التكلفة</div>
-                      <div className="text-xl font-bold text-red">{fmt(data.summary.grand_cost)}</div>
+                  </div>
+                </div>
+
+                <div className="col-sm-6 col-md-3">
+                  <div className="card card-sm border-secondary-subtle">
+                    <div className="card-body py-3">
+                      <div className="row align-items-center">
+                        <div className="col-auto">
+                          <span className="bg-warning text-white avatar avatar-sm">
+                            <IconReceipt size={18} />
+                          </span>
+                        </div>
+                        <div className="col">
+                          <div className="font-weight-medium text-muted">مصروفات</div>
+                          <Link to="/reports/expenses" className="fs-3 fw-bolder text-warning text-decoration-none">
+                            {fmt(processedData.totals.expenses)}
+                          </Link>
+                        </div>
+                      </div>
                     </div>
-                    <div className="col-md-3 col-6 mb-3">
-                      <div className="text-muted font-weight-medium">إجمالي عمولات المناديب</div>
-                      <div className="text-xl font-bold text-orange">{fmt(data.summary.grand_commission)}</div>
-                    </div>
-                    <div className="col-md-2 col-6 mb-3">
-                      <div className="text-muted font-weight-medium">مصروفات تشغيلية</div>
-                      <div className="text-xl font-bold text-secondary">{fmt(data.summary.expenses_total)}</div>
-                    </div>
-                    <div className="col-md-3 col-12 mb-3 border-right">
-                      <div className="text-muted font-weight-bold">صافي الربح النهائي</div>
-                      <div className="text-2xl font-black text-green">{fmt(data.summary.net_profit_final)}</div>
+                  </div>
+                </div>
+
+                <div className="col-sm-6 col-md-3">
+                  <div className="card card-sm border-secondary-subtle">
+                    <div className="card-body py-3">
+                      <div className="row align-items-center">
+                        <div className="col-auto">
+                          <span className="bg-success text-white avatar avatar-sm">
+                            <IconReceipt size={18} />
+                          </span>
+                        </div>
+                        <div className="col">
+                          <div className="font-weight-medium text-muted">المكسب</div>
+                          <div className="fs-3 fw-bolder text-success">{fmt(processedData.totals.profit)}</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Cash Sales Profitability Table */}
-              <div className="card mb-4">
-                <div className="card-header bg-green-lt">
-                  <h3 className="card-title text-green">أرباح مبيعات الكاش</h3>
-                </div>
-                <div className="table-responsive report-table-container">
+              {/* Unified Table */}
+              <div className="card border-secondary-subtle shadow-sm">
+                <div ref={setTableRef} className="table-responsive hide-vertical-scroll">
                   <table className="table table-vcenter card-table table-bordered text-center align-middle mb-0">
-                    <thead className="table-light">
+                    <thead className="table-light sticky-top" style={{ zIndex: 2 }}>
                       {showTotalsOnly ? (
                         <tr>
                           <th>الصنف</th>
+                          <th>نوع البيع</th>
                           <th>الكمية</th>
-                          <th>اجمالي المبيعات</th>
-                          <th>اجمالي التكلفة</th>
-                          <th>اجمالي عمولة البيع</th>
-                          <th>الربح النهائي</th>
+                          <th>إجمالي المبيعات</th>
+                          <th>إجمالي التكلفة</th>
+                          <th>إجمالي مندبة</th>
+                          <th>عمولة تحصيل</th>
+                          <th>المكسب النهائي</th>
                         </tr>
                       ) : (
                         <tr>
                           <th>الصنف</th>
+                          <th>نوع البيع</th>
                           <th>الكمية</th>
                           <th>سعر البيع</th>
                           <th>التكلفة</th>
-                          <th>العمولة</th>
-                          <th>الربح</th>
+                          <th>مندبة</th>
+                          <th>عمولة تحصيل</th>
+                          <th>المكسب</th>
                         </tr>
                       )}
                     </thead>
                     <tbody>
-                      {data.cash_sales_profitability && data.cash_sales_profitability.length > 0 ? (
-                        data.cash_sales_profitability.map((item, index) => {
+                      {processedData.items.length > 0 ? (
+                        processedData.items.map((item, index) => {
+                          const isCash = item.sale_type === 'cash';
+                          const typeBadgeClass = isCash ? "badge bg-success-lt" : "badge bg-warning-lt";
+                          const typeText = isCash ? "كاش" : "قسط";
+                          
                           if (showTotalsOnly) {
                             return (
-                              <tr key={index}>
-                                <td className="fw-bold">{item.name}</td>
-                                <td>{fmt(item.qty)}</td>
-                                <td className="fw-bold text-azure">{fmt(item.total_rev)}</td>
-                                <td className="text-danger">{fmt(item.total_cost)}</td>
-                                <td className="text-warning">{fmt(item.total_sales_comm)}</td>
-                                <td className="text-success font-weight-bold">{fmt(item.total_profit)}</td>
+                              <tr key={`${item.id}-${item.sale_type}`}>
+                                <td className="text-start px-3">
+                                  <a href="#" onClick={(e) => e.preventDefault()} className="text-decoration-none fw-bold text-dark">
+                                    {item.name}
+                                  </a>
+                                </td>
+                                <td><span className={typeBadgeClass}>{typeText}</span></td>
+                                <td className="fw-bold">{fmt(item.qty)}</td>
+                                <td className="fw-bolder text-azure">{fmt(item.total_rev)}</td>
+                                <td className="text-danger fw-bolder">{fmt(item.total_cost)}</td>
+                                <td className="text-warning fw-bolder">{fmt(item.total_sales_comm)}</td>
+                                <td className="text-warning fw-bolder">
+                                  {isCash ? <span className="text-muted fs-5">كاش</span> : fmt(item.total_coll_comm || 0)}
+                                </td>
+                                <td className="text-success fw-bolder fs-4">{fmt(item.total_profit)}</td>
                               </tr>
                             );
                           }
+                          
                           return (
-                            <React.Fragment key={index}>
+                            <React.Fragment key={`${item.id}-${item.sale_type}`}>
                               <tr className="bg-light">
-                                <td rowSpan={2} className="fw-bold fs-4 bg-white border-bottom-0">{item.name}</td>
+                                <td rowSpan={2} className="text-start px-3 bg-white border-bottom-0">
+                                  <a href="#" onClick={(e) => e.preventDefault()} className="text-decoration-none fw-bold fs-4 text-dark">
+                                    {item.name}
+                                  </a>
+                                </td>
+                                <td rowSpan={2} className="bg-white border-bottom-0">
+                                  <span className={typeBadgeClass}>{typeText}</span>
+                                </td>
                                 <td rowSpan={2} className="fw-bold fs-4 bg-white border-bottom-0">{fmt(item.qty)}</td>
-                                <td className="text-muted"><small>متوسط الوحدة</small> <br/> {fmt(item.avg_sell)}</td>
-                                <td className="text-muted"><small>تكلفة الوحدة</small> <br/> {fmt(item.cost_per_unit)}</td>
-                                <td className="text-muted"><small>عمولة الوحدة</small> <br/> {fmt(item.sales_comm_per_unit)}</td>
-                                <td className="text-muted"><small>متوسط ربح القطعة</small> <br/> {fmt(item.avg_profit)}</td>
+                                <td className="text-muted border-secondary-subtle"><small>متوسط الوحدة</small> <br/> <span className="fw-bold">{fmt(item.avg_sell)}</span></td>
+                                <td className="text-muted border-secondary-subtle"><small>تكلفة الوحدة</small> <br/> <span className="fw-bold">{fmt(item.cost_per_unit)}</span></td>
+                                <td className="text-muted border-secondary-subtle"><small>للوحدة</small> <br/> <span className="fw-bold">{fmt(item.sales_comm_per_unit)}</span></td>
+                                <td className="text-muted border-secondary-subtle"><small>للوحدة</small> <br/> 
+                                  <span className="fw-bold">
+                                    {isCash ? <span className="text-muted fs-5">كاش</span> : fmt(item.coll_comm_per_unit || 0)}
+                                  </span>
+                                </td>
+                                <td className="text-muted border-secondary-subtle"><small>متوسط مكسب القطعة</small> <br/> <span className="fw-bold">{fmt(item.avg_profit)}</span></td>
                               </tr>
                               <tr>
-                                <td className="fw-bold text-azure"><small className="text-muted d-block">إجمالي مبيعات</small>{fmt(item.total_rev)}</td>
-                                <td className="fw-bold text-danger"><small className="text-muted d-block">إجمالي تكلفة</small>{fmt(item.total_cost)}</td>
-                                <td className="fw-bold text-warning"><small className="text-muted d-block">إجمالي عمولة</small>{fmt(item.total_sales_comm)}</td>
-                                <td className="fw-bold text-success fs-3"><small className="text-muted d-block">إجمالي الربح</small>{fmt(item.total_profit)}</td>
+                                <td className="fw-bolder text-azure border-secondary-subtle"><small className="text-muted d-block fw-normal">إجمالي مبيعات</small>{fmt(item.total_rev)}</td>
+                                <td className="fw-bolder text-danger border-secondary-subtle"><small className="text-muted d-block fw-normal">إجمالي تكلفة</small>{fmt(item.total_cost)}</td>
+                                <td className="fw-bolder text-warning border-secondary-subtle"><small className="text-muted d-block fw-normal">إجمالي مندبة</small>{fmt(item.total_sales_comm)}</td>
+                                <td className="fw-bolder text-warning border-secondary-subtle"><small className="text-muted d-block fw-normal">إجمالي تحصيل</small>
+                                  {isCash ? <span className="text-muted fs-5">كاش</span> : fmt(item.total_coll_comm || 0)}
+                                </td>
+                                <td className="fw-bolder text-success fs-3 border-secondary-subtle"><small className="text-muted d-block fw-normal">المكسب النهائي</small>{fmt(item.total_profit)}</td>
                               </tr>
                             </React.Fragment>
                           );
                         })
                       ) : (
                         <tr>
-                          <td colSpan={showTotalsOnly ? 6 : 6} className="text-center text-muted py-3">لا توجد مبيعات كاش</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Installment Sales Profitability Table */}
-              <div className="card">
-                <div className="card-header bg-azure-lt">
-                  <h3 className="card-title text-azure">أرباح مبيعات القسط</h3>
-                </div>
-                <div className="table-responsive report-table-container">
-                  <table className="table table-vcenter card-table table-bordered text-center align-middle mb-0">
-                    <thead className="table-light">
-                      {showTotalsOnly ? (
-                        <tr>
-                          <th>الصنف</th>
-                          <th>الكمية</th>
-                          <th>اجمالي المبيعات</th>
-                          <th>اجمالي التكلفة</th>
-                          <th>عمولة بيع وتحصيل</th>
-                          <th>الربح النهائي</th>
-                        </tr>
-                      ) : (
-                        <tr>
-                          <th>الصنف</th>
-                          <th>الكمية</th>
-                          <th>سعر البيع</th>
-                          <th>التكلفة</th>
-                          <th>العمولة</th>
-                          <th>الربح</th>
-                        </tr>
-                      )}
-                    </thead>
-                    <tbody>
-                      {data.installment_sales_profitability && data.installment_sales_profitability.length > 0 ? (
-                        data.installment_sales_profitability.map((item, index) => {
-                          if (showTotalsOnly) {
-                            return (
-                              <tr key={index}>
-                                <td className="fw-bold">{item.name}</td>
-                                <td>{fmt(item.qty)}</td>
-                                <td className="fw-bold text-azure">{fmt(item.total_rev)}</td>
-                                <td className="text-danger">{fmt(item.total_cost)}</td>
-                                <td className="text-warning">{fmt((item.total_sales_comm || 0) + (item.total_coll_comm || 0))}</td>
-                                <td className="text-success font-weight-bold">{fmt(item.total_profit)}</td>
-                              </tr>
-                            );
-                          }
-                          return (
-                            <React.Fragment key={index}>
-                              <tr className="bg-light">
-                                <td rowSpan={2} className="fw-bold fs-4 bg-white border-bottom-0">{item.name}</td>
-                                <td rowSpan={2} className="fw-bold fs-4 bg-white border-bottom-0">{fmt(item.qty)}</td>
-                                <td className="text-muted"><small>متوسط الوحدة</small> <br/> {fmt(item.avg_sell)}</td>
-                                <td className="text-muted"><small>تكلفة الوحدة</small> <br/> {fmt(item.cost_per_unit)}</td>
-                                <td className="text-muted"><small>عمولة الوحدة</small> <br/> {fmt(item.sales_comm_per_unit)}</td>
-                                <td className="text-muted"><small>متوسط ربح القطعة</small> <br/> {fmt(item.avg_profit)}</td>
-                              </tr>
-                              <tr>
-                                <td className="fw-bold text-azure"><small className="text-muted d-block">إجمالي مبيعات</small>{fmt(item.total_rev)}</td>
-                                <td className="fw-bold text-danger"><small className="text-muted d-block">إجمالي تكلفة</small>{fmt(item.total_cost)}</td>
-                                <td className="fw-bold text-warning"><small className="text-muted d-block">إجمالي عمولة (بيع+تحصيل)</small>{fmt((item.total_sales_comm || 0) + (item.total_coll_comm || 0))}</td>
-                                <td className="fw-bold text-success fs-3"><small className="text-muted d-block">إجمالي الربح</small>{fmt(item.total_profit)}</td>
-                              </tr>
-                            </React.Fragment>
-                          );
-                        })
-                      ) : (
-                        <tr>
-                          <td colSpan={showTotalsOnly ? 6 : 6} className="text-center text-muted py-3">لا توجد مبيعات قسط</td>
+                          <td colSpan={showTotalsOnly ? 8 : 8} className="text-center text-muted py-4">لا توجد بيانات مطابقة للبحث</td>
                         </tr>
                       )}
                     </tbody>
