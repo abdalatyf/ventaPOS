@@ -345,11 +345,11 @@ export default function ProfitAndLossReport() {
                           <th>الصنف</th>
                           <th>نوع البيع</th>
                           <th>الكمية</th>
-                          <th>سعر البيع</th>
-                          <th>التكلفة</th>
-                          <th>مندبة</th>
-                          <th>عمولة تحصيل</th>
-                          <th>المكسب</th>
+                          <th>سعر البيع / الإجمالي</th>
+                          <th>التكلفة / الإجمالي</th>
+                          <th>مندبة / الإجمالي</th>
+                          <th>عمولة تحصيل / الإجمالي</th>
+                          <th>المكسب / الإجمالي</th>
                         </tr>
                       )}
                     </thead>
@@ -393,24 +393,22 @@ export default function ProfitAndLossReport() {
                                   <span className={typeBadgeClass}>{typeText}</span>
                                 </td>
                                 <td rowSpan={2} className="fw-bold fs-4 bg-white border-bottom-0">{fmt(item.qty)}</td>
-                                <td className="text-muted border-secondary-subtle"><small>متوسط الوحدة</small> <br/> <span className="fw-bold">{fmt(item.avg_sell)}</span></td>
-                                <td className="text-muted border-secondary-subtle"><small>تكلفة الوحدة</small> <br/> <span className="fw-bold">{fmt(item.cost_per_unit)}</span></td>
-                                <td className="text-muted border-secondary-subtle"><small>للوحدة</small> <br/> <span className="fw-bold">{fmt(item.sales_comm_per_unit)}</span></td>
-                                <td className="text-muted border-secondary-subtle"><small>للوحدة</small> <br/> 
-                                  <span className="fw-bold">
-                                    {isCash ? <span className="text-muted fs-5">كاش</span> : fmt(item.coll_comm_per_unit || 0)}
-                                  </span>
+                                <td className="text-muted border-secondary-subtle fw-bold">{fmt(item.avg_sell)}</td>
+                                <td className="text-muted border-secondary-subtle fw-bold">{fmt(item.cost_per_unit)}</td>
+                                <td className="text-muted border-secondary-subtle fw-bold">{fmt(item.sales_comm_per_unit)}</td>
+                                <td className="text-muted border-secondary-subtle fw-bold">
+                                  {isCash ? <span className="text-muted fs-5">كاش</span> : fmt(item.coll_comm_per_unit || 0)}
                                 </td>
-                                <td className="text-muted border-secondary-subtle"><small>متوسط مكسب القطعة</small> <br/> <span className="fw-bold">{fmt(item.avg_profit)}</span></td>
+                                <td className="text-muted border-secondary-subtle fw-bold">{fmt(item.avg_profit)}</td>
                               </tr>
                               <tr>
-                                <td className="fw-bolder text-azure border-secondary-subtle"><small className="text-muted d-block fw-normal">إجمالي مبيعات</small>{fmt(item.total_rev)}</td>
-                                <td className="fw-bolder text-danger border-secondary-subtle"><small className="text-muted d-block fw-normal">إجمالي تكلفة</small>{fmt(item.total_cost)}</td>
-                                <td className="fw-bolder text-warning border-secondary-subtle"><small className="text-muted d-block fw-normal">إجمالي مندبة</small>{fmt(item.total_sales_comm)}</td>
-                                <td className="fw-bolder text-warning border-secondary-subtle"><small className="text-muted d-block fw-normal">إجمالي تحصيل</small>
+                                <td className="fw-bolder text-azure border-secondary-subtle bg-azure-lt">{fmt(item.total_rev)}</td>
+                                <td className="fw-bolder text-danger border-secondary-subtle bg-danger-lt">{fmt(item.total_cost)}</td>
+                                <td className="fw-bolder text-warning border-secondary-subtle bg-warning-lt">{fmt(item.total_sales_comm)}</td>
+                                <td className="fw-bolder text-warning border-secondary-subtle bg-warning-lt">
                                   {isCash ? <span className="text-muted fs-5">كاش</span> : fmt(item.total_coll_comm || 0)}
                                 </td>
-                                <td className="fw-bolder text-success fs-3 border-secondary-subtle"><small className="text-muted d-block fw-normal">المكسب النهائي</small>{fmt(item.total_profit)}</td>
+                                <td className="fw-bolder text-success fs-3 border-secondary-subtle bg-success-lt">{fmt(item.total_profit)}</td>
                               </tr>
                             </React.Fragment>
                           );
