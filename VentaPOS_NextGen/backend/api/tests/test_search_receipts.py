@@ -1,4 +1,3 @@
-import uuid
 from datetime import date
 from django.utils import timezone
 from django.test import TestCase
@@ -66,8 +65,8 @@ class SearchReceiptsTests(TestCase):
             salesperson=self.salesperson1,
             local_id=1,
             receipt_number=101,
-            client_uuid=uuid.uuid4(),
-            receipt_hash=uuid.uuid4().hex,
+
+
             customer_name="احمد علي",
             phone_number="01012345678",
             address="شارع النصر",
@@ -86,8 +85,8 @@ class SearchReceiptsTests(TestCase):
             salesperson=self.salesperson2,
             local_id=2,
             receipt_number=102,
-            client_uuid=uuid.uuid4(),
-            receipt_hash=uuid.uuid4().hex,
+
+
             customer_name="محمود حسن",
             phone_number="01198765432",
             address="شارع التحرير",
@@ -106,8 +105,8 @@ class SearchReceiptsTests(TestCase):
             salesperson=self.salesperson1,
             local_id=3,
             receipt_number=103,
-            client_uuid=uuid.uuid4(),
-            receipt_hash=uuid.uuid4().hex,
+
+
             customer_name="احمد مصطفى",
             phone_number="01234567890",
             address="شارع الأهرام",

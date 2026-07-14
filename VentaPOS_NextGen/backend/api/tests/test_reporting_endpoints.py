@@ -1,4 +1,3 @@
-import uuid
 from django.test import TestCase
 from django.utils import timezone
 from datetime import date
@@ -102,7 +101,7 @@ class ReportingEndpointsTests(TestCase):
             salesperson=self.salesperson,
             local_id=1,
             receipt_number=1001,
-            client_uuid=uuid.uuid4(),
+
             receipt_hash="hash_cash",
             customer_name="محمد علي",
             area="الدقي",
@@ -129,7 +128,7 @@ class ReportingEndpointsTests(TestCase):
             salesperson=self.salesperson,
             local_id=2,
             receipt_number=1002,
-            client_uuid=uuid.uuid4(),
+
             receipt_hash="hash_credit",
             customer_name="إبراهيم حسن",
             area="الدقي",
@@ -329,7 +328,7 @@ class ReportingEndpointsTests(TestCase):
         self.assertEqual(data["summary"]["grand_revenue"], 80000)
 
         # Query with non-existent salesperson UUID
-        params["salesperson_id"] = str(uuid.uuid4())
+        params["salesperson_id"] = "1"
         response = self.client.get(url, params)
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -363,11 +362,11 @@ class ReportingEndpointsTests(TestCase):
         self.assertIn("branch_id", response.json())
         
         # invalid branch_id format
-        response = self.client.get(url, {"branch_id": "not-a-uuid", "year": 2026, "month": 7})
+        response = self.client.get(url, {"branch_id": "9999", "year": 2026, "month": 7})
         self.assertEqual(response.status_code, 400)
         self.assertIn("branch_id", response.json())
         
         # non-existent branch_id
-        response = self.client.get(url, {"branch_id": str(uuid.uuid4()), "year": 2026, "month": 7})
+        response = self.client.get(url, {"branch_id": "1", "year": 2026, "month": 7})
         self.assertEqual(response.status_code, 400)
         self.assertIn("branch_id", response.json())

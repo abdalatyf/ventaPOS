@@ -1,26 +1,8 @@
 import requests
-import json
-
-url = 'http://localhost:8000/api/v1/receipts/'
-# Get the first receipt
-r = requests.get(url, params={'limit': 1})
-if r.status_code == 200:
-    receipts = r.json().get('results', [])
-    if receipts:
-        first = receipts[0]
-        r_id = first['id']
-        print(f"Editing receipt: {r_id}")
-        put_url = f"{url}{r_id}/"
-        payload = {
-            "customer_name": first["customer_name"],
-            "sale_month": first["sale_month"],
-            "sale_year": first["sale_year"],
-            "sale_items": first["sale_items"]
-        }
-        res = requests.put(put_url, json=payload)
-        print(res.status_code)
-        print(res.text)
-    else:
-        print("No receipts")
-else:
-    print(r.status_code, r.text)
+headers = {
+    'company-code': '1234',
+    'machine-id': 'DEV-MACHINE-001'
+}
+res = requests.get('http://127.0.0.1:8000/api/v1/default-date/?branch_id=63b94665-6653-4c0f-97f4-38596bd89c84', headers=headers)
+print("Status:", res.status_code)
+print("Text:", res.text[:200])

@@ -5,7 +5,7 @@ Single Source of Truth: d:/Projects/VentaPOS/database_schema.md
 API Contract:           d:/Projects/VentaPOS/api_contract.md
 
 Design policies enforced in every model:
-  1. UUID primary keys (via django.db.models.UUIDField + uuid.uuid4 default).
+  1. BigAutoField primary keys (Django default).
   2. tenant_id FK on every tenant-owned table.
   3. is_deleted BOOLEAN NOT NULL DEFAULT FALSE on every transactional table.
   4. DECIMAL(12, 2) for all financial columns.
@@ -38,7 +38,6 @@ NOTE: The legacy ActionLog model is kept at the bottom to avoid breaking existin
 migrations. It is NOT part of the approved schema and will be migrated away.
 """
 
-import uuid
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 
@@ -66,7 +65,6 @@ class AllObjectsManager(models.Manager):
 class Tenant(models.Model):
     """Root tenant / company entity. All other tables reference this."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company_code = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True)
@@ -104,7 +102,6 @@ class CloudUser(models.Model):
         ("BRANCH_MANAGER", "مدير الفرع"),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="cloud_users", db_constraint=False
     )
@@ -149,7 +146,6 @@ class CloudUser(models.Model):
 class Branch(models.Model):
     """Physical branch or warehouse within a tenant."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="branches"
     )
@@ -195,7 +191,6 @@ class Branch(models.Model):
 class Salesperson(models.Model):
     """Sales representative linked to a branch."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="salespeople"
     )
@@ -204,7 +199,6 @@ class Salesperson(models.Model):
     )
     local_id = models.IntegerField()          # Local device sequential ID
     name = models.CharField(max_length=100)
-    device_token = models.UUIDField(default=uuid.uuid4)
     is_device_active = models.BooleanField(default=True)
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -241,7 +235,6 @@ class Salesperson(models.Model):
 class InventoryItem(models.Model):
     """Catalog item tracked per branch."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="inventory_items"
     )
@@ -430,7 +423,6 @@ class InventoryItem(models.Model):
 class CommissionHistory(models.Model):
     """Tracks commission rate changes per inventory item over time."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="commission_histories"
     )
@@ -493,7 +485,6 @@ class InventoryAdjustment(models.Model):
         ("SURPLUS", "زيادة (+)"),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="inventory_adjustments"
     )
@@ -553,7 +544,6 @@ class InventoryAdjustment(models.Model):
 class Supplier(models.Model):
     """Procurement vendor / supplier entity."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="suppliers"
     )
@@ -595,7 +585,6 @@ class PurchaseInvoice(models.Model):
         ("RETURN", "فاتورة مرتجع"),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="purchase_invoices"
     )
@@ -660,7 +649,6 @@ class PurchaseInvoice(models.Model):
 class PurchaseInvoiceItem(models.Model):
     """Line item within a purchase or return invoice."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="purchase_invoice_items"
     )
@@ -712,7 +700,6 @@ class PurchaseInvoiceItem(models.Model):
 class Receipt(models.Model):
     """Sales transaction / invoice record."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="receipts"
     )
@@ -727,7 +714,6 @@ class Receipt(models.Model):
     local_id = models.IntegerField(validators=[MinValueValidator(0)])
     receipt_number = models.IntegerField(validators=[MinValueValidator(0)])
     # Idempotency key (schema §1.4)
-    client_uuid = models.UUIDField()
     # Tamper-proof hash (schema §1.5)
     receipt_hash = models.CharField(max_length=255, unique=True)
     customer_name = models.CharField(max_length=200)
@@ -761,11 +747,6 @@ class Receipt(models.Model):
         verbose_name = "الفاتورة"
         verbose_name_plural = "الفواتير"
         constraints = [
-            # Idempotency: one receipt per device UUID per tenant (schema §1.4)
-            models.UniqueConstraint(
-                fields=["tenant", "client_uuid"],
-                name="uq_tenant_receipt_client_uuid",
-            ),
             models.CheckConstraint(
                 condition=models.Q(local_id__gte=0),
                 name="chk_receipt_local_id_gte_0",
@@ -809,7 +790,6 @@ class Receipt(models.Model):
 class SaleItem(models.Model):
     """Line item within a sale receipt."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="sale_items"
     )
@@ -858,7 +838,6 @@ class SaleItem(models.Model):
 class InstallmentPayment(models.Model):
     """Scheduled installment payment tied to a receipt."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="installment_payments"
     )
@@ -903,7 +882,6 @@ class InstallmentPayment(models.Model):
 class Expense(models.Model):
     """Operational overhead expense logged against a branch."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="expenses"
     )
@@ -961,7 +939,6 @@ class Expense(models.Model):
 class CompanySetting(models.Model):
     """Per-tenant company profile settings. One row per tenant (singleton)."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.OneToOneField(
         Tenant, on_delete=models.CASCADE, related_name="company_setting", db_constraint=False
     )
@@ -1005,7 +982,6 @@ class ClientLicense(models.Model):
     (schema §1.5).
     """
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="client_licenses", db_constraint=False
     )
@@ -1063,7 +1039,6 @@ class ClientLicense(models.Model):
 class UsedLicense(models.Model):
     """Registry of consumed license activation codes (prevents replay)."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="used_licenses", db_constraint=False
     )
@@ -1093,7 +1068,6 @@ class UsedLicense(models.Model):
 class LicenseHistory(models.Model):
     """Audit log of all licensing operations (activations, renewals, etc.)."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="license_histories", db_constraint=False
     )
@@ -1132,7 +1106,6 @@ class PendingExternalReceipt(models.Model):
         ("FILE", "ملف"),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="pending_external_receipts"
     )

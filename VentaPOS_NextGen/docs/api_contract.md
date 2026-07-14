@@ -2,12 +2,26 @@
 *This document defines the RESTful endpoints that the React frontend will consume.*
 
 ## 🔒 1. Authentication & Licensing
-All API endpoints (except `/auth/login/` and `/license/activate/`) require an authenticated session and a valid active license.
+All API endpoints (except `/auth/local/`, `/auth/demo/`, `/auth/recover/`, `/init/`, and `/license/activate/`) require an authenticated session and a valid active license.
 
-### `POST /api/v1/auth/login/`
-Authenticates the user and returns an HttpOnly session cookie or Token.
-*   **Request**: `{"username": "...", "password": "..."}`
-*   **Response**: `200 OK`, `{"role": "CASHIER", "user_id": 1}`
+### `POST /api/v1/auth/local/`
+Authenticates the user using the single master password.
+*   **Request**: `{"password": "..."}`
+*   **Response**: `200 OK`, `{"token": "...", "company_name": "..."}`
+
+### `POST /api/v1/auth/demo/`
+Silently logs the frontend into a volatile Demo Mode if no active license exists.
+*   **Response**: `200 OK`, `{"token": "...", "company_name": "شركة تجريبية (Demo)"}`
+
+### `POST /api/v1/auth/recover/`
+Recovers the master password using the Recovery Code generated during initialization.
+*   **Request**: `{"recovery_code": "VNTA-...", "new_password": "..."}`
+*   **Response**: `200 OK` or `400 Bad Request`
+
+### `POST /api/v1/init/`
+Initializes the system upon receiving a valid license code. Returns a Recovery Code.
+*   **Request**: `{"company_name": "...", "branch_name": "...", "password": "...", "license_code": "..."}`
+*   **Response**: `201 Created`, `{"message": "...", "recovery_code": "VNTA-ABCD-1234"}`
 
 ### `GET /api/v1/license/status/`
 Returns the current status of the machine's license.
@@ -19,7 +33,8 @@ Activates a new code or recharges invoices.
 *   **Response**: `200 OK` or `400 Bad Request`
 
 > [!WARNING]
-> **403 Forbidden - License Tamper / Expired**: If a user attempts to call ANY endpoint (especially `POST /api/v1/receipts/`) and their license is expired or has been tampered with, the API will return a `403 Forbidden` with `{"error": "license_expired"}`. The React app must catch this globally.
+> **402 Payment Required - Read-Only Mode**: If a user attempts to call ANY mutating endpoint (`POST`, `PUT`, `DELETE`) and their license is expired, the API will return a `402 Payment Required` with `{"error": "license_expired", "message": "انتهى الاشتراك"}`. The React app must catch this globally and show a read-only warning.
+> **403 Forbidden - License Tamper / Exhausted**: If invoices balance is exhausted or tampering is detected.
 
 ---
 

@@ -7,9 +7,14 @@ from .views import (
     SaleItemViewSet, InstallmentPaymentViewSet, PendingExternalReceiptViewSet,
     ClientLicenseViewSet, UsedLicenseViewSet, LicenseHistoryViewSet, ActionLogViewSet,
     LicenseStatusView, LicenseActivateView, SystemInitializationView, CustomAuthToken,
+    DemoAuthToken, PasswordRecoveryView,
     CustomerSuggestionsView, ProductSuggestionsView,
     DashboardReportView, SalespersonPerformanceReportView, InventoryMovementReportView,
-    ProfitAndLossReportView, CashDrawerReportView, DefaultDateView
+    ProfitAndLossReportView, CashDrawerReportView, DefaultDateView, InstallmentsReportView
+)
+from .tools_views import (
+    BackupDownloadView, BackupUploadView, OfflineExportItemsView,
+    OfflineImportReceiptsView, ApprovePendingReceiptView, SmartImportWizardView
 )
 
 router = DefaultRouter()
@@ -34,6 +39,8 @@ router.register(r'action-logs', ActionLogViewSet)
 urlpatterns = [
     path('init/', SystemInitializationView.as_view(), name='system_init'),
     path('auth/local/', CustomAuthToken.as_view(), name='auth_local'),
+    path('auth/demo/', DemoAuthToken.as_view(), name='auth_demo'),
+    path('auth/recover/', PasswordRecoveryView.as_view(), name='auth_recover'),
     path('license/status/', LicenseStatusView.as_view(), name='license-status'),
     path('license/activate/', LicenseActivateView.as_view(), name='license-activate'),
     path('customer-suggestions/', CustomerSuggestionsView.as_view(), name='customer-suggestions'),
@@ -48,6 +55,16 @@ urlpatterns = [
     path('reports/profit-and-loss/', ProfitAndLossReportView.as_view(), name='report-profit-and-loss-alias'),
     path('reports/cash-drawer-details/', CashDrawerReportView.as_view(), name='report-cash-drawer-details'),
     path('reports/cash-drawer/', CashDrawerReportView.as_view(), name='report-cash-drawer-alias'),
+    path('reports/installments/', InstallmentsReportView.as_view(), name='report-installments'),
+    
+    # Tools APIs
+    path('tools/backup/download/', BackupDownloadView.as_view(), name='backup-download'),
+    path('tools/backup/upload/', BackupUploadView.as_view(), name='backup-upload'),
+    path('tools/sync/export-items/', OfflineExportItemsView.as_view(), name='sync-export-items'),
+    path('tools/sync/import-receipts/', OfflineImportReceiptsView.as_view(), name='sync-import-receipts'),
+    path('tools/sync/approve-pending/<int:pk>/', ApprovePendingReceiptView.as_view(), name='sync-approve-pending'),
+    path('tools/smart-import/', SmartImportWizardView.as_view(), name='smart-import'),
+
     path('', include(router.urls)),
 ]
 

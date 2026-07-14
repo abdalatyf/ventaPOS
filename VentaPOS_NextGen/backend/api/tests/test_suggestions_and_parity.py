@@ -1,4 +1,3 @@
-import uuid
 from datetime import date
 from django.utils import timezone
 from django.test import TestCase
@@ -54,16 +53,16 @@ class AutocompleteAndParityTests(TestCase):
         # Create receipts with some historical data
         r1 = Receipt.objects.using("default").create(
             tenant=self.tenant, branch=self.branch, salesperson=self.salesperson,
-            local_id=1, receipt_number=1, client_uuid=uuid.uuid4(),
-            receipt_hash=uuid.uuid4().hex, customer_name="Customer A",
+            local_id=1, receipt_number=1,
+customer_name="Customer A",
             phone_number="012345", address="Cairo", area="Heliopolis",
             total_amount=100, down_payment=100, is_cash_sale=True,
             sale_year=2026, sale_month=6, created_at_local=timezone.now()
         )
         r2 = Receipt.objects.using("default").create(
             tenant=self.tenant, branch=self.branch, salesperson=None,
-            local_id=2, receipt_number=2, client_uuid=uuid.uuid4(),
-            receipt_hash=uuid.uuid4().hex, customer_name="Customer B",
+            local_id=2, receipt_number=2,
+customer_name="Customer B",
             phone_number="012346", address="Cairo", area="Helwan",
             total_amount=100, down_payment=100, is_cash_sale=True,
             sale_year=2026, sale_month=6, created_at_local=timezone.now()
@@ -87,8 +86,8 @@ class AutocompleteAndParityTests(TestCase):
         # Query using Arabic numerals term: "٠١٢" (which translates to "012")
         Receipt.objects.using("default").create(
             tenant=self.tenant, branch=self.branch,
-            local_id=3, receipt_number=3, client_uuid=uuid.uuid4(),
-            receipt_hash=uuid.uuid4().hex, customer_name="Ahmed",
+            local_id=3, receipt_number=3,
+customer_name="Ahmed",
             phone_number="012999", address="Cairo", area="Giza",
             total_amount=100, down_payment=100, is_cash_sale=True,
             sale_year=2026, sale_month=6, created_at_local=timezone.now()
@@ -114,7 +113,7 @@ class AutocompleteAndParityTests(TestCase):
         # Create a sale of 3 items in month 4
         receipt = Receipt.objects.using("default").create(
             tenant=self.tenant, branch=self.branch, local_id=4, receipt_number=4,
-            client_uuid=uuid.uuid4(), receipt_hash=uuid.uuid4().hex,
+
             customer_name="Ahmed", total_amount=3000, down_payment=3000,
             is_cash_sale=True, sale_year=2026, sale_month=4, created_at_local=timezone.now()
         )
@@ -158,8 +157,7 @@ class AutocompleteAndParityTests(TestCase):
             "salesperson": self.salesperson.id,
             "local_id": 100,
             "receipt_number": 100,
-            "client_uuid": str(uuid.uuid4()),
-            "customer_name": "Ahmed",
+                        "customer_name": "Ahmed",
             "total_amount": 500,
             "down_payment": 250,
             "is_cash_sale": False,

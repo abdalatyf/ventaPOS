@@ -10,7 +10,8 @@ import {
   IconSettings,
   IconLogout,
   IconPlus,
-  IconMinus
+  IconMinus,
+  IconCash
 } from '@tabler/icons-react';
 
 export default function Navbar() {
@@ -94,7 +95,7 @@ export default function Navbar() {
   };
 
   return (
-    <header className="navbar navbar-expand-md navbar-light d-print-none">
+    <header className="navbar navbar-expand-md navbar-light sticky-top d-print-none" style={{ zIndex: 1030 }}>
       <div className="container-fluid">
         <button 
           className="navbar-toggler" 
@@ -166,60 +167,49 @@ export default function Navbar() {
                 </Link>
               </li>
 
-              <li className={`nav-item dropdown ${location.pathname.startsWith('/purchases') || location.pathname.startsWith('/expenses') ? 'active' : ''} ${openDropdown === 'purchases' ? 'show' : ''}`}>
-                <a className="nav-link dropdown-toggle text-info" href="#" onClick={(e) => toggleDropdown('purchases', e)}>
+              <li className={`nav-item ${location.pathname.startsWith('/search-purchases') || location.pathname.startsWith('/purchases') ? 'active' : ''}`}>
+                <Link className="nav-link text-info" to="/search-purchases" onClick={() => setOpenDropdown(null)}>
                   <span className="nav-link-icon d-md-none d-lg-inline-block">
                     <IconPackage stroke={1.5} />
                   </span>
-                  <span className="nav-link-title">المشتريات والمصروفات</span>
-                </a>
-                <div className={`dropdown-menu ${openDropdown === 'purchases' ? 'show' : ''}`} data-bs-popper={openDropdown === 'purchases' ? 'static' : undefined}>
-                  <Link className={`dropdown-item ${isActive('/purchases')}`} to="/purchases">إضافة فاتورة مشتريات</Link>
-                  <Link className={`dropdown-item ${isActive('/purchases/search')}`} to="/purchases/search">بحث الفواتير</Link>
-                  <Link className={`dropdown-item ${isActive('/expenses')}`} to="/expenses">المصروفات اليومية</Link>
-                </div>
+                  <span className="nav-link-title">المشتريات</span>
+                </Link>
               </li>
 
-              <li className={`nav-item dropdown ${location.pathname === '/' || location.pathname.startsWith('/reports') || location.pathname.startsWith('/collections') ? 'active' : ''} ${openDropdown === 'reports' ? 'show' : ''}`}>
-                <a className="nav-link dropdown-toggle text-warning" href="#" onClick={(e) => toggleDropdown('reports', e)}>
+              <li className={`nav-item ${location.pathname.startsWith('/expenses') ? 'active' : ''}`}>
+                <Link className="nav-link text-danger" to="/expenses" onClick={() => setOpenDropdown(null)}>
+                  <span className="nav-link-icon d-md-none d-lg-inline-block">
+                    <IconCash stroke={1.5} />
+                  </span>
+                  <span className="nav-link-title">المصروفات</span>
+                </Link>
+              </li>
+
+              <li className={`nav-item ${location.pathname.startsWith('/reports') ? 'active' : ''}`}>
+                <Link className="nav-link text-warning" to="/reports" onClick={() => setOpenDropdown(null)}>
                   <span className="nav-link-icon d-md-none d-lg-inline-block">
                     <IconChartBar stroke={1.5} />
                   </span>
                   <span className="nav-link-title">التقارير</span>
-                </a>
-                <div className={`dropdown-menu ${openDropdown === 'reports' ? 'show' : ''}`} data-bs-popper={openDropdown === 'reports' ? 'static' : undefined}>
-                  <Link className={`dropdown-item ${isActive('/reports/dashboard')}`} to="/reports/dashboard">لوحة تقارير الأداء</Link>
-                  <Link className={`dropdown-item ${isActive('/reports/salesperson')}`} to="/reports/salesperson">عمولات وأداء المناديب</Link>
-                  <Link className={`dropdown-item ${isActive('/reports/inventory')}`} to="/reports/inventory">حركة وجرد المخازن</Link>
-                  <Link className={`dropdown-item ${isActive('/reports/profit-and-loss')}`} to="/reports/profit-and-loss">الأرباح والخسائر بالتفصيل</Link>
-                  <Link className={`dropdown-item ${isActive('/reports/cash-drawer')}`} to="/reports/cash-drawer">حركة درج الخزينة</Link>
-                </div>
+                </Link>
               </li>
 
-              <li className={`nav-item dropdown ${location.pathname.startsWith('/tools') ? 'active' : ''} ${openDropdown === 'tools' ? 'show' : ''}`}>
-                <a className="nav-link dropdown-toggle text-secondary" href="#" onClick={(e) => toggleDropdown('tools', e)}>
+              <li className={`nav-item ${location.pathname.startsWith('/tools') ? 'active' : ''}`}>
+                <Link className="nav-link text-secondary" to="/tools" onClick={() => setOpenDropdown(null)}>
                   <span className="nav-link-icon d-md-none d-lg-inline-block">
                     <IconTool stroke={1.5} />
                   </span>
                   <span className="nav-link-title">الأدوات</span>
-                </a>
-                <div className={`dropdown-menu ${openDropdown === 'tools' ? 'show' : ''}`} data-bs-popper={openDropdown === 'tools' ? 'static' : undefined}>
-                  <Link className={`dropdown-item ${isActive('/tools/cloud')}`} to="/tools/cloud">الربط أونلاين</Link>
-                  <Link className={`dropdown-item ${isActive('/tools/backup')}`} to="/tools/backup">النسخ الاحتياطي</Link>
-                </div>
+                </Link>
               </li>
 
-              <li className={`nav-item dropdown ${location.pathname === '/settings/company' || location.pathname === '/settings/license' ? 'active' : ''} ${openDropdown === 'settings' ? 'show' : ''}`}>
-                <a className="nav-link dropdown-toggle text-dark" href="#" onClick={(e) => toggleDropdown('settings', e)}>
+              <li className={`nav-item ${location.pathname.startsWith('/settings') ? 'active' : ''}`}>
+                <Link className="nav-link text-dark" to="/settings" onClick={() => setOpenDropdown(null)}>
                   <span className="nav-link-icon d-md-none d-lg-inline-block">
                     <IconSettings stroke={1.5} />
                   </span>
                   <span className="nav-link-title">الإعدادات</span>
-                </a>
-                <div className={`dropdown-menu ${openDropdown === 'settings' ? 'show' : ''}`} data-bs-popper={openDropdown === 'settings' ? 'static' : undefined}>
-                  <Link className={`dropdown-item ${isActive('/settings/company')}`} to="/settings/company">بيانات الشركة</Link>
-                  <Link className={`dropdown-item ${isActive('/settings/license')}`} to="/settings/license">الاشتراك</Link>
-                </div>
+                </Link>
               </li>
 
             </ul>

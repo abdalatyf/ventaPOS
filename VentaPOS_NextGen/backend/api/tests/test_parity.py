@@ -114,7 +114,6 @@ def _make_purchase(branch, supplier, item, qty, month, year, inv_type="PURCHASE"
 
 def _make_receipt(branch, sale_month, sale_year, is_cash=True):
     """Creates a bare Receipt WITHOUT touching license balance (used by stock tests)."""
-    import uuid
     from django.utils import timezone
     tenant = branch.tenant
     local_id = Receipt.objects.using("default").count() + 1
@@ -125,7 +124,7 @@ def _make_receipt(branch, sale_month, sale_year, is_cash=True):
         branch=branch,
         local_id=local_id,
         receipt_number=receipt_number,
-        client_uuid=uuid.uuid4(),
+
         receipt_hash=receipt_hash,
         customer_name="عميل نقدي" if is_cash else "عميل آجل",
         created_at_local=timezone.now(),
@@ -915,14 +914,13 @@ class PosEntryParityTests(TestCase):
         self.assertEqual(data[0]["max"], 50)
 
     def test_customer_suggestions_endpoint(self):
-        import uuid
         from django.utils import timezone
         Receipt.objects.using("default").create(
             tenant=self.tenant,
             branch=self.branch,
             local_id=1,
             receipt_number=1001,
-            client_uuid=uuid.uuid4(),
+
             receipt_hash="dummyhash1",
             customer_name="أحمد علي",
             phone_number="0101234567",

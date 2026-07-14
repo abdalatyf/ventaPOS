@@ -86,7 +86,24 @@ def _is_valid_sqlite(path):
     except Exception:
         return False
 
+def is_demo_mode():
+    if not os.path.exists(RUNTIME_DB): return True
+    try:
+        import sqlite3
+        con = sqlite3.connect(RUNTIME_DB)
+        cursor = con.cursor()
+        cursor.execute("SELECT COUNT(*) FROM api_clientlicense WHERE is_active=1")
+        count = cursor.fetchone()[0]
+        con.close()
+        return count == 0
+    except Exception:
+        return True
+
 def encrypt_and_save_db():
+    if is_demo_mode():
+        # Do not save changes in Demo Mode, so they wipe on restart.
+        return
+
     if os.path.exists(RUNTIME_DB):
         try:
             if not _is_valid_sqlite(RUNTIME_DB):
@@ -143,8 +160,14 @@ def ensure_databases_are_ready():
     try:
         call_command('migrate', database='system', interactive=False)
         call_command('migrate', interactive=False)
+        
+        # Populate demo data if no license exists
+        if is_demo_mode():
+            print("📦 Populating Demo Data...")
+            call_command('init_demo_db', interactive=False)
+            
     except Exception as e:
-        print(f"❌ Migration Failed: {e}")
+        print(f"❌ Migration/Init Failed: {e}")
 
 def start_server(port, application):
     print(f"🚀 Waitress Server on Port {port}...")

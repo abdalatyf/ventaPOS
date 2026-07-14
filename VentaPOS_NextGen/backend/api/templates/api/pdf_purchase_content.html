@@ -1,0 +1,67 @@
+<div class="evl" style="margin-bottom: 30px;">
+    <div class="main">
+        <table class="table table-bordered table-sm mb-0">
+            <tbody>
+                <tr style="{% if invoice.invoice_type == 'RETURN' %}background-color: #fee2e2;{% else %}background-color: #f8f9fa;{% endif %}">
+                    <td colspan="4" class="text-center">
+                        <h3 style="margin: 0; font-weight: bold;">
+                            {{ company_settings.name|default:"اسم المؤسسة" }}
+                        </h3>
+                        <p style="margin: 5px 0 0 0; font-size: 14px;">
+                            {{ company_settings.description|default:"" }}
+                        </p>
+                        <p style="margin: 0; font-size: 14px; direction: ltr;">
+                            {{ company_settings.phone1|default:"" }} {% if company_settings.phone2 %} - {{ company_settings.phone2 }} {% endif %}
+                        </p>
+                    </td>
+                    <td colspan="2" class="text-center align-middle" style="vertical-align: middle;">
+                        <h4 style="margin: 0; font-weight: bold; {% if invoice.invoice_type == 'RETURN' %}color: #dc3545;{% else %}color: #198754;{% endif %}">
+                            {% if invoice.invoice_type == 'RETURN' %}فاتورة مرتجع للمورد{% else %}فاتورة مشتريات{% endif %}
+                        </h4>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="header-cell" style="width: 15%;">رقم الفاتورة:</td>
+                    <td class="text-center number-bold" style="width: 15%;">{{ invoice.invoice_number }}</td>
+                    <td class="header-cell" style="width: 10%;">التاريخ:</td>
+                    <td class="text-center font-weight-bold" dir="ltr" style="width: 25%;">{{ invoice_date }}</td>
+                    <td class="header-cell" style="width: 15%;">اسم المورد:</td>
+                    <td class="text-center font-weight-bold" style="width: 20%;">{{ invoice.supplier.name|default:"غير محدد" }}</td>
+                </tr>
+            </tbody>
+        </table>
+        <table class="table table-bordered table-sm mt-2 mb-0">
+            <thead style="background-color: #e9ecef;">
+                <tr>
+                    <th class="text-center" style="width: 50%;">اسم الصنف</th>
+                    <th class="text-center" style="width: 15%;">الكمية</th>
+                    <th class="text-center" style="width: 15%;">سعر الشراء</th>
+                    <th class="text-center" style="width: 20%;">الإجمالي</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td class="text-start font-weight-bold px-2">{{ item.inventory_item.name|default:"صنف محذوف" }}</td>
+                    <td class="text-center">{{ item.quantity }}</td>
+                    <td class="text-center">{{ item.purchase_price }}</td>
+                    <td class="text-center font-weight-bold">{% widthratio item.quantity 1 item.purchase_price %}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center">لا توجد أصناف</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr style="background-color: #f8f9fa;">
+                    <td colspan="3" class="text-start font-weight-bold px-2" style="font-size: 16px;">إجمالي الفاتورة:</td>
+                    <td class="text-center font-weight-bold number-bold text-danger" style="font-size: 18px;">{{ total_amount }}</td>
+                </tr>
+            </tfoot>
+        </table>
+        <div class="mt-2 text-center small text-muted">
+            {{ company_settings.footer_text|default:"" }}
+        </div>
+    </div>
+</div>

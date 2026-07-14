@@ -12,11 +12,25 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Recovery State
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [recoveryError, setRecoveryError] = useState('');
+  const [recoverySuccess, setRecoverySuccess] = useState('');
+
   useEffect(() => {
     // Check if the system is initialized and get company name
     api.get('/init/').then(res => {
       if (!res.data.initialized) {
-        navigate('/init', { replace: true }); // Force setup if not initialized
+        // Auto-login to Demo mode if not initialized
+        api.post('/auth/demo/').then(demoRes => {
+          localStorage.setItem('token', demoRes.data.token);
+          localStorage.setItem('company_name', demoRes.data.company_name);
+          navigate('/select-branch', { replace: true });
+        }).catch(err => {
+          navigate('/init', { replace: true }); // Fallback
+        });
       } else {
         if (res.data.company_name) {
           setCompanyName(res.data.company_name);
@@ -53,7 +67,31 @@ export default function Login() {
       if (err.response && err.response.data && err.response.data.error) {
         setError(err.response.data.error);
       } else {
-        setError('تعذر الاتصال بالخادم. يرجى المحاولة لاحقاً.');
+        setError('تعذر الاتصال بالخادم. كلمة المرور قد تكون خاطئة.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRecoverySubmit = async (e) => {
+    e.preventDefault();
+    setRecoveryError('');
+    setRecoverySuccess('');
+    setLoading(true);
+
+    try {
+      const response = await api.post('/auth/recover/', { 
+        recovery_code: recoveryCode, 
+        new_password: newPassword 
+      });
+      setRecoverySuccess(response.data.message || 'تم تغيير كلمة المرور بنجاح.');
+      setTimeout(() => setShowRecovery(false), 2000);
+    } catch (err) {
+      if (err.response && err.response.data && err.response.data.error) {
+        setRecoveryError(err.response.data.error);
+      } else {
+        setRecoveryError('تعذر التحقق من كود الاسترداد.');
       }
     } finally {
       setLoading(false);
@@ -82,32 +120,78 @@ export default function Login() {
 
         <div className="card card-md shadow-sm border-0" style={{ borderRadius: '12px' }}>
           <div className="card-body">
-            <h3 className="text-center mb-4 text-primary fw-bold">تسجيل الدخول</h3>
-            
-            {error && (
-              <div className="alert alert-danger" role="alert">
-                {error}
-              </div>
-            )}
+            {!showRecovery ? (
+              <>
+                <h3 className="text-center mb-4 text-primary fw-bold">تسجيل الدخول</h3>
+                
+                {error && (
+                  <div className="alert alert-danger" role="alert">
+                    {error}
+                  </div>
+                )}
 
-            <form onSubmit={handleSubmit}>
-              <div className="mb-4">
-                <label className="form-label fw-bold text-muted">كلمة المرور</label>
-                <input 
-                  type="password" 
-                  className="form-control form-control-lg" 
-                  placeholder="أدخل كلمة سر النظام" 
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required 
-                />
-              </div>
-              <div className="form-footer mt-4">
-                <button type="submit" className="btn btn-primary w-100 btn-lg fw-bold" disabled={loading}>
-                  {loading ? 'جاري الدخول...' : 'تسجيل الدخول'}
-                </button>
-              </div>
-            </form>
+                <form onSubmit={handleSubmit}>
+                  <div className="mb-4">
+                    <label className="form-label fw-bold text-muted">كلمة المرور</label>
+                    <input 
+                      type="password" 
+                      className="form-control form-control-lg" 
+                      placeholder="أدخل كلمة سر النظام" 
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required 
+                    />
+                  </div>
+                  <div className="form-footer mt-4">
+                    <button type="submit" className="btn btn-primary w-100 btn-lg fw-bold" disabled={loading}>
+                      {loading ? 'جاري الدخول...' : 'تسجيل الدخول'}
+                    </button>
+                  </div>
+                </form>
+                <div className="text-center text-muted mt-3">
+                  <a href="#" onClick={(e) => { e.preventDefault(); setShowRecovery(true); }}>نسيت كلمة المرور؟</a>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-center mb-4 text-warning fw-bold">استعادة كلمة المرور</h3>
+                
+                {recoveryError && <div className="alert alert-danger" role="alert">{recoveryError}</div>}
+                {recoverySuccess && <div className="alert alert-success" role="alert">{recoverySuccess}</div>}
+
+                <form onSubmit={handleRecoverySubmit}>
+                  <div className="mb-3">
+                    <label className="form-label fw-bold text-muted">كود الاسترداد (Recovery Code)</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="مثال: VNTA-ABCD-1234" 
+                      value={recoveryCode}
+                      onChange={(e) => setRecoveryCode(e.target.value)}
+                      required 
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <label className="form-label fw-bold text-muted">كلمة المرور الجديدة</label>
+                    <input 
+                      type="password" 
+                      className="form-control" 
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required 
+                    />
+                  </div>
+                  <div className="form-footer mt-4 d-flex gap-2">
+                    <button type="button" className="btn btn-light flex-grow-1" onClick={() => setShowRecovery(false)}>
+                      إلغاء
+                    </button>
+                    <button type="submit" className="btn btn-warning flex-grow-1 fw-bold" disabled={loading}>
+                      {loading ? 'جاري...' : 'تغيير كلمة المرور'}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
           </div>
         </div>
       </div>

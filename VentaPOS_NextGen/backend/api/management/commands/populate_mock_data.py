@@ -1,11 +1,9 @@
 import random
 import traceback
-import uuid
 import sys
 
 if sys.stdout.encoding.lower() != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8')
-import uuid
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
@@ -318,7 +316,6 @@ class Command(BaseCommand):
                     
                     receipt = Receipt.objects.create(
                         tenant=tenant,
-                        client_uuid=uuid.uuid4(),
                         receipt_hash=f"hash_{tenant.id}_{receipt_local_id}_{random.randint(1000, 9999)}",
                         local_id=receipt_local_id,
                         receipt_number=receipt_local_id,

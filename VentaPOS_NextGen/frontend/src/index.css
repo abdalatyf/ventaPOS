@@ -6,6 +6,10 @@
   /* Override tabler primary color if needed */
   --tblr-primary: #0f52ba;
   --tblr-font-sans-serif: 'Cairo', sans-serif;
+  
+  /* Table Scroll UX Architecture */
+  --navbar-height: 64px; 
+  --toolbar-height: 46px; 
 }
 
 body {
@@ -33,18 +37,43 @@ body {
   background-color: #f8fafc;
 }
 
+/* 1. Global Page Wrapper */
+.native-page-scroll {
+  height: auto !important;
+  min-height: 100vh;
+  overflow: visible !important;
+}
+
+/* 2. Sticky Toolbar (The row above the table) */
+.sticky-toolbar {
+  position: sticky;
+  top: var(--navbar-height);
+  z-index: 1020;
+  background-color: #f8f9fa;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+/* 3. Sticky Table Header */
+.table-sticky-header th {
+  position: sticky !important;
+  top: calc(var(--navbar-height) + var(--toolbar-height)) !important;
+  z-index: 1010;
+  background-color: #f8f9fa !important;
+  box-shadow: inset 0 -1px 0 var(--tblr-border-color);
+}
+
 
 /* Ensure full height layout for Flexbox */
 html, body, #root {
   height: 100%;
   margin: 0;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .page {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100vh;
 }
 
 .page-wrapper {
@@ -52,4 +81,52 @@ html, body, #root {
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+/* Premium KPI Cards */
+.premium-card {
+  background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(245,247,250,0.95) 100%);
+  border: 1px solid rgba(255,255,255,0.4);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.premium-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(15, 82, 186, 0.15);
+}
+
+.premium-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--tblr-primary) 0%, #3b82f6 100%);
+  color: white;
+  box-shadow: 0 4px 10px rgba(15, 82, 186, 0.3);
+}
+
+/* Tab Navigation inside Page Header */
+.dashboard-tabs .nav-link {
+  font-weight: 600;
+  color: #475569;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 16px;
+  transition: all 0.2s;
+}
+
+.dashboard-tabs .nav-link:hover {
+  border-bottom-color: #cbd5e1;
+  color: #1e293b;
+}
+
+.dashboard-tabs .nav-link.active {
+  color: var(--tblr-primary);
+  border-bottom: 2px solid var(--tblr-primary);
+  background: transparent;
 }

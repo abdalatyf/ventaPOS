@@ -68,7 +68,7 @@ class TenantSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class CloudUserSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = CloudUser
@@ -87,7 +87,7 @@ class CloudUserSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class BranchSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = Branch
@@ -103,7 +103,7 @@ class BranchSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class SalespersonSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = Salesperson
@@ -130,7 +130,7 @@ class InventoryItemSerializer(serializers.ModelSerializer):
       created_at_local       → stored in created_at_local
     """
 
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
     current_stock = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -154,7 +154,7 @@ class InventoryItemSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class CommissionHistorySerializer(serializers.ModelSerializer):
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = CommissionHistory
@@ -170,7 +170,7 @@ class CommissionHistorySerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class InventoryAdjustmentSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = InventoryAdjustment
@@ -181,13 +181,37 @@ class InventoryAdjustmentSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "tenant_id", "is_deleted", "created_at"]
 
+    def validate(self, data):
+        if data.get("adjustment_type") == "DEFICIT":
+            from api.views import get_default_date_for_tenant
+            from rest_framework.exceptions import ValidationError
+            tenant = self.context["tenant"]
+            default_year, default_month = get_default_date_for_tenant(tenant)
+            
+            target_year = data.get("adjustment_year", self.instance.adjustment_year if self.instance else None)
+            target_month = data.get("adjustment_month", self.instance.adjustment_month if self.instance else None)
+            item = data.get("inventory_item", self.instance.inventory_item if self.instance else None)
+            qty = data.get("quantity", self.instance.quantity if self.instance else None)
+            
+            if item and target_month and target_year and qty:
+                safe_limit = item.get_safe_available_qty(target_month, target_year, default_month, default_year)
+                
+                if self.instance and not self.instance.is_deleted:
+                    safe_limit += self.instance.quantity
+                    
+                if qty > safe_limit:
+                    raise ValidationError({
+                        "error": f"عفواً، أقصى كمية يمكن تسويتها بالنقصان للصنف '{item.name}' في هذا التاريخ هي ({safe_limit})."
+                    })
+        return data
+
 
 # ---------------------------------------------------------------------------
 # 8. Supplier
 # ---------------------------------------------------------------------------
 
 class SupplierSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = Supplier
@@ -200,7 +224,7 @@ class SupplierSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class PurchaseInvoiceItemSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = PurchaseInvoiceItem
@@ -212,8 +236,9 @@ class PurchaseInvoiceItemSerializer(serializers.ModelSerializer):
 
 
 class PurchaseInvoiceSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
     items = PurchaseInvoiceItemSerializer(many=True, required=False)
+    invoice_number = serializers.IntegerField(required=False)
 
     class Meta:
         model = PurchaseInvoice
@@ -227,6 +252,34 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         items_data = validated_data.pop("items", [])
         tenant = self.context["tenant"]
+        branch = validated_data.get("branch")
+        
+        # Stock validation for RETURNS
+        if validated_data.get("invoice_type") == "RETURN":
+            from api.views import get_default_date_for_tenant
+            from rest_framework.exceptions import ValidationError
+            default_year, default_month = get_default_date_for_tenant(tenant)
+            target_year = validated_data["invoice_year"]
+            target_month = validated_data["invoice_month"]
+            
+            for item_data in items_data:
+                item = item_data["inventory_item"]
+                qty = item_data["quantity"]
+                safe_limit = item.get_safe_available_qty(target_month, target_year, default_month, default_year)
+                if qty > safe_limit:
+                    raise ValidationError({
+                        "error": f"عفواً، لا يمكن الإرجاع! أقصى كمية يمكن إرجاعها للمورد للصنف '{item.name}' هي ({safe_limit})."
+                    })
+
+        # Auto-generate invoice_number sequentially per branch if not provided
+        if "invoice_number" not in validated_data:
+            from django.db.models import Max
+            last_invoice = PurchaseInvoice.objects.filter(
+                tenant=tenant, branch=branch
+            ).aggregate(Max("invoice_number"))
+            last_num = last_invoice.get("invoice_number__max") or 0
+            validated_data["invoice_number"] = last_num + 1
+
         with transaction.atomic():
             invoice = PurchaseInvoice.objects.create(tenant=tenant, **validated_data)
             for item_data in items_data:
@@ -243,7 +296,7 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class SaleItemSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
     product_name = serializers.CharField(source="inventory_item.name", read_only=True)
 
     class Meta:
@@ -267,7 +320,7 @@ class SaleItemSerializer(serializers.ModelSerializer):
 
 
 class InstallmentPaymentSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
     # Virtual write-only fields for POS frontend convenience
     payment_month = serializers.IntegerField(write_only=True, required=False)
     payment_year = serializers.IntegerField(write_only=True, required=False)
@@ -305,7 +358,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
       created_at_local ← stored as `created_at_local` (device time)
     """
 
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
     # Nested writable collections
     sale_items = SaleItemSerializer(many=True, required=False)
     installment_payments = InstallmentPaymentSerializer(many=True, required=False)
@@ -314,7 +367,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
         model = Receipt
         fields = [
             "id", "tenant_id", "branch", "salesperson",
-            "local_id", "receipt_number", "client_uuid", "receipt_hash",
+            "local_id", "receipt_number", "receipt_hash",
             "customer_name", "phone_number", "address", "area",
             "total_amount", "down_payment", "installment_system",
             "sale_year", "sale_month", "is_cash_sale", "products_text",
@@ -329,7 +382,6 @@ class ReceiptSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "local_id": {"required": False},
             "receipt_number": {"required": False},
-            "client_uuid": {"required": False},
             "created_at_local": {"required": False},
             "products_text": {"required": False},
             "address": {"required": False, "allow_blank": True},
@@ -420,20 +472,15 @@ class ReceiptSerializer(serializers.ModelSerializer):
                 from django.utils import timezone
                 validated_data["created_at_local"] = timezone.now()
                 
-            # Auto-assign client_uuid if not provided
-            if "client_uuid" not in validated_data:
-                import uuid
-                validated_data["client_uuid"] = uuid.uuid4()
-
             # Stock validation
-            from api.views import get_default_date_for_tenant, calculate_safe_stock_limit
+            from api.views import get_default_date_for_tenant
             default_year, default_month = get_default_date_for_tenant(tenant)
             target_year = validated_data["sale_year"]
             target_month = validated_data["sale_month"]
             for item_data in items_data:
                 item = item_data["inventory_item"]
                 qty = item_data["quantity"]
-                safe_limit = calculate_safe_stock_limit(item, default_year, default_month, target_year, target_month)
+                safe_limit = item.get_safe_available_qty(target_month, target_year, default_month, default_year)
                 if qty > safe_limit:
                     raise ValidationError({
                         "error": f"عفواً، لا يمكن البيع! أقصى كمية يمكن بيعها بأثر رجعي للصنف '{item.name}' هي ({safe_limit}) لتجنب حدوث رصيد سالب في الشهور اللاحقة."
@@ -526,15 +573,16 @@ class ReceiptSerializer(serializers.ModelSerializer):
                 instance.sale_items.all().update(is_deleted=True)
 
                 # Stock validation
-                from api.views import get_default_date_for_tenant, calculate_safe_stock_limit
+                from api.views import get_default_date_for_tenant
                 default_year, default_month = get_default_date_for_tenant(tenant)
-                target_year = instance.sale_year
-                target_month = instance.sale_month
-                
+                target_year = validated_data.get("sale_year", instance.sale_year)
+                target_month = validated_data.get("sale_month", instance.sale_month)
+
                 for item_data in items_data:
                     item = item_data["inventory_item"]
                     qty = item_data["quantity"]
-                    safe_limit = calculate_safe_stock_limit(item, default_year, default_month, target_year, target_month)
+
+                    safe_limit = item.get_safe_available_qty(target_month, target_year, default_month, default_year)
                     if qty > safe_limit:
                         raise ValidationError({
                             "error": f"عفواً، أقصى كمية يمكن بيعها أو تعديلها للصنف '{item.name}' في هذا التاريخ هي ({safe_limit})."
@@ -588,7 +636,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class ExpenseSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = Expense
@@ -605,7 +653,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class CompanySettingSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = CompanySetting
@@ -622,7 +670,7 @@ class CompanySettingSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class ClientLicenseSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = ClientLicense
@@ -647,7 +695,7 @@ class ClientLicenseSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class UsedLicenseSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = UsedLicense
@@ -660,7 +708,7 @@ class UsedLicenseSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class LicenseHistorySerializer(serializers.ModelSerializer):
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = LicenseHistory
@@ -677,7 +725,7 @@ class LicenseHistorySerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class PendingExternalReceiptSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.UUIDField(source="tenant.id", read_only=True)
+    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = PendingExternalReceipt

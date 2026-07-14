@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import api from '../api';
 import {
   IconSearch, IconRefresh, IconPlus, IconEye, IconReceipt, IconPrinter, IconFilter,
@@ -77,7 +77,9 @@ const ReceiptRow = React.memo(({
 });
 
 export default function SearchReceipts() {
+  const { setTableRef } = useSmartScroll();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const toArabic = (str) => {
     if (str === null || str === undefined) return '';
@@ -106,10 +108,24 @@ export default function SearchReceipts() {
   const currentYear = new Date().getFullYear();
   const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
+  const searchParams = new URLSearchParams(location.search);
+  
+  let saleTypeInitial = searchParams.get('sale_type') || 'ALL';
+  if (searchParams.get('is_cash_sale') === 'true') saleTypeInitial = 'CASH';
+  else if (searchParams.get('is_cash_sale') === 'false') saleTypeInitial = 'INSTALLMENT';
+
   const initialFilters = {
-    receipt_number: '', salesperson_id: '', customer_name: '', phone: '',
-    address: '', area: '', month: '', year: '',
-    sale_type: 'ALL', receipt_from: '', receipt_to: ''
+    receipt_number: searchParams.get('receipt_number') || '', 
+    salesperson_id: searchParams.get('salesperson_id') || '', 
+    customer_name: searchParams.get('customer_name') || '', 
+    phone: searchParams.get('phone') || '',
+    address: searchParams.get('address') || '', 
+    area: searchParams.get('area') || '', 
+    month: searchParams.get('month') || '', 
+    year: searchParams.get('year') || '',
+    sale_type: saleTypeInitial, 
+    receipt_from: searchParams.get('receipt_from') || '', 
+    receipt_to: searchParams.get('receipt_to') || ''
   };
 
   const [filters, setFilters] = useState(initialFilters);

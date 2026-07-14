@@ -10,8 +10,8 @@ class LicenseEnforcementMiddleware:
 
     def __call__(self, request):
         from django.conf import settings
-        if getattr(settings, 'DEBUG', False):
-            return self.get_response(request)
+        # if getattr(settings, 'DEBUG', False):
+        #     return self.get_response(request)
             
         if request.path.startswith('/admin/') or request.path.startswith('/static/'):
             return self.get_response(request)
@@ -58,11 +58,17 @@ class LicenseEnforcementMiddleware:
                 
                 total_invoices_balance += lic.invoices_balance
 
-            if not valid_time_license or (valid_time_license.expiry_date and today > valid_time_license.expiry_date):
-                if request.path.startswith('/api/'):
-                    return JsonResponse({"error": "license_expired", "message": "Application license has expired. Please activate."}, status=403)
+            if not valid_time_license:
+                # No licenses exist AT ALL -> We are in DEMO MODE.
+                # Allow everything (the startup script will wipe the DB on next restart).
+                pass
+            elif valid_time_license.expiry_date and today > valid_time_license.expiry_date:
+                # License exists but EXPIRED -> READ-ONLY MODE.
+                if request.method in ['POST', 'PUT', 'DELETE', 'PATCH']:
+                    if request.path.startswith('/api/'):
+                        return JsonResponse({"error": "license_expired", "message": "انتهى الاشتراك. التطبيق الآن في وضع القراءة فقط."}, status=402)
             
-            if is_saving_receipt and total_invoices_balance <= 0:
+            if is_saving_receipt and total_invoices_balance <= 0 and valid_time_license:
                 return JsonResponse({"error": "license_expired", "message": "Invoice balance exhausted. Please add invoice balance."}, status=403)
 
             cache.set(cache_key, 'valid', 300) # 5 minutes cache

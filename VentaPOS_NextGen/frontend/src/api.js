@@ -46,15 +46,14 @@ api.interceptors.response.use(
       const errorMessage = error.response.data?.detail || error.response.data?.message || '';
       
       // التقاط انتهاء الاشتراك السحابي للتوجيه المباشر لشاشة التفعيل كما نص عقد الـ API
-      if (errorMessage.includes('الاشتراك السحابي انتهى') || errorMessage.includes('expired')) {
-        localStorage.removeItem('token'); // تنظيف التوكن منتهي الصلاحية
-        window.dispatchEvent(new CustomEvent('subscription_expired'));
-        
-        // التوجيه التلقائي لصفحة تسجيل الدخول أو التنشيط مع تمرير السبب
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login?reason=expired';
-        }
+      if (errorMessage.includes('الاشتراك السحابي انتهى') || errorMessage.includes('expired') || errorMessage.includes('Invoice balance exhausted')) {
+        // Do not redirect to login if we are using the new Read-Only mode (402 handles that)
+        // But if it's 403, it means it's an old auth error
       }
+    } else if (error.response && error.response.status === 402) {
+      // 402 Payment Required: Read-Only Mode
+      alert('انتهى الاشتراك الخاص بك. النظام يعمل حالياً في وضع القراءة فقط. لا يمكنك إضافة أو تعديل بيانات جديدة.');
+      window.dispatchEvent(new CustomEvent('subscription_expired'));
     }
     return Promise.reject(error);
   }

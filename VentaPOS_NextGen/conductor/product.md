@@ -30,4 +30,4 @@ Through our `/grill-me` alignment, the following core business logic rules have 
 4. **Date Formats (التعامل الشهري):** All operations and logic revolve around monthly accounting. To enforce this, dates globally in the UI should be displayed exclusively as month and year `MM/YYYY` (e.g., `07/2026`). Exact days should be hidden from UI components unless explicitly needed.
 
 5. **Profit and Loss Report (??????? ????????):** The report uses a unified table displaying Cash and Installment sales. Sales Commission (?????) and Collection Commission (????? ?????) are separated. The table default sorts by Item Number (\local_id\). Sorting dual-value columns defaults to sorting by the Total value.
-
+6. **Tools Dashboard (الأدوات):** A unified tools dashboard provides Offline Sync (USB/JSON data transfer), Online Sync (Pending Receipts Approval), Smart Import (Excel upload), Backup & Restore (with pre-restore integrity checks), and System Logs. The UI enforces license permissions by disabling online tools for offline-only subscriptions while keeping offline tools functional.

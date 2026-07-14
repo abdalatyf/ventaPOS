@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IconKey, IconCheck, IconX } from '@tabler/icons-react';
 import api from '../api';
 
@@ -6,6 +6,15 @@ const ActivationModal = ({ isOpen, onClose }) => {
   const [code, setCode] = useState('');
   const [status, setStatus] = useState('idle'); // idle, loading, success, error
   const [errorMessage, setErrorMessage] = useState('');
+  const [machineId, setMachineId] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      api.get('/api/v1/license/status/').then(res => {
+        if (res.data.machine_id) setMachineId(res.data.machine_id);
+      }).catch(console.error);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -55,6 +64,11 @@ const ActivationModal = ({ isOpen, onClose }) => {
             <div className="text-center mb-4">
               <h3 className="fw-medium mb-2">دخل كود التفعيل</h3>
               <p className="text-muted">انتهت النسخة التجريبية، يرجى إدخال كود التفعيل للاستمرار في استخدام VentaPOS.</p>
+              
+              <div className="bg-light p-3 rounded-3 mt-3 border border-secondary-subtle">
+                <div className="text-muted small fw-bold mb-1">رقم بصمة الجهاز (أرسل هذا الرقم للإدارة):</div>
+                <div className="fs-3 fw-bold font-monospace text-primary">{machineId || 'جاري التحميل...'}</div>
+              </div>
             </div>
 
             <form onSubmit={handleActivate}>

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 
@@ -8,10 +8,13 @@ import Dashboard from './pages/Dashboard';
 import POS from './pages/POS';
 import Setup from './pages/Setup';
 import AppShell from './components/AppShell';
+import ActivationModal from './components/ActivationModal';
+import DemoBanner from './components/DemoBanner';
 
 import SystemInit from './pages/SystemInit';
 import BranchSelection from './pages/BranchSelection';
-import Purchases from './pages/Purchases';
+import PurchaseEntry from './pages/PurchaseEntry';
+import SearchPurchases from './pages/SearchPurchases';
 import Expenses from './pages/Expenses';
 import SearchReceipts from './pages/SearchReceipts';
 
@@ -21,6 +24,13 @@ import SalespersonPerformanceReport from './pages/reports/SalespersonPerformance
 import InventoryMovementReport from './pages/reports/InventoryMovementReport';
 import ProfitAndLossReport from './pages/reports/ProfitAndLossReport';
 import CashDrawerReport from './pages/reports/CashDrawerReport';
+import ReportsIndex from './pages/reports/ReportsIndex';
+import InstallmentsReport from './pages/reports/InstallmentsReport';
+import ToolsDashboard from './pages/tools/ToolsDashboard';
+import ReportsLayout from './pages/reports/ReportsLayout';
+import ReceiptsReport from './pages/reports/ReceiptsReport';
+import ExpensesReport from './pages/reports/ExpensesReport';
+import SettingsIndex from './pages/settings/SettingsIndex';
 
 // مكون حماية المسارات (Gatekeeper)
 const ProtectedRoute = ({ children }) => {
@@ -57,9 +67,11 @@ const PlaceholderPage = ({ title }) => (
 );
 
 function App() {
+  const [showActivationModal, setShowActivationModal] = useState(false);
+
   useEffect(() => {
     const handleSubscriptionExpired = () => {
-      alert('تنبيه الدفتر: انتهت صلاحية الاشتراك السحابي للشركة. يرجى تفعيل الرخصة.');
+      setShowActivationModal(true);
     };
     
     window.addEventListener('subscription_expired', handleSubscriptionExpired);
@@ -67,8 +79,11 @@ function App() {
   }, []);
 
   return (
-    <Router>
-      <Routes>
+    <>
+      <ActivationModal isOpen={showActivationModal} onClose={() => setShowActivationModal(false)} />
+      <Router>
+        <DemoBanner />
+        <Routes>
         {/* المسارات العامة خارج الـ Shell */}
         <Route path="/init" element={<SystemInit />} />
         <Route path="/login" element={<Login />} />
@@ -93,29 +108,32 @@ function App() {
           {/* مسارات المخزون */}
           <Route path="inventory" element={<PlaceholderPage title="الأصناف" />} />
           <Route path="product-ledger/:id" element={<PlaceholderPage title="حركة صنف" />} />
-          <Route path="purchases" element={<Purchases />} />
+          <Route path="search-purchases" element={<SearchPurchases />} />
+          <Route path="purchases/new" element={<PurchaseEntry />} />
+          <Route path="purchases/edit/:id" element={<PurchaseEntry />} />
           <Route path="expenses" element={<Expenses />} />
           
           {/* مسارات التقارير */}
-          <Route path="reports/sales" element={<PlaceholderPage title="الجرد والمبيعات" />} />
-          <Route path="collections" element={<PlaceholderPage title="التحصيلات" />} />
-          
-          <Route path="reports/dashboard" element={<DashboardReport />} />
-          <Route path="reports/salesperson" element={<SalespersonPerformanceReport />} />
-          <Route path="reports/inventory" element={<InventoryMovementReport />} />
-          <Route path="reports/profit-and-loss" element={<ProfitAndLossReport />} />
-          <Route path="reports/cash-drawer" element={<CashDrawerReport />} />
+          <Route path="reports" element={<ReportsLayout />}>
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardReport />} />
+            <Route path="receipts" element={<ReceiptsReport />} />
+            <Route path="expenses" element={<ExpensesReport />} />
+            <Route path="salesperson" element={<SalespersonPerformanceReport />} />
+            <Route path="inventory" element={<InventoryMovementReport />} />
+            <Route path="profit-and-loss" element={<ProfitAndLossReport />} />
+            <Route path="installments" element={<InstallmentsReport />} />
+          </Route>
           
           {/* مسارات الأدوات */}
-          <Route path="tools/cloud" element={<PlaceholderPage title="الربط أونلاين" />} />
-          <Route path="tools/backup" element={<PlaceholderPage title="النسخ الاحتياطي" />} />
+          <Route path="tools/*" element={<ToolsDashboard />} />
           
-          {/* مسارات الإعدادات الأخرى */}
-          <Route path="settings/company" element={<PlaceholderPage title="بيانات الشركة" />} />
-          <Route path="settings/license" element={<PlaceholderPage title="الاشتراك" />} />
+          {/* مسارات الإعدادات */}
+          <Route path="settings" element={<SettingsIndex />} />
         </Route>
       </Routes>
     </Router>
+    </>
   );
 }
 

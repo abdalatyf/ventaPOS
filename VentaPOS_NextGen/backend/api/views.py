@@ -48,7 +48,6 @@ Endpoints implemented:
 """
 
 import hashlib
-import uuid
 from datetime import date, timedelta
 
 from django.db import transaction, IntegrityError
@@ -292,6 +291,44 @@ class CustomAuthToken(ObtainAuthToken):
             'is_cloud': False
         })
 
+class DemoAuthToken(views.APIView):
+    permission_classes = []
+    
+    def post(self, request, *args, **kwargs):
+        from api.models import ClientLicense
+        if ClientLicense.objects.filter(is_active=True).exists():
+            return Response({"error": "النظام مفعل مسبقاً، الرجاء تسجيل الدخول العادي."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        user, _ = User.objects.get_or_create(username='demo', defaults={'is_superuser': False})
+        token, _ = Token.objects.get_or_create(user=user)
+        return Response({
+            'token': token.key,
+            'user_id': user.pk,
+            'company_name': 'شركة تجريبية (Demo)',
+            'is_cloud': False
+        })
+
+class PasswordRecoveryView(views.APIView):
+    permission_classes = []
+    
+    def post(self, request):
+        recovery_code = request.data.get('recovery_code')
+        new_password = request.data.get('new_password')
+        if not recovery_code or not new_password:
+            return Response({"error": "الرجاء إدخال كود الاسترداد وكلمة المرور الجديدة"}, status=400)
+            
+        from django.contrib.auth.hashers import check_password
+        admin_user = User.objects.filter(is_superuser=True).first()
+        if not admin_user or not admin_user.last_name:
+            return Response({"error": "لا يوجد كود استرداد مسجل في النظام."}, status=400)
+            
+        if check_password(recovery_code, admin_user.last_name):
+            admin_user.set_password(new_password)
+            admin_user.save()
+            return Response({"message": "تم تغيير كلمة المرور بنجاح."})
+        else:
+            return Response({"error": "كود الاسترداد غير صحيح."}, status=400)
+
 class SystemInitializationView(views.APIView):
     """
     Handles the first-time setup of the system.
@@ -314,16 +351,35 @@ class SystemInitializationView(views.APIView):
         company_name = request.data.get('company_name')
         branch_name = request.data.get('branch_name')
         password = request.data.get('password')
+        license_code = request.data.get('license_code')
         phone1 = request.data.get('phone1', '')
         phone2 = request.data.get('phone2', '')
         
-        if not all([company_name, branch_name, password]):
-            return Response({"error": "الرجاء إدخال جميع البيانات الإلزامية"}, status=status.HTTP_400_BAD_REQUEST)
+        if not all([company_name, branch_name, password, license_code]):
+            return Response({"error": "الرجاء إدخال جميع البيانات الإلزامية بما فيها كود التفعيل"}, status=status.HTTP_400_BAD_REQUEST)
             
+        from .utils.license_validator import LicenseValidator
+        from .utils.security_utils import get_machine_id
+        
+        machine_id = get_machine_id()
+        validation_result = LicenseValidator.validate(license_code, machine_id)
+        
+        if not validation_result.get("valid"):
+            return Response({"error": validation_result.get("error", "كود تفعيل غير صالح")}, status=status.HTTP_400_BAD_REQUEST)
+            
+        import random
+        import string
+        from django.contrib.auth.hashers import make_password
+        
+        recovery_code = f"VNTA-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
+        
         with transaction.atomic():
             # Create master user
             User.objects.filter(is_superuser=True).delete() # clean up any partial state
             user = User.objects.create_superuser('admin', 'admin@ventapos.local', password)
+            # Store hashed recovery code in last_name to avoid migrations
+            user.last_name = make_password(recovery_code)
+            user.save()
             
             # Create Tenant
             tenant = Tenant.objects.filter(is_deleted=False).first()
@@ -347,7 +403,36 @@ class SystemInitializationView(views.APIView):
                     local_id=1
                 )
                 
-        return Response({"message": "تم تهيئة النظام بنجاح"}, status=status.HTTP_201_CREATED)
+            # Save the license
+            from .models import ClientLicense
+            from .utils.security_utils import generate_record_signature
+            ClientLicense.objects.all().update(is_active=False) # deactivate old
+            
+            new_license = ClientLicense(
+                tenant=tenant,
+                license_code=license_code,
+                product_id=validation_result.get("product_id", 1),
+                invoices_balance=999999,  # Default infinite balance for new offline setups
+                is_active=True
+            )
+            
+            # Calculate expiry date from start month/year (add 1 year)
+            import datetime
+            from dateutil.relativedelta import relativedelta
+            start_date = datetime.date(validation_result["start_year"], validation_result["start_month"], 1)
+            new_license.expiry_date = start_date + relativedelta(years=1)
+            
+            # Sign it securely
+            new_license.license_code_hash = generate_record_signature(
+                new_license.expiry_date, 
+                new_license.invoices_balance, 
+                machine_id, 
+                new_license.product_id, 
+                True
+            )
+            new_license.save()
+                
+        return Response({"message": "تم تهيئة النظام بنجاح", "recovery_code": recovery_code}, status=status.HTTP_201_CREATED)
 
 # ===========================================================================
 # Standard ViewSets
@@ -388,10 +473,9 @@ class InventoryItemViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
         qs = super().get_queryset()
         branch_id_param = self.request.query_params.get("branch_id")
         if branch_id_param:
-            import uuid
             try:
                 # If it's a UUID (NextGen React frontend)
-                uuid_val = uuid.UUID(branch_id_param)
+                uuid_val = int(branch_id_param)
                 qs = qs.filter(branch__id=uuid_val)
             except ValueError:
                 # If it's an integer (Legacy Sync script)
@@ -414,64 +498,44 @@ class InventoryItemViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Build month-by-month change map
-        changes = {}
-        changes[(item.initial_year, item.initial_month)] = item.initial_quantity
-
-        for sale in SaleItem.objects.filter(inventory_item=item, is_deleted=False).select_related("receipt"):
-            key = (sale.receipt.sale_year, sale.receipt.sale_month)
-            changes[key] = changes.get(key, 0) - sale.quantity
-
-        for purchase in PurchaseInvoiceItem.objects.filter(
-            inventory_item=item, is_deleted=False
-        ).select_related("purchase_invoice"):
-            key = (
-                purchase.purchase_invoice.invoice_year,
-                purchase.purchase_invoice.invoice_month,
-            )
-            if purchase.purchase_invoice.invoice_type == "RETURN":
-                changes[key] = changes.get(key, 0) - purchase.quantity
-            else:
-                changes[key] = changes.get(key, 0) + purchase.quantity
-
-        for adj in InventoryAdjustment.objects.filter(inventory_item=item, is_deleted=False):
-            key = (adj.adjustment_year, adj.adjustment_month)
-            if adj.adjustment_type == "SURPLUS":
-                changes[key] = changes.get(key, 0) + adj.quantity
-            else:
-                changes[key] = changes.get(key, 0) - adj.quantity
-
-        if not changes:
-            return Response({"safe_available_qty": 0})
-
-        min_key = min(changes.keys())
-        max_key = max(max(changes.keys()), (req_year, req_month))
-
-        cy, cm = min_key
-        ey, em = max_key
-
-        running = 0
-        balances = {}
-        while (cy, cm) <= (ey, em):
-            key = (cy, cm)
-            running += changes.get(key, 0)
-            balances[key] = running
-            cm += 1
-            if cm > 12:
-                cm = 1
-                cy += 1
-
-        future = [
-            b for k, b in balances.items()
-            if k[0] > req_year or (k[0] == req_year and k[1] >= req_month)
-        ]
-        safe_qty = min(future) if future else running
+        default_year, default_month = get_default_date_for_tenant(item.tenant)
+        safe_qty = item.get_safe_available_qty(req_month, req_year, default_month, default_year)
 
         return Response({"safe_available_qty": safe_qty})
 
     @action(detail=True, methods=["get"], url_path="get_safe_available_qty")
     def get_safe_available_qty(self, request, pk=None):
         return self.safe_available_qty(request, pk)
+
+    @action(detail=False, methods=["get"], url_path="pos_search")
+    def pos_search(self, request):
+        term = request.query_params.get("term", "").strip()
+        if not term:
+            return Response([])
+
+        try:
+            req_month = int(request.query_params.get("month", timezone.now().month))
+            req_year = int(request.query_params.get("year", timezone.now().year))
+        except ValueError:
+            return Response(
+                {"error": "قيم الشهر أو السنة غير صحيحة، يرجى إدخال أرقام صحيحة."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        qs = self.get_queryset().filter(name__icontains=term)[:20]
+        tenant = self._get_tenant()
+        default_year, default_month = get_default_date_for_tenant(tenant)
+        
+        results = []
+        for item in qs:
+            safe_stock = item.get_safe_available_qty(req_month, req_year, default_month, default_year)
+            results.append({
+                "id": item.id,
+                "name": item.name,
+                "max": safe_stock,
+            })
+            
+        return Response(results)
 
     # ------------------------------------------------------------------
     # Custom action: full stock ledger with monthly summary
@@ -650,11 +714,120 @@ class SupplierViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
     serializer_class = SupplierSerializer
 
 
+class PurchaseInvoicePagination(PageNumberPagination):
+    page_size = 200
+    page_size_query_param = "page_size"
+    max_page_size = 1000
+
+    def get_paginated_response(self, data):
+        from django.db.models import Sum, F
+        # Calculate total cost by multiplying quantity by purchase_price for all items in these invoices
+        total_purchases = PurchaseInvoiceItem.objects.filter(
+            purchase_invoice__in=self.page.paginator.object_list
+        ).aggregate(
+            total=Sum(F('quantity') * F('purchase_price'))
+        )["total"] or 0
+        all_ids = list(self.page.paginator.object_list.values_list('id', flat=True))
+        return Response({
+            "count": self.page.paginator.count,
+            "next": self.get_next_link(),
+            "previous": self.get_previous_link(),
+            "aggregate": {"total_purchases": total_purchases},
+            "all_ids": all_ids,
+            "results": data
+        })
+
 class PurchaseInvoiceViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
     queryset = PurchaseInvoice.objects.select_related(
         "tenant", "branch", "supplier"
     ).prefetch_related("items").all()
     serializer_class = PurchaseInvoiceSerializer
+    pagination_class = PurchaseInvoicePagination
+
+    def get_queryset(self):
+        qs = super().get_queryset().order_by("-created_at")
+        supplier_id = self.request.query_params.get("supplier")
+        invoice_number = self.request.query_params.get("invoice_number")
+        month = self.request.query_params.get("month")
+        year = self.request.query_params.get("year")
+        invoice_type = self.request.query_params.get("invoice_type")
+
+        if supplier_id:
+            qs = qs.filter(supplier_id=supplier_id)
+        if invoice_number:
+            qs = qs.filter(invoice_number=invoice_number)
+        if month:
+            qs = qs.filter(invoice_month=month)
+        if year:
+            qs = qs.filter(invoice_year=year)
+        if invoice_type and invoice_type != "ALL":
+            qs = qs.filter(invoice_type=invoice_type)
+        return qs
+
+    def _prepare_pdf_context(self, invoice):
+        from api.models import CompanySetting
+        from api.utils.format_utils import to_arabic_numerals, ed2ad
+        
+        company_settings = CompanySetting.objects.filter(tenant=self._get_tenant()).first()
+        items = list(invoice.items.all())
+        
+        total_amount = sum((item.quantity * item.purchase_price) for item in items)
+        
+        context = {
+            "invoice": invoice,
+            "company_settings": company_settings,
+            "items": items,
+            "total_amount": ed2ad(str(int(total_amount))),
+            "invoice_date": invoice.created_at.strftime("%Y-%m-%d %I:%M %p") if invoice.created_at else f"{invoice.invoice_year}-{invoice.invoice_month:02d}",
+        }
+        return context
+
+    @action(detail=False, methods=["post"])
+    def desktop_print(self, request):
+        invoice_ids = request.data.get("invoice_ids", [])
+        action_type = request.data.get("action", "print") # 'print' or 'view'
+        target_printer = request.data.get("target_printer", None)
+        
+        if not isinstance(invoice_ids, list) or not invoice_ids:
+            return Response({"error": "invoice_ids must be a non-empty list"}, status=status.HTTP_400_BAD_REQUEST)
+
+        invoices = self.get_queryset().filter(id__in=invoice_ids)
+        if not invoices.exists():
+            return Response({"error": "No valid invoices found"}, status=status.HTTP_404_NOT_FOUND)
+
+        from django.template.loader import render_to_string
+        from .print_utils import generate_and_open_pdf
+
+        pages_html = []
+        for invoice in invoices:
+            ctx = self._prepare_pdf_context(invoice)
+            part = render_to_string('api/pdf_purchase_content.html', ctx)
+            pages_html.append(part)
+
+        full_content_body = '<div style="page-break-after: always; display: block; clear: both; height: 1px;"></div>'.join(pages_html)
+        final_html = render_to_string('api/pdf_base.html', {'content': full_content_body})
+
+        if action_type == 'view':
+            success, result_msg = generate_and_open_pdf(
+                html_content=final_html,
+                target_printer=None,
+                open_pdf=True
+            )
+            if success:
+                return Response({"status": "success", "message": "تم فتح الـ PDF لمعاينته"}, status=status.HTTP_200_OK)
+            else:
+                return Response({"error": f"فشل في إنشاء أو فتح الـ PDF: {result_msg}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            success, msg = generate_and_open_pdf(
+                html_content=final_html,
+                target_printer=target_printer,
+                open_pdf=False
+            )
+            if success:
+                return Response({"status": "success", "message": "تم إرسال الفواتير للطباعة"}, status=status.HTTP_200_OK)
+            else:
+                return Response({"error": f"فشل في الطباعة: {msg}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 class PurchaseInvoiceItemViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
@@ -869,7 +1042,7 @@ class ReceiptViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
             if str(branch_id_param).strip():
                 clean_branch_id = to_english_numerals(str(branch_id_param).strip())
                 try:
-                    uuid_val = uuid.UUID(clean_branch_id)
+                    uuid_val = int(clean_branch_id)
                     qs = qs.filter(branch_id=uuid_val)
                 except ValueError:
                     qs = qs.filter(branch__local_id=clean_branch_id)
@@ -879,7 +1052,7 @@ class ReceiptViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
             if str(sp_param).strip():
                 clean_sp_id = to_english_numerals(str(sp_param).strip())
                 try:
-                    uuid_val = uuid.UUID(clean_sp_id)
+                    uuid_val = int(clean_sp_id)
                     qs = qs.filter(salesperson_id=uuid_val)
                 except ValueError:
                     qs = qs.filter(salesperson__local_id=clean_sp_id)
@@ -1269,8 +1442,6 @@ class SyncPushView(views.APIView):
                     if not receipt_hash:
                         continue
 
-                    # Idempotency: skip if already processed
-                    client_uuid_str = r.get("client_uuid") or str(uuid.uuid4())
                     if Receipt.all_objects.filter(
                         tenant=tenant, receipt_hash=receipt_hash
                     ).exists():
@@ -1296,7 +1467,6 @@ class SyncPushView(views.APIView):
                         salesperson=salesperson,
                         local_id=r.get("id", 0),
                         receipt_number=r.get("receipt_number", 0),
-                        client_uuid=client_uuid_str,
                         receipt_hash=receipt_hash,
                         customer_name=r.get("customer_name", ""),
                         phone_number=r.get("phone_number", ""),
@@ -1752,28 +1922,13 @@ def is_date_within_subscription(tenant, year, month):
         now = timezone.now()
         return now.year == year and now.month == month
 
-def calculate_safe_stock_limit(item, default_year, default_month, target_year, target_month):
-    start_ym = min((default_year, default_month), (target_year, target_month))
-    end_ym = max((default_year, default_month), (target_year, target_month))
-    
-    consecutive_months = []
-    cy, cm = start_ym
-    ey, em = end_ym
-    while (cy, cm) <= (ey, em):
-        consecutive_months.append((cy, cm))
-        cm += 1
-        if cm > 12:
-            cm = 1
-            cy += 1
-            
-    stock_values = [item.get_stock_at_date(m, y) for y, m in consecutive_months]
-    return min(stock_values) if stock_values else 0
 
-def resolve_salesperson_uuid(tenant, salesperson_id):
+
+def resolve_salesperson_id(tenant, salesperson_id):
     if not salesperson_id:
         return None
     try:
-        return uuid.UUID(str(salesperson_id))
+        return int(str(salesperson_id))
     except ValueError:
         pass
     try:
@@ -1811,7 +1966,7 @@ class CustomerSuggestionsView(TenantFromRequestMixin, views.APIView):
         elif field == 'phone':
             receipts_qs = receipts_qs.filter(phone_number__icontains=term).exclude(phone_number='').exclude(phone_number__isnull=True)
 
-        sp_uuid = resolve_salesperson_uuid(tenant, salesperson_id)
+        sp_id = resolve_salesperson_id(tenant, salesperson_id)
 
         suggestions_map = {}
         for r in receipts_qs:
@@ -1837,24 +1992,24 @@ class CustomerSuggestionsView(TenantFromRequestMixin, views.APIView):
                 relevance += 50
 
             if field == 'area':
-                if sp_uuid and r.salesperson_id == sp_uuid:
+                if sp_id and r.salesperson_id == sp_id:
                     relevance += 20
             elif field == 'name':
-                if sp_uuid and r.salesperson_id == sp_uuid:
+                if sp_id and r.salesperson_id == sp_id:
                     relevance += 20
                 if current_area and r.area and r.area.strip().lower() == current_area.lower():
                     relevance += 10
             elif field == 'address':
                 if current_area and r.area and r.area.strip().lower() == current_area.lower():
                     relevance += 30
-                if sp_uuid and r.salesperson_id == sp_uuid:
+                if sp_id and r.salesperson_id == sp_id:
                     relevance += 10
                 if current_name and r.customer_name and r.customer_name.strip().lower() == current_name.lower():
                     relevance += 5
             elif field == 'phone':
                 if current_area and r.area and r.area.strip().lower() == current_area.lower():
                     relevance += 30
-                if sp_uuid and r.salesperson_id == sp_uuid:
+                if sp_id and r.salesperson_id == sp_id:
                     relevance += 10
                 if current_name and r.customer_name and r.customer_name.strip().lower() == current_name.lower():
                     relevance += 5
@@ -1912,7 +2067,7 @@ class ProductSuggestionsView(TenantFromRequestMixin, views.APIView):
         
         if branch_id:
             try:
-                branch_uuid = uuid.UUID(branch_id)
+                branch_uuid = int(branch_id)
                 items_qs = items_qs.filter(branch_id=branch_uuid)
             except ValueError:
                 try:
@@ -1971,9 +2126,9 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
         if not branch_id_str:
             raise ValidationError({"branch_id": ["This field is required."]})
         try:
-            branch_id = uuid.UUID(branch_id_str)
+            branch_id = int(branch_id_str)
         except ValueError:
-            raise ValidationError({"branch_id": ["Invalid UUID format."]})
+            raise ValidationError({"branch_id": ["Invalid ID format."]})
             
         try:
             Branch.objects.get(id=branch_id, tenant=tenant, is_deleted=False)
@@ -2237,9 +2392,9 @@ class SalespersonPerformanceReportView(TenantFromRequestMixin, views.APIView):
         if not branch_id_str:
             raise ValidationError({"branch_id": ["This field is required."]})
         try:
-            branch_id = uuid.UUID(branch_id_str)
+            branch_id = int(branch_id_str)
         except ValueError:
-            raise ValidationError({"branch_id": ["Invalid UUID format."]})
+            raise ValidationError({"branch_id": ["Invalid ID format."]})
             
         try:
             Branch.objects.get(id=branch_id, tenant=tenant, is_deleted=False)
@@ -2326,6 +2481,7 @@ class SalespersonPerformanceReportView(TenantFromRequestMixin, views.APIView):
             
             list_data.append({
                 "salesperson_id": str(sp.id),
+                "local_id": sp.local_id,
                 "name": sp.name,
                 "receipts_count": receipts_count,
                 "cash_sales": cash_sales,
@@ -2361,9 +2517,9 @@ class InventoryMovementReportView(TenantFromRequestMixin, views.APIView):
         if not branch_id_str:
             raise ValidationError({"branch_id": ["This field is required."]})
         try:
-            branch_id = uuid.UUID(branch_id_str)
+            branch_id = int(branch_id_str)
         except ValueError:
-            raise ValidationError({"branch_id": ["Invalid UUID format."]})
+            raise ValidationError({"branch_id": ["Invalid ID format."]})
             
         try:
             Branch.objects.get(id=branch_id, tenant=tenant, is_deleted=False)
@@ -2471,6 +2627,7 @@ class InventoryMovementReportView(TenantFromRequestMixin, views.APIView):
             
             items_list.append({
                 "product_id": str(item.id),
+                "local_id": item.local_id,
                 "product_name": item.name,
                 "opening_stock": opening_stock,
                 "purchases": purchases,
@@ -2500,9 +2657,9 @@ class ProfitAndLossReportView(TenantFromRequestMixin, views.APIView):
         if not branch_id_str:
             raise ValidationError({"branch_id": ["This field is required."]})
         try:
-            branch_id = uuid.UUID(branch_id_str)
+            branch_id = int(branch_id_str)
         except ValueError:
-            raise ValidationError({"branch_id": ["Invalid UUID format."]})
+            raise ValidationError({"branch_id": ["Invalid ID format."]})
             
         try:
             Branch.objects.get(id=branch_id, tenant=tenant, is_deleted=False)
@@ -2527,9 +2684,9 @@ class ProfitAndLossReportView(TenantFromRequestMixin, views.APIView):
         salesperson_id = None
         if salesperson_id_str:
             try:
-                salesperson_id = uuid.UUID(salesperson_id_str)
+                salesperson_id = int(salesperson_id_str)
             except ValueError:
-                raise ValidationError({"salesperson_id": ["Invalid salesperson_id UUID format."]})
+                raise ValidationError({"salesperson_id": ["Invalid salesperson_id format."]})
 
         sale_items_qs = SaleItem.objects.filter(
             receipt__branch_id=branch_id,
@@ -2688,9 +2845,9 @@ class CashDrawerReportView(TenantFromRequestMixin, views.APIView):
         if not branch_id_str:
             raise ValidationError({"branch_id": ["This field is required."]})
         try:
-            branch_id = uuid.UUID(branch_id_str)
+            branch_id = int(branch_id_str)
         except ValueError:
-            raise ValidationError({"branch_id": ["Invalid UUID format."]})
+            raise ValidationError({"branch_id": ["Invalid ID format."]})
             
         try:
             Branch.objects.get(id=branch_id, tenant=tenant, is_deleted=False)
@@ -2786,7 +2943,6 @@ class CashDrawerReportView(TenantFromRequestMixin, views.APIView):
 class InstallmentsReportView(TenantFromRequestMixin, views.APIView):
     def get(self, request):
         from django.db.models import Sum, F, ExpressionWrapper, IntegerField, Q
-        import uuid
         from django.utils import timezone
         
         tenant = self._get_tenant()
@@ -2795,9 +2951,9 @@ class InstallmentsReportView(TenantFromRequestMixin, views.APIView):
         if not branch_id_str:
             raise ValidationError({"branch_id": ["This field is required."]})
         try:
-            branch_id = uuid.UUID(branch_id_str)
+            branch_id = int(branch_id_str)
         except ValueError:
-            raise ValidationError({"branch_id": ["Invalid UUID format."]})
+            raise ValidationError({"branch_id": ["Invalid ID format."]})
             
         try:
             Branch.objects.get(id=branch_id, tenant=tenant, is_deleted=False)
@@ -2825,7 +2981,7 @@ class InstallmentsReportView(TenantFromRequestMixin, views.APIView):
         
         if salesperson_id_str:
             try:
-                sp_id = uuid.UUID(salesperson_id_str)
+                sp_id = int(salesperson_id_str)
                 filters &= Q(receipt__salesperson_id=sp_id)
             except ValueError:
                 pass
