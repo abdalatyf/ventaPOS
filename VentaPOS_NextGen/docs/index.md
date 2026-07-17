@@ -37,6 +37,8 @@ Welcome to the VentaPOS NextGen Documentation Hub. This directory contains all t
 - [Procurement & Suppliers](./features/procurement.md) - المشتريات والموردين (Procurement)
 - [Reports & Tools](./features/reports_and_tools.md) - تقارير النظام وأدوات الإدارة (Reports & Tools)
 - [Settings & Security](./features/settings_and_security.md) - Settings and Security
+- [Backend Micro-Features](./features/backend_micro_features.md) - Backend Helper APIs (Commissions, Adjustments, Suggestions, Date)
+- [System Init & Admin Tools](./features/system_init_and_tools.md) - System Initialization & Admin Tools
 
 ---
 
@@ -46,13 +48,8 @@ Welcome to the VentaPOS NextGen Documentation Hub. This directory contains all t
 ### Frontend Pages
 - **Branch Selection (`BranchSelection.jsx`)**: Needs documentation for branch switching and related API (`/api/branches/`).
 - **Expenses (`Expenses.jsx`)**: Expense tracking is missing from POS & Reports docs (API: `/api/expenses/`).
+- **Purchase Invoices & Suppliers (`PurchaseEntry.jsx`, `SearchPurchases.jsx`)**: The complete purchasing flow and supplier management (APIs: `/api/purchase-invoices/`, `/api/suppliers/`).
 - **System Initialization & Setup (`SystemInit.jsx`, `Setup.jsx`)**: The initial setup wizard and first-time configuration (API: `/api/init/`).
 - **Search Modules (`SearchReceipts.jsx`)**: Detailed documentation on receipt searching and filtering capabilities.
 - **Smart Import Tool (`settings/tabs/SmartImportTab.jsx`)**: Excel import tool functionality (API: `/api/tools/smart-import/`).
 - **System Logs (`settings/tabs/LogsTab.jsx`)**: Action logs viewer (API: `/api/action-logs/`).
-
-### Backend API Endpoints (Undocumented)
-- **Commission History** (`/api/commission-histories/`): Needs explanation of how commissions are tracked and calculated.
-- **Inventory Adjustments** (`/api/inventory-adjustments/`): Missing logic for stock taking and manual adjustments.
-- **Suggestions APIs** (`/api/customer-suggestions/`, `/api/product-suggestions/`): Search suggestions endpoints.
-- **Default Date** (`/api/default-date/`): Endpoint for fetching the default system date.
