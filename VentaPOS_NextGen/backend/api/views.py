@@ -426,7 +426,6 @@ class InventoryItemViewSet(SoftDeleteModelViewSet):
             )
 
         qs = self.get_queryset().filter(name__icontains=term)[:20]
-        tenant = self._get_tenant()
         default_year, default_month = get_default_date_for_tenant(tenant)
         
         results = []
@@ -671,7 +670,7 @@ class PurchaseInvoiceViewSet(SoftDeleteModelViewSet):
         from api.models import CompanySetting
         from api.utils.format_utils import to_arabic_numerals, ed2ad
         
-        company_settings = CompanySetting.objects.filter(tenant=self._get_tenant()).first()
+        company_settings = CompanySetting.objects.filter().first()
         items = list(invoice.items.all())
         
         total_amount = sum((item.quantity * item.purchase_price) for item in items)
@@ -774,7 +773,6 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
 
         with transaction.atomic():
             # Decrement license balance securely
-            tenant = self._get_tenant()
             machine_id = get_machine_id()
             
             # Lock the active licenses for update to prevent race conditions
@@ -810,7 +808,7 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
             return Response({"error": "receipt_ids must be a list"}, status=status.HTTP_400_BAD_REQUEST)
         
         # Soft delete
-        Receipt.objects.filter(id__in=receipt_ids, tenant=self._get_tenant()).update(is_deleted=True)
+        Receipt.objects.filter(id__in=receipt_ids).update(is_deleted=True)
         return Response({"status": "success", "deleted_count": len(receipt_ids)}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["get"])
@@ -840,7 +838,7 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
         from django.template.loader import render_to_string
         from .print_utils import generate_and_open_pdf, ed2ad
 
-        company_settings = CompanySetting.objects.filter(tenant=self._get_tenant()).first()
+        company_settings = CompanySetting.objects.filter().first()
         pages_html = []
 
         for receipt in receipts:
@@ -1765,7 +1763,7 @@ def to_arabic_numerals(text):
     translation_table = str.maketrans(english_digits, arabic_digits)
     return text.translate(translation_table)
 
-def get_default_date_for_tenant(tenant):
+def get_default_date_for_tenant():
     latest_receipt = Receipt.objects.filter(is_deleted=False).order_by('-created_at_local').first()
     if latest_receipt:
         return latest_receipt.sale_year, latest_receipt.sale_month
@@ -1777,7 +1775,7 @@ def get_default_date_for_tenant(tenant):
     now = timezone.now()
     return now.year, now.month
 
-def is_date_within_subscription(tenant, year, month):
+def is_date_within_subscription(year, month):
     target_date = date(year, month, 1)
     active_license = ClientLicense.objects.filter(is_active=True, is_deleted=False).order_by('-start_date').first()
     if active_license:
@@ -1829,7 +1827,6 @@ class CustomerSuggestionsView(views.APIView):
         if field not in ['name', 'phone', 'address', 'area']:
             return Response([])
 
-        tenant = self._get_tenant()
         receipts_qs = Receipt.objects.filter(is_deleted=False)
 
         if field == 'area':
@@ -1915,7 +1912,6 @@ class CustomerSuggestionsView(views.APIView):
 
 class ProductSuggestionsView(views.APIView):
     def get(self, request):
-        tenant = self._get_tenant()
         term = to_english_numerals(request.query_params.get("term", "").strip())
         month_str = to_english_numerals(request.query_params.get("month", "").strip())
         year_str = to_english_numerals(request.query_params.get("year", "").strip())
@@ -1932,7 +1928,7 @@ class ProductSuggestionsView(views.APIView):
             target_year = default_year
 
         # If not within subscription dates, return empty array []
-        if not is_date_within_subscription(tenant, target_year, target_month):
+        if not is_date_within_subscription( target_year, target_month):
             return Response([])
 
         # Filter items by tenant and name
@@ -1971,7 +1967,6 @@ class ProductSuggestionsView(views.APIView):
 
 class DefaultDateView(views.APIView):
     def get(self, request):
-        tenant = self._get_tenant()
         branch_id_str = request.query_params.get("branch_id")
         from django.utils import timezone
         
@@ -1995,7 +1990,6 @@ class DashboardReportView(views.APIView):
     def get(self, request):
         
         from django.db.models import Sum, Count
-        tenant = self._get_tenant()
         
         branch_id_str = request.query_params.get("branch_id")
         if not branch_id_str:
@@ -2246,7 +2240,6 @@ class SalespersonPerformanceReportView(views.APIView):
     def get(self, request):
         
         from django.db.models import Sum
-        tenant = self._get_tenant()
         
         branch_id_str = request.query_params.get("branch_id")
         if not branch_id_str:
@@ -2367,7 +2360,6 @@ class InventoryMovementReportView(views.APIView):
     def get(self, request):
         
         from django.db.models import Sum
-        tenant = self._get_tenant()
         
         branch_id_str = request.query_params.get("branch_id")
         if not branch_id_str:
@@ -2500,7 +2492,6 @@ class ProfitAndLossReportView(views.APIView):
     def get(self, request):
         
         from django.db.models import Sum
-        tenant = self._get_tenant()
         
         branch_id_str = request.query_params.get("branch_id")
         if not branch_id_str:
@@ -2686,7 +2677,6 @@ class ProfitAndLossReportView(views.APIView):
 class CashDrawerReportView(views.APIView):
     def get(self, request):
         
-        tenant = self._get_tenant()
         
         branch_id_str = request.query_params.get("branch_id")
         if not branch_id_str:
@@ -2789,7 +2779,6 @@ class InstallmentsReportView(views.APIView):
         from django.db.models import Sum, F, ExpressionWrapper, IntegerField, Q
         from django.utils import timezone
         
-        tenant = self._get_tenant()
         
         branch_id_str = request.query_params.get("branch_id")
         if not branch_id_str:

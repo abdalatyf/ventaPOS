@@ -51,7 +51,6 @@ from .utils.security_utils import (
 # ---------------------------------------------------------------------------
 
 class BranchSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = Branch
@@ -67,7 +66,6 @@ class BranchSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class SalespersonSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = Salesperson
@@ -94,7 +92,6 @@ class InventoryItemSerializer(serializers.ModelSerializer):
       created_at_local       → stored in created_at_local
     """
 
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
     current_stock = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -118,7 +115,6 @@ class InventoryItemSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class CommissionHistorySerializer(serializers.ModelSerializer):
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = CommissionHistory
@@ -134,7 +130,6 @@ class CommissionHistorySerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class InventoryAdjustmentSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = InventoryAdjustment
@@ -149,8 +144,7 @@ class InventoryAdjustmentSerializer(serializers.ModelSerializer):
         if data.get("adjustment_type") == "DEFICIT":
             from api.views import get_default_date_for_tenant
             from rest_framework.exceptions import ValidationError
-            tenant = self.context["tenant"]
-            default_year, default_month = get_default_date_for_tenant(tenant)
+            default_year, default_month = get_default_date_for_tenant()
             
             target_year = data.get("adjustment_year", self.instance.adjustment_year if self.instance else None)
             target_month = data.get("adjustment_month", self.instance.adjustment_month if self.instance else None)
@@ -175,7 +169,6 @@ class InventoryAdjustmentSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class SupplierSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = Supplier
@@ -188,7 +181,6 @@ class SupplierSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class PurchaseInvoiceItemSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = PurchaseInvoiceItem
@@ -200,7 +192,6 @@ class PurchaseInvoiceItemSerializer(serializers.ModelSerializer):
 
 
 class PurchaseInvoiceSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
     items = PurchaseInvoiceItemSerializer(many=True, required=False)
     invoice_number = serializers.IntegerField(required=False)
 
@@ -215,14 +206,13 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         items_data = validated_data.pop("items", [])
-        tenant = self.context["tenant"]
         branch = validated_data.get("branch")
         
         # Stock validation for RETURNS
         if validated_data.get("invoice_type") == "RETURN":
             from api.views import get_default_date_for_tenant
             from rest_framework.exceptions import ValidationError
-            default_year, default_month = get_default_date_for_tenant(tenant)
+            default_year, default_month = get_default_date_for_tenant()
             target_year = validated_data["invoice_year"]
             target_month = validated_data["invoice_month"]
             
@@ -239,16 +229,15 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
         if "invoice_number" not in validated_data:
             from django.db.models import Max
             last_invoice = PurchaseInvoice.objects.filter(
-                tenant=tenant, branch=branch
+                branch=branch
             ).aggregate(Max("invoice_number"))
             last_num = last_invoice.get("invoice_number__max") or 0
             validated_data["invoice_number"] = last_num + 1
 
         with transaction.atomic():
-            invoice = PurchaseInvoice.objects.create(tenant=tenant, **validated_data)
+            invoice = PurchaseInvoice.objects.create(**validated_data)
             for item_data in items_data:
                 PurchaseInvoiceItem.objects.create(
-                    tenant=tenant,
                     purchase_invoice=invoice,
                     **item_data,
                 )
@@ -260,7 +249,6 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class SaleItemSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
     product_name = serializers.CharField(source="inventory_item.name", read_only=True)
 
     class Meta:
@@ -284,7 +272,6 @@ class SaleItemSerializer(serializers.ModelSerializer):
 
 
 class InstallmentPaymentSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
     # Virtual write-only fields for POS frontend convenience
     payment_month = serializers.IntegerField(write_only=True, required=False)
     payment_year = serializers.IntegerField(write_only=True, required=False)
@@ -322,7 +309,6 @@ class ReceiptSerializer(serializers.ModelSerializer):
       created_at_local ← stored as `created_at_local` (device time)
     """
 
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
     # Nested writable collections
     sale_items = SaleItemSerializer(many=True, required=False)
     installment_payments = InstallmentPaymentSerializer(many=True, required=False)
@@ -388,14 +374,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         items_data = validated_data.pop("sale_items", [])
         installments_data = validated_data.pop("installment_payments", [])
-        tenant = validated_data.get("tenant") or self.context.get("tenant")
-        if not tenant:
-            branch = validated_data.get("branch")
-            if branch:
-                tenant = branch.tenant
-            else:
-                tenant = Tenant.objects.using("default").first()
-        validated_data["tenant"] = tenant
+
 
         with transaction.atomic():
             # Deduct from license balance (pessimistic lock)
@@ -403,7 +382,6 @@ class ReceiptSerializer(serializers.ModelSerializer):
                 ClientLicense.objects
                 .select_for_update()
                 .filter(
-                    tenant=tenant,
                     is_active=True,
                     is_deleted=False,
                     invoices_balance__gt=0,
@@ -423,7 +401,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
                 last = (
                     Receipt.all_objects
                     .select_for_update()
-                    .filter(tenant=tenant, is_deleted=False)
+                    .filter(is_deleted=False)
                     .order_by("receipt_number")
                     .last()
                 )
@@ -438,7 +416,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
                 
             # Stock validation
             from api.views import get_default_date_for_tenant
-            default_year, default_month = get_default_date_for_tenant(tenant)
+            default_year, default_month = get_default_date_for_tenant()
             target_year = validated_data["sale_year"]
             target_month = validated_data["sale_month"]
             for item_data in items_data:
@@ -451,7 +429,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
                     })
 
             if "local_id" not in validated_data:
-                last_receipt = Receipt.objects.filter(tenant=tenant).order_by('-local_id').first()
+                last_receipt = Receipt.objects.filter().order_by('-local_id').first()
                 validated_data["local_id"] = (last_receipt.local_id + 1) if last_receipt else 1
 
             if "products_text" not in validated_data and items_data:
@@ -460,7 +438,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
             receipt = Receipt.objects.create(**validated_data)
 
             for item_data in items_data:
-                SaleItem.objects.create(tenant=tenant, receipt=receipt, **item_data)
+                SaleItem.objects.create(receipt=receipt, **item_data)
 
             for inst_data in installments_data:
                 payment_month = inst_data.pop("payment_month", 1)
@@ -469,7 +447,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
                     import datetime
                     inst_data["payment_date"] = datetime.date(payment_year, payment_month, 25)
                 InstallmentPayment.objects.create(
-                    tenant=tenant, receipt=receipt, **inst_data
+                    receipt=receipt, **inst_data
                 )
 
             # Generate & store receipt hash (schema §1.5)
@@ -499,7 +477,6 @@ class ReceiptSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         items_data = validated_data.pop("sale_items", None)
         installments_data = validated_data.pop("installment_payments", None)
-        tenant = self.context["tenant"]
 
         with transaction.atomic():
             for attr, value in validated_data.items():
@@ -508,7 +485,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
             from dateutil.relativedelta import relativedelta
             from datetime import date
             active_lic = ClientLicense.objects.filter(
-                tenant=tenant, is_active=True, is_deleted=False
+                is_active=True, is_deleted=False
             ).first()
             if not active_lic:
                 raise ValidationError({"license": "لا يوجد ترخيص ساري."})
@@ -538,7 +515,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
 
                 # Stock validation
                 from api.views import get_default_date_for_tenant
-                default_year, default_month = get_default_date_for_tenant(tenant)
+                default_year, default_month = get_default_date_for_tenant()
                 target_year = validated_data.get("sale_year", instance.sale_year)
                 target_month = validated_data.get("sale_month", instance.sale_month)
 
@@ -554,7 +531,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
 
                 for item_data in items_data:
                     SaleItem.objects.create(
-                        tenant=tenant, receipt=instance, **item_data
+                        receipt=instance, **item_data
                     )
 
             if installments_data is not None:
@@ -566,7 +543,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
                         import datetime
                         inst_data["payment_date"] = datetime.date(payment_year, payment_month, 25)
                     InstallmentPayment.objects.create(
-                        tenant=tenant, receipt=instance, **inst_data
+                        receipt=instance, **inst_data
                     )
 
             # Re-hash the receipt
@@ -600,7 +577,6 @@ class ReceiptSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class ExpenseSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = Expense
@@ -617,7 +593,6 @@ class ExpenseSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class CompanySettingSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = CompanySetting
@@ -634,7 +609,6 @@ class CompanySettingSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class ClientLicenseSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = ClientLicense
@@ -659,7 +633,6 @@ class ClientLicenseSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class UsedLicenseSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = UsedLicense
@@ -672,7 +645,6 @@ class UsedLicenseSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class LicenseHistorySerializer(serializers.ModelSerializer):
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = LicenseHistory
