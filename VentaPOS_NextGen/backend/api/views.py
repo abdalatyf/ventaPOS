@@ -60,10 +60,8 @@ from django.contrib.auth import authenticate
 from rest_framework.pagination import PageNumberPagination
 
 from .models import (
-    ActionLog,
     Branch,
     ClientLicense,
-    CloudUser,
     CommissionHistory,
     CompanySetting,
     Expense,
@@ -78,14 +76,11 @@ from .models import (
     SaleItem,
     Salesperson,
     Supplier,
-    Tenant,
     UsedLicense,
 )
 from .serializers import (
-    ActionLogSerializer,
     BranchSerializer,
     ClientLicenseSerializer,
-    CloudUserSerializer,
     CommissionHistorySerializer,
     CompanySettingSerializer,
     ExpenseSerializer,
@@ -100,7 +95,6 @@ from .serializers import (
     SaleItemSerializer,
     SalespersonSerializer,
     SupplierSerializer,
-    TenantSerializer,
     UsedLicenseSerializer,
 )
 from .utils.license_validator import LicenseValidator
@@ -113,81 +107,6 @@ from .utils.security_utils import (
 
 # ===========================================================================
 # Tenant resolution mixin
-# ===========================================================================
-
-class TenantFromRequestMixin:
-    """
-    Resolves the active tenant from:
-      1. JWT payload's `tenant_id` claim (cloud viewer sessions).
-      2. `X-Company-Code` header (local device sync sessions).
-
-    Raises HTTP 404 if the company code is unknown or HTTP 403 if the
-    tenant is inactive.
-    """
-
-    def _get_tenant(self):
-        print("DEBUG: _get_tenant called. Method:", getattr(self.request, "method", "UNKNOWN"))
-        # Bypass tenant checks for CORS preflight OPTIONS requests
-        if getattr(self, "request", None) and getattr(self.request, "method", "").upper() == "OPTIONS":
-            return None
-
-        # Try X-Company-Code header first (device sync flow)
-        company_code = self.request.headers.get("X-Company-Code")
-        if company_code:
-            try:
-                tenant = Tenant.objects.get(company_code=company_code, is_deleted=False)
-            except Tenant.DoesNotExist:
-                raise ValidationError({
-                    "company_code": (
-                        "رمز الشركة المكتوب غير مسجل في الدفتر، يرجى التحقق من الرقم."
-                    )
-                })
-            if not tenant.is_active:
-                raise ValidationError({
-                    "company_code": (
-                        "الاشتراك السحابي للشركة انتهى أو معطل، يرجى التجديد لتتمكن من الدخول."
-                    )
-                })
-            return tenant
-
-        # Fall back to JWT claim
-        tenant_id = getattr(getattr(self.request, "auth", None), "tenant_id", None)
-        if tenant_id:
-            try:
-                return Tenant.objects.get(id=tenant_id, is_deleted=False)
-            except Tenant.DoesNotExist:
-                raise ValidationError({"tenant": "Tenant not found."})
-
-        # Fall back to local default tenant since this is a local-first application
-        tenant = Tenant.objects.filter(is_deleted=False).first()
-        if tenant:
-            return tenant
-
-        raise ValidationError({
-            "auth": (
-                "بيانات الدخول ناقصة أو غير موجودة في قاعدة البيانات المحلية."
-            )
-        })
-
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        tenant = self._get_tenant()
-        if tenant:
-            context["tenant"] = tenant
-        return context
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        tenant = self._get_tenant()
-        if tenant:
-            qs = qs.filter(tenant=tenant)
-        else:
-            qs = qs.none()
-        return qs
-
-
-# ===========================================================================
-# Base soft-delete ViewSet
 # ===========================================================================
 
 class SoftDeleteModelViewSet(viewsets.ModelViewSet):
@@ -203,58 +122,39 @@ class SoftDeleteModelViewSet(viewsets.ModelViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def create(self, request, *args, **kwargs):
-        """Auto-fill branch and local_id if missing, since this is a local-first application."""
-        context = self.get_serializer_context()
-        tenant = context.get("tenant")
-        
-        if tenant and isinstance(request.data, dict):
-            # Normal JSON dict
+        """Auto-fill branch if missing."""
+        from api.models import Branch
+        if isinstance(request.data, dict) or hasattr(request.data, 'copy'):
             data = request.data.copy()
-            self._fill_local_data(data, tenant, request)
-        elif tenant and hasattr(request.data, 'copy'):
-            # QueryDict from FormData
-            data = request.data.copy()
-            self._fill_local_data(data, tenant, request)
+            if 'branch' not in data:
+                branch = None
+                if request.headers.get("X-Branch-ID"):
+                    branch = Branch.objects.filter(id=request.headers.get("X-Branch-ID"), is_deleted=False).first()
+                if not branch:
+                    branch = Branch.objects.filter(is_deleted=False).first()
+                if branch:
+                    data['branch'] = branch.id
         else:
             data = request.data
             
+        from rest_framework.response import Response
+        from rest_framework import status
         serializer = self.get_serializer(data=data)
-        if not serializer.is_valid():
-            import json
-            with open("error_log.json", "w", encoding="utf-8") as f:
-                json.dump(serializer.errors, f, ensure_ascii=False)
-            serializer.is_valid(raise_exception=True)
-            
+        serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
-    def _fill_local_data(self, data, tenant, request=None):
-        if 'branch' not in data:
-            branch = None
-            if request and request.headers.get("X-Branch-ID"):
-                branch = Branch.objects.filter(id=request.headers.get("X-Branch-ID"), tenant=tenant, is_deleted=False).first()
-            if not branch:
-                branch = Branch.objects.filter(tenant=tenant, is_deleted=False).first()
-            if branch:
-                data['branch'] = branch.id
-        
-        if 'local_id' not in data:
-            ModelClass = self.get_queryset().model
-            if hasattr(ModelClass, 'local_id'):
-                max_local = ModelClass.all_objects.filter(tenant=tenant).order_by('-local_id').first()
-                data['local_id'] = (max_local.local_id + 1) if max_local else 1
-
-
     def perform_create(self, serializer):
-        """Inject tenant from context into every create call."""
-        context = self.get_serializer_context()
-        tenant = context.get("tenant")
+        from django.db import IntegrityError
+        from rest_framework.exceptions import ValidationError
         try:
-            if tenant:
-                serializer.save(tenant=tenant)
-            else:
-                serializer.save()
+            serializer.save()
+        except IntegrityError as e:
+            print(f"IntegrityError in perform_create: {e}")
+            if "UNIQUE constraint failed" in str(e):
+                raise ValidationError({"name": ["الاسم ده متسجل قبل كده، أو موجود في سلة المهملات."]})
+            raise ValidationError({"error": [f"حدث خطأ في قاعدة البيانات: {e}"]})
         except IntegrityError as e:
             print(f"IntegrityError in perform_create: {e}")
             if "UNIQUE constraint failed" in str(e):
@@ -281,7 +181,6 @@ class CustomAuthToken(ObtainAuthToken):
         if not user.check_password(password):
             return Response({"error": "كلمة المرور غير صحيحة"}, status=status.HTTP_401_UNAUTHORIZED)
             
-        tenant = Tenant.objects.filter(is_deleted=False).first()
         
         token, created = Token.objects.get_or_create(user=user)
         return Response({
@@ -329,23 +228,42 @@ class PasswordRecoveryView(views.APIView):
         else:
             return Response({"error": "كود الاسترداد غير صحيح."}, status=400)
 
+class ChangePasswordView(views.APIView):
+    def post(self, request):
+        old_password = request.data.get("old_password")
+        new_password = request.data.get("new_password")
+        if not old_password or not new_password:
+            return Response({"error": "الرجاء إدخال كلمة المرور الحالية والجديدة"}, status=400)
+        
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"error": "غير مصرح لك"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if not user.check_password(old_password):
+            return Response({"error": "كلمة المرور الحالية غير صحيحة"}, status=400)
+            
+        user.set_password(new_password)
+        user.save()
+        return Response({"message": "تم تغيير كلمة المرور بنجاح."})
+
+
 class SystemInitializationView(views.APIView):
     """
     Handles the first-time setup of the system.
-    Creates the Tenant, the default Branch, and the master Admin User.
+    Creates the default Branch, CompanySettings, and the master Admin User.
     """
     permission_classes = [] # Allow unauthenticated access for init
 
     def get(self, request):
-        tenant = Tenant.objects.filter(is_deleted=False).first()
-        is_initialized = tenant is not None and User.objects.filter(is_superuser=True).exists()
+        is_initialized = User.objects.filter(is_superuser=True).exists()
+        company = CompanySetting.objects.first()
         return Response({
             "initialized": is_initialized,
-            "company_name": tenant.name if tenant else None
+            "company_name": company.company_name if company else None
         })
 
     def post(self, request):
-        if Tenant.objects.filter(is_deleted=False).exists() and User.objects.filter(is_superuser=True).exists():
+        if User.objects.filter(is_superuser=True).exists():
             return Response({"error": "النظام مهيأ بالفعل."}, status=status.HTTP_400_BAD_REQUEST)
             
         company_name = request.data.get('company_name')
@@ -360,6 +278,7 @@ class SystemInitializationView(views.APIView):
             
         from .utils.license_validator import LicenseValidator
         from .utils.security_utils import get_machine_id
+        from django.db import transaction
         
         machine_id = get_machine_id()
         validation_result = LicenseValidator.validate(license_code, machine_id)
@@ -377,50 +296,51 @@ class SystemInitializationView(views.APIView):
             # Create master user
             User.objects.filter(is_superuser=True).delete() # clean up any partial state
             user = User.objects.create_superuser('admin', 'admin@ventapos.local', password)
-            # Store hashed recovery code in last_name to avoid migrations
-            user.last_name = make_password(recovery_code)
             user.save()
             
-            # Create Tenant
-            tenant = Tenant.objects.filter(is_deleted=False).first()
-            if not tenant:
-                tenant = Tenant.objects.create(
+            # Create Company Setting
+            company = CompanySetting.objects.first()
+            if not company:
+                company = CompanySetting.objects.create(
                     company_name=company_name,
-                    company_code=company_name[:3].upper() + "123",
-                    plan_type='LIFETIME',
-                    is_active=True
+                    phone1=phone1,
+                    phone2=phone2
                 )
             else:
-                tenant.company_name = company_name
-                tenant.save()
+                company.company_name = company_name
+                company.phone1 = phone1
+                company.phone2 = phone2
+                company.save()
                 
             # Create default branch
-            if not Branch.objects.filter(tenant=tenant, is_deleted=False).exists():
-                Branch.objects.create(
-                    tenant=tenant,
-                    name=branch_name,
-                    phone=phone1,
-                    local_id=1
-                )
+            branch = Branch.objects.filter(name=branch_name).first()
+            if not branch:
+                Branch.objects.create(name=branch_name, local_id=1)
                 
-            # Save the license
-            from .models import ClientLicense
+            # Store recovery code as special license type
             from .utils.security_utils import generate_record_signature
-            ClientLicense.objects.all().update(is_active=False) # deactivate old
-            
-            new_license = ClientLicense(
-                tenant=tenant,
-                license_code=license_code,
-                product_id=validation_result.get("product_id", 1),
-                invoices_balance=999999,  # Default infinite balance for new offline setups
-                is_active=True
-            )
-            
-            # Calculate expiry date from start month/year (add 1 year)
             import datetime
             from dateutil.relativedelta import relativedelta
+
+            rec_license = ClientLicense.objects.create(
+                machine_id=machine_id,
+                license_code=make_password(recovery_code),
+                plan_type="RECOVERY"
+            )
+            
+            # Save the actual activation license
+            ClientLicense.objects.exclude(plan_type="RECOVERY").update(is_active=False)
             start_date = datetime.date(validation_result["start_year"], validation_result["start_month"], 1)
-            new_license.expiry_date = start_date + relativedelta(years=1)
+            expiry_date = start_date + relativedelta(years=1)
+
+            new_license = ClientLicense.objects.create(
+                license_code=license_code,
+                product_id=validation_result.get("product_id", 1),
+                invoices_balance=999999,
+                is_active=True,
+                expiry_date=expiry_date,
+                machine_id=machine_id
+            )
             
             # Sign it securely
             new_license.license_code_hash = generate_record_signature(
@@ -438,35 +358,18 @@ class SystemInitializationView(views.APIView):
 # Standard ViewSets
 # ===========================================================================
 
-class TenantViewSet(SoftDeleteModelViewSet):
-    """
-    Tenant management — typically admin-only.
-    Does NOT use TenantFromRequestMixin (tenant IS the root entity).
-    """
-    queryset = Tenant.objects.all()
-    serializer_class = TenantSerializer
-
-    def perform_create(self, serializer):
-        serializer.save()
-
-
-class CloudUserViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
-    queryset = CloudUser.objects.select_related("tenant").all()
-    serializer_class = CloudUserSerializer
-
-
-class BranchViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
-    queryset = Branch.objects.select_related("tenant").all()
+class BranchViewSet(SoftDeleteModelViewSet):
+    queryset = Branch.objects.all()
     serializer_class = BranchSerializer
 
 
-class SalespersonViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
-    queryset = Salesperson.objects.select_related("tenant", "branch").all()
+class SalespersonViewSet(SoftDeleteModelViewSet):
+    queryset = Salesperson.objects.select_related("branch").all()
     serializer_class = SalespersonSerializer
 
 
-class InventoryItemViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
-    queryset = InventoryItem.objects.select_related("tenant", "branch").all()
+class InventoryItemViewSet(SoftDeleteModelViewSet):
+    queryset = InventoryItem.objects.select_related("branch").all()
     serializer_class = InventoryItemSerializer
 
     def get_queryset(self):
@@ -692,8 +595,8 @@ class InventoryItemViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
         })
 
 
-class CommissionHistoryViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
-    queryset = CommissionHistory.objects.select_related("tenant", "inventory_item").all()
+class CommissionHistoryViewSet(SoftDeleteModelViewSet):
+    queryset = CommissionHistory.objects.select_related("inventory_item").all()
     serializer_class = CommissionHistorySerializer
 
     def get_queryset(self):
@@ -704,13 +607,13 @@ class CommissionHistoryViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
         return qs
 
 
-class InventoryAdjustmentViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
-    queryset = InventoryAdjustment.objects.select_related("tenant", "inventory_item").all()
+class InventoryAdjustmentViewSet(SoftDeleteModelViewSet):
+    queryset = InventoryAdjustment.objects.select_related("inventory_item").all()
     serializer_class = InventoryAdjustmentSerializer
 
 
-class SupplierViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
-    queryset = Supplier.objects.select_related("tenant").all()
+class SupplierViewSet(SoftDeleteModelViewSet):
+    queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
 
 
@@ -737,9 +640,9 @@ class PurchaseInvoicePagination(PageNumberPagination):
             "results": data
         })
 
-class PurchaseInvoiceViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
+class PurchaseInvoiceViewSet(SoftDeleteModelViewSet):
     queryset = PurchaseInvoice.objects.select_related(
-        "tenant", "branch", "supplier"
+        "branch", "supplier"
     ).prefetch_related("items").all()
     serializer_class = PurchaseInvoiceSerializer
     pagination_class = PurchaseInvoicePagination
@@ -830,9 +733,9 @@ class PurchaseInvoiceViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
 
 
 
-class PurchaseInvoiceItemViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
+class PurchaseInvoiceItemViewSet(SoftDeleteModelViewSet):
     queryset = PurchaseInvoiceItem.objects.select_related(
-        "tenant", "purchase_invoice", "inventory_item"
+        "purchase_invoice", "inventory_item"
     ).all()
     serializer_class = PurchaseInvoiceItemSerializer
 
@@ -856,9 +759,9 @@ class ReceiptPagination(PageNumberPagination):
         })
 
 
-class ReceiptViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
+class ReceiptViewSet(SoftDeleteModelViewSet):
     queryset = Receipt.objects.select_related(
-        "tenant", "branch", "salesperson"
+        "branch", "salesperson"
     ).prefetch_related("sale_items", "installment_payments").all()
     serializer_class = ReceiptSerializer
     pagination_class = ReceiptPagination
@@ -876,7 +779,7 @@ class ReceiptViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
             
             # Lock the active licenses for update to prevent race conditions
             active_lics = ClientLicense.objects.select_for_update().filter(
-                tenant=tenant, is_active=True, is_deleted=False
+                is_active=True, is_deleted=False
             ).order_by('expiry_date')
 
             deducted = False
@@ -1135,20 +1038,20 @@ class ReceiptViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
         })
 
 
-class SaleItemViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
+class SaleItemViewSet(SoftDeleteModelViewSet):
     queryset = SaleItem.objects.select_related(
-        "tenant", "receipt", "inventory_item"
+        "receipt", "inventory_item"
     ).all()
     serializer_class = SaleItemSerializer
 
 
-class InstallmentPaymentViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
-    queryset = InstallmentPayment.objects.select_related("tenant", "receipt").all()
+class InstallmentPaymentViewSet(SoftDeleteModelViewSet):
+    queryset = InstallmentPayment.objects.select_related("receipt").all()
     serializer_class = InstallmentPaymentSerializer
 
 
-class ExpenseViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
-    queryset = Expense.objects.select_related("tenant", "branch").all()
+class ExpenseViewSet(SoftDeleteModelViewSet):
+    queryset = Expense.objects.select_related("branch").all()
     serializer_class = ExpenseSerializer
 
     def get_queryset(self):
@@ -1163,41 +1066,30 @@ class ExpenseViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
         return qs
 
 
-class CompanySettingViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
-    queryset = CompanySetting.objects.select_related("tenant").all()
+class CompanySettingViewSet(SoftDeleteModelViewSet):
+    queryset = CompanySetting.objects.all()
     serializer_class = CompanySettingSerializer
 
 
-class ClientLicenseViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
-    queryset = ClientLicense.objects.select_related("tenant").all()
+class ClientLicenseViewSet(SoftDeleteModelViewSet):
+    queryset = ClientLicense.objects.all()
     serializer_class = ClientLicenseSerializer
 
 
-class UsedLicenseViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
-    queryset = UsedLicense.objects.select_related("tenant").all()
+class UsedLicenseViewSet(SoftDeleteModelViewSet):
+    queryset = UsedLicense.objects.all()
     serializer_class = UsedLicenseSerializer
 
 
-class LicenseHistoryViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
-    queryset = LicenseHistory.objects.select_related("tenant").all()
+class LicenseHistoryViewSet(SoftDeleteModelViewSet):
+    queryset = LicenseHistory.objects.all()
     serializer_class = LicenseHistorySerializer
 
 
-class PendingExternalReceiptViewSet(TenantFromRequestMixin, SoftDeleteModelViewSet):
-    queryset = PendingExternalReceipt.objects.select_related("tenant", "branch").all()
+class PendingExternalReceiptViewSet(SoftDeleteModelViewSet):
+    queryset = PendingExternalReceipt.objects.select_related("branch").all()
     serializer_class = PendingExternalReceiptSerializer
 
-
-class ActionLogViewSet(viewsets.ModelViewSet):
-    """Legacy — read-only view of the action log."""
-    queryset = ActionLog.objects.all().order_by("-created_at")
-    serializer_class = ActionLogSerializer
-    http_method_names = ["get", "head", "options"]
-
-
-# ===========================================================================
-# Special API Views
-# ===========================================================================
 
 class ViewerAuthView(views.APIView):
     """
@@ -1251,7 +1143,6 @@ class ViewerAuthView(views.APIView):
 
         # Validate online license
         active_lic = ClientLicense.objects.filter(
-            tenant=tenant,
             is_active=True,
             is_online_active=True,
             is_deleted=False,
@@ -1273,7 +1164,6 @@ class ViewerAuthView(views.APIView):
 
         try:
             user = CloudUser.objects.get(
-                tenant=tenant,
                 username=username,
                 password_hash=password_hash,
                 is_deleted=False,
@@ -1343,7 +1233,6 @@ class SyncPushView(views.APIView):
 
         # Verify device license
         active_lic = ClientLicense.objects.filter(
-            tenant=tenant,
             machine_id=machine_id_header,
             is_active=True,
             is_deleted=False,
@@ -1382,7 +1271,6 @@ class SyncPushView(views.APIView):
                 cs_data = payload.get("company_settings")
                 if cs_data:
                     CompanySetting.objects.update_or_create(
-                        tenant=tenant,
                         defaults={
                             "name": cs_data.get("name", ""),
                             "description": cs_data.get("description", ""),
@@ -1395,7 +1283,6 @@ class SyncPushView(views.APIView):
                 # --- Branches ---
                 for b in payload.get("branches", []):
                     Branch.objects.update_or_create(
-                        tenant=tenant,
                         local_id=b["id"],
                         defaults={"name": b["name"]},
                     )
@@ -1404,12 +1291,11 @@ class SyncPushView(views.APIView):
                 for s in payload.get("salespeople", []):
                     try:
                         branch = Branch.objects.get(
-                            tenant=tenant, local_id=s["branch_id"], is_deleted=False
+                            local_id=s["branch_id"], is_deleted=False
                         )
                     except Branch.DoesNotExist:
                         continue
                     Salesperson.objects.update_or_create(
-                        tenant=tenant,
                         local_id=s["id"],
                         defaults={"name": s["name"], "branch": branch},
                     )
@@ -1418,12 +1304,11 @@ class SyncPushView(views.APIView):
                 for inv in payload.get("inventory", []):
                     try:
                         branch = Branch.objects.get(
-                            tenant=tenant, local_id=inv["branch_id"], is_deleted=False
+                            local_id=inv["branch_id"], is_deleted=False
                         )
                     except Branch.DoesNotExist:
                         continue
                     InventoryItem.objects.update_or_create(
-                        tenant=tenant,
                         local_id=inv["id"],
                         defaults={
                             "branch": branch,
@@ -1443,14 +1328,14 @@ class SyncPushView(views.APIView):
                         continue
 
                     if Receipt.all_objects.filter(
-                        tenant=tenant, receipt_hash=receipt_hash
+                        receipt_hash=receipt_hash
                     ).exists():
                         receipts_processed += 1
                         continue
 
                     try:
                         branch = Branch.objects.get(
-                            tenant=tenant, local_id=r["branch_id"], is_deleted=False
+                            local_id=r["branch_id"], is_deleted=False
                         )
                     except Branch.DoesNotExist:
                         continue
@@ -1458,11 +1343,10 @@ class SyncPushView(views.APIView):
                     salesperson = None
                     if r.get("salesperson_id"):
                         salesperson = Salesperson.objects.filter(
-                            tenant=tenant, local_id=r["salesperson_id"], is_deleted=False
+                            local_id=r["salesperson_id"], is_deleted=False
                         ).first()
 
                     receipt = Receipt.objects.create(
-                        tenant=tenant,
                         branch=branch,
                         salesperson=salesperson,
                         local_id=r.get("id", 0),
@@ -1484,13 +1368,11 @@ class SyncPushView(views.APIView):
 
                     for item_data in r.get("items", []):
                         inv_item = InventoryItem.objects.filter(
-                            tenant=tenant,
                             local_id=item_data["product_id"],
                             is_deleted=False,
                         ).first()
                         if inv_item:
                             SaleItem.objects.create(
-                                tenant=tenant,
                                 receipt=receipt,
                                 inventory_item=inv_item,
                                 quantity=item_data.get("quantity", 0),
@@ -1499,7 +1381,6 @@ class SyncPushView(views.APIView):
 
                     for inst in r.get("installments", []):
                         InstallmentPayment.objects.create(
-                            tenant=tenant,
                             receipt=receipt,
                             payment_date=inst["payment_date"],
                             amount=inst.get("amount", "0.00"),
@@ -1511,12 +1392,11 @@ class SyncPushView(views.APIView):
                 for exp in payload.get("expenses", []):
                     try:
                         branch = Branch.objects.get(
-                            tenant=tenant, local_id=exp["branch_id"], is_deleted=False
+                            local_id=exp["branch_id"], is_deleted=False
                         )
                     except Branch.DoesNotExist:
                         continue
                     Expense.objects.create(
-                        tenant=tenant,
                         branch=branch,
                         amount=exp.get("amount", "0.00"),
                         description=exp.get("description", ""),
@@ -1581,7 +1461,6 @@ class SyncPullView(views.APIView):
             )
 
         active_lic = ClientLicense.objects.filter(
-            tenant=tenant,
             machine_id=machine_id,
             is_active=True,
             is_deleted=False,
@@ -1609,7 +1488,7 @@ class SyncPullView(views.APIView):
         # Products (translated to SQLite field names)
         products = []
         for item in InventoryItem.objects.filter(
-            tenant=tenant, is_deleted=False, created_at__gte=last_sync
+            is_deleted=False, created_at__gte=last_sync
         ):
             products.append({
                 "id": item.local_id,
@@ -1626,7 +1505,7 @@ class SyncPullView(views.APIView):
         receipts = []
         salesperson_filter = data.get("salesperson_id")
         receipt_qs = Receipt.objects.filter(
-            tenant=tenant, is_deleted=False, created_at__gte=last_sync
+            is_deleted=False, created_at__gte=last_sync
         )
         if salesperson_filter:
             receipt_qs = receipt_qs.filter(salesperson__local_id=salesperson_filter)
@@ -1653,14 +1532,14 @@ class SyncPullView(views.APIView):
         # Branches
         branches = []
         for br in Branch.objects.filter(
-            tenant=tenant, is_deleted=False, created_at__gte=last_sync
+            is_deleted=False, created_at__gte=last_sync
         ):
             branches.append({"id": br.local_id, "name": br.name})
 
         # Salespeople
         users = []
         for sp in Salesperson.objects.filter(
-            tenant=tenant, is_deleted=False, created_at__gte=last_sync
+            is_deleted=False, created_at__gte=last_sync
         ).select_related("branch"):
             users.append({
                 "id": sp.local_id,
@@ -1671,7 +1550,7 @@ class SyncPullView(views.APIView):
         # Expenses
         expenses = []
         for exp in Expense.objects.filter(
-            tenant=tenant, is_deleted=False, created_at__gte=last_sync
+            is_deleted=False, created_at__gte=last_sync
         ).select_related("branch"):
             expenses.append({
                 "id": str(exp.id),
@@ -1686,7 +1565,6 @@ class SyncPullView(views.APIView):
         # Installments
         installments = []
         for inst in InstallmentPayment.objects.filter(
-            tenant=tenant,
             is_deleted=False,
             created_at__gte=last_sync,
         ).select_related("receipt"):
@@ -1743,7 +1621,6 @@ class ConfirmReceiptsView(views.APIView):
             )
 
         updated = Receipt.objects.filter(
-            tenant=tenant,
             receipt_hash__in=receipt_hashes,
             is_deleted=False,
         ).update(is_confirmed=True)
@@ -1765,7 +1642,7 @@ class LicenseStatusView(views.APIView):
             return Response({"status": "inactive", "message": "رمز الشركة غير موجود."})
 
         active_lics = ClientLicense.objects.filter(
-            tenant=tenant, is_active=True, is_deleted=False
+            is_active=True, is_deleted=False
         )
         from api.utils.security_utils import get_machine_id
         machine_id = get_machine_id()
@@ -1841,7 +1718,6 @@ class LicenseActivateView(views.APIView):
 
         with transaction.atomic():
             ClientLicense.objects.create(
-                tenant=tenant,
                 product_id=result["product_id"],
                 start_date=start_date,
                 expiry_date=expiry_date,
@@ -1851,10 +1727,9 @@ class LicenseActivateView(views.APIView):
                 company_code=company_code,
                 license_code_hash=new_sig,
             )
-            UsedLicense.objects.create(tenant=tenant, code_hash=code_hash)
+            UsedLicense.objects.create(code_hash=code_hash)
 
             LicenseHistory.objects.create(
-                tenant=tenant,
                 machine_id=machine_id,
                 product_name=f"Product {result['product_id']}",
                 operation_type="ACTIVATE",
@@ -1891,11 +1766,11 @@ def to_arabic_numerals(text):
     return text.translate(translation_table)
 
 def get_default_date_for_tenant(tenant):
-    latest_receipt = Receipt.objects.filter(tenant=tenant, is_deleted=False).order_by('-created_at_local').first()
+    latest_receipt = Receipt.objects.filter(is_deleted=False).order_by('-created_at_local').first()
     if latest_receipt:
         return latest_receipt.sale_year, latest_receipt.sale_month
     
-    active_license = ClientLicense.objects.filter(tenant=tenant, is_active=True, is_deleted=False).order_by('-start_date').first()
+    active_license = ClientLicense.objects.filter(is_active=True, is_deleted=False).order_by('-start_date').first()
     if active_license and active_license.start_date:
         return active_license.start_date.year, active_license.start_date.month
         
@@ -1904,7 +1779,7 @@ def get_default_date_for_tenant(tenant):
 
 def is_date_within_subscription(tenant, year, month):
     target_date = date(year, month, 1)
-    active_license = ClientLicense.objects.filter(tenant=tenant, is_active=True, is_deleted=False).order_by('-start_date').first()
+    active_license = ClientLicense.objects.filter(is_active=True, is_deleted=False).order_by('-start_date').first()
     if active_license:
         start = active_license.start_date
         expiry = active_license.expiry_date
@@ -1933,14 +1808,14 @@ def resolve_salesperson_id(tenant, salesperson_id):
         pass
     try:
         local_id = int(salesperson_id)
-        sp = Salesperson.objects.filter(tenant=tenant, local_id=local_id, is_deleted=False).first()
+        sp = Salesperson.objects.filter(local_id=local_id, is_deleted=False).first()
         if sp:
             return sp.id
     except ValueError:
         pass
     return None
 
-class CustomerSuggestionsView(TenantFromRequestMixin, views.APIView):
+class CustomerSuggestionsView(views.APIView):
     def get(self, request):
         term = to_english_numerals(request.query_params.get("term", "").strip())
         field = request.query_params.get("field", "").strip()
@@ -1955,7 +1830,7 @@ class CustomerSuggestionsView(TenantFromRequestMixin, views.APIView):
             return Response([])
 
         tenant = self._get_tenant()
-        receipts_qs = Receipt.objects.filter(tenant=tenant, is_deleted=False)
+        receipts_qs = Receipt.objects.filter(is_deleted=False)
 
         if field == 'area':
             receipts_qs = receipts_qs.filter(area__icontains=term).exclude(area='').exclude(area__isnull=True)
@@ -2038,7 +1913,7 @@ class CustomerSuggestionsView(TenantFromRequestMixin, views.APIView):
         return Response(results)
 
 
-class ProductSuggestionsView(TenantFromRequestMixin, views.APIView):
+class ProductSuggestionsView(views.APIView):
     def get(self, request):
         tenant = self._get_tenant()
         term = to_english_numerals(request.query_params.get("term", "").strip())
@@ -2061,7 +1936,7 @@ class ProductSuggestionsView(TenantFromRequestMixin, views.APIView):
             return Response([])
 
         # Filter items by tenant and name
-        items_qs = InventoryItem.objects.filter(tenant=tenant, is_deleted=False)
+        items_qs = InventoryItem.objects.filter(is_deleted=False)
         if term:
             items_qs = items_qs.filter(name__icontains=term)
         
@@ -2094,14 +1969,14 @@ class ProductSuggestionsView(TenantFromRequestMixin, views.APIView):
 # 9. Reports and Dashboard Views
 # ===========================================================================
 
-class DefaultDateView(TenantFromRequestMixin, views.APIView):
+class DefaultDateView(views.APIView):
     def get(self, request):
         tenant = self._get_tenant()
         branch_id_str = request.query_params.get("branch_id")
         from django.utils import timezone
         
         try:
-            qs = Receipt.objects.filter(tenant=tenant, is_deleted=False)
+            qs = Receipt.objects.filter(is_deleted=False)
             if branch_id_str:
                 qs = qs.filter(branch_id=branch_id_str)
 
@@ -2116,7 +1991,7 @@ class DefaultDateView(TenantFromRequestMixin, views.APIView):
             return Response({"year": now.year, "month": now.month, "error": str(e)})
 
 
-class DashboardReportView(TenantFromRequestMixin, views.APIView):
+class DashboardReportView(views.APIView):
     def get(self, request):
         
         from django.db.models import Sum, Count
@@ -2131,7 +2006,7 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
             raise ValidationError({"branch_id": ["Invalid ID format."]})
             
         try:
-            Branch.objects.get(id=branch_id, tenant=tenant, is_deleted=False)
+            Branch.objects.get(id=branch_id, is_deleted=False)
         except Branch.DoesNotExist:
             raise ValidationError({"branch_id": ["Branch does not exist or does not belong to this tenant."]})
 
@@ -2152,7 +2027,6 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
         # 1. Cash Inflow calculations
         cash_sales_inflow = Receipt.objects.filter(
             branch_id=branch_id,
-            tenant=tenant,
             sale_year=year,
             sale_month=month,
             is_cash_sale=True,
@@ -2161,7 +2035,6 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
 
         down_payment_inflow = Receipt.objects.filter(
             branch_id=branch_id,
-            tenant=tenant,
             sale_year=year,
             sale_month=month,
             is_cash_sale=False,
@@ -2170,8 +2043,7 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
 
         collection_inflow = InstallmentPayment.objects.filter(
             receipt__branch_id=branch_id,
-            receipt__tenant=tenant,
-            payment_date__year=year,
+            receipt__payment_date__year=year,
             payment_date__month=month,
             is_deleted=False,
             receipt__is_deleted=False
@@ -2182,7 +2054,6 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
         # 2. Revenue
         total_revenue = Receipt.objects.filter(
             branch_id=branch_id,
-            tenant=tenant,
             sale_year=year,
             sale_month=month,
             is_deleted=False
@@ -2191,8 +2062,7 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
         # 3. COGS and Sales Commission
         sale_items = SaleItem.objects.filter(
             receipt__branch_id=branch_id,
-            receipt__tenant=tenant,
-            receipt__sale_year=year,
+            receipt__receipt__sale_year=year,
             receipt__sale_month=month,
             receipt__is_deleted=False,
             is_deleted=False
@@ -2210,7 +2080,6 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
         # 4. Reserve Deduction
         credit_receipts = Receipt.objects.filter(
             branch_id=branch_id,
-            tenant=tenant,
             sale_year=year,
             sale_month=month,
             is_cash_sale=False,
@@ -2223,7 +2092,6 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
         # 5. Operating Expenses
         operating_expenses = Expense.objects.filter(
             branch_id=branch_id,
-            tenant=tenant,
             expense_year=year,
             expense_month=month,
             is_deleted=False
@@ -2232,7 +2100,6 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
         # 6. Auto Salaries
         salespersons = Salesperson.objects.filter(
             branch_id=branch_id,
-            tenant=tenant,
             is_deleted=False
         )
         auto_salaries = 0
@@ -2242,8 +2109,7 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
             sp_sale_items = SaleItem.objects.filter(
                 receipt__salesperson=sp,
                 receipt__branch_id=branch_id,
-                receipt__tenant=tenant,
-                receipt__sale_year=year,
+                receipt__receipt__sale_year=year,
                 receipt__sale_month=month,
                 receipt__is_deleted=False,
                 is_deleted=False
@@ -2257,8 +2123,7 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
             sp_collected = InstallmentPayment.objects.filter(
                 receipt__salesperson=sp,
                 receipt__branch_id=branch_id,
-                receipt__tenant=tenant,
-                payment_date__year=year,
+                receipt__payment_date__year=year,
                 payment_date__month=month,
                 is_deleted=False,
                 receipt__is_deleted=False
@@ -2273,8 +2138,7 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
 
         total_purchases = PurchaseInvoiceItem.objects.filter(
             purchase_invoice__branch_id=branch_id,
-            purchase_invoice__tenant=tenant,
-            purchase_invoice__invoice_year=year,
+            purchase_invoice__purchase_invoice__invoice_year=year,
             purchase_invoice__invoice_month=month,
             purchase_invoice__invoice_type="PURCHASE",
             is_deleted=False,
@@ -2291,7 +2155,6 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
         # 9. Current Inventory Value & Low Stock Count
         inventory_items = InventoryItem.objects.filter(
             branch_id=branch_id,
-            tenant=tenant,
             is_deleted=False
         )
         current_inventory_value = 0
@@ -2306,7 +2169,6 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
         # 10. Avg Basket Size
         receipt_count = Receipt.objects.filter(
             branch_id=branch_id,
-            tenant=tenant,
             sale_year=year,
             sale_month=month,
             is_deleted=False
@@ -2316,8 +2178,7 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
         # 11. Top Products
         top_products_qs = SaleItem.objects.filter(
             receipt__branch_id=branch_id,
-            receipt__tenant=tenant,
-            receipt__sale_year=year,
+            receipt__receipt__sale_year=year,
             receipt__sale_month=month,
             receipt__is_deleted=False,
             is_deleted=False
@@ -2336,7 +2197,6 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
         # 12. Top Areas
         top_areas_qs = Receipt.objects.filter(
             branch_id=branch_id,
-            tenant=tenant,
             sale_year=year,
             sale_month=month,
             is_deleted=False
@@ -2382,7 +2242,7 @@ class DashboardReportView(TenantFromRequestMixin, views.APIView):
         })
 
 
-class SalespersonPerformanceReportView(TenantFromRequestMixin, views.APIView):
+class SalespersonPerformanceReportView(views.APIView):
     def get(self, request):
         
         from django.db.models import Sum
@@ -2397,7 +2257,7 @@ class SalespersonPerformanceReportView(TenantFromRequestMixin, views.APIView):
             raise ValidationError({"branch_id": ["Invalid ID format."]})
             
         try:
-            Branch.objects.get(id=branch_id, tenant=tenant, is_deleted=False)
+            Branch.objects.get(id=branch_id, is_deleted=False)
         except Branch.DoesNotExist:
             raise ValidationError({"branch_id": ["Branch does not exist or does not belong to this tenant."]})
 
@@ -2417,7 +2277,6 @@ class SalespersonPerformanceReportView(TenantFromRequestMixin, views.APIView):
 
         salespersons = Salesperson.objects.filter(
             branch_id=branch_id,
-            tenant=tenant,
             is_deleted=False
         )
 
@@ -2432,7 +2291,6 @@ class SalespersonPerformanceReportView(TenantFromRequestMixin, views.APIView):
             receipts_qs = Receipt.objects.filter(
                 salesperson=sp,
                 branch_id=branch_id,
-                tenant=tenant,
                 sale_year=year,
                 sale_month=month,
                 is_deleted=False
@@ -2447,8 +2305,7 @@ class SalespersonPerformanceReportView(TenantFromRequestMixin, views.APIView):
             collected = InstallmentPayment.objects.filter(
                 receipt__salesperson=sp,
                 receipt__branch_id=branch_id,
-                receipt__tenant=tenant,
-                payment_date__year=year,
+                receipt__payment_date__year=year,
                 payment_date__month=month,
                 is_deleted=False,
                 receipt__is_deleted=False
@@ -2457,8 +2314,7 @@ class SalespersonPerformanceReportView(TenantFromRequestMixin, views.APIView):
             sp_sale_items = SaleItem.objects.filter(
                 receipt__salesperson=sp,
                 receipt__branch_id=branch_id,
-                receipt__tenant=tenant,
-                receipt__sale_year=year,
+                receipt__receipt__sale_year=year,
                 receipt__sale_month=month,
                 receipt__is_deleted=False,
                 is_deleted=False
@@ -2507,7 +2363,7 @@ class SalespersonPerformanceReportView(TenantFromRequestMixin, views.APIView):
         })
 
 
-class InventoryMovementReportView(TenantFromRequestMixin, views.APIView):
+class InventoryMovementReportView(views.APIView):
     def get(self, request):
         
         from django.db.models import Sum
@@ -2522,7 +2378,7 @@ class InventoryMovementReportView(TenantFromRequestMixin, views.APIView):
             raise ValidationError({"branch_id": ["Invalid ID format."]})
             
         try:
-            Branch.objects.get(id=branch_id, tenant=tenant, is_deleted=False)
+            Branch.objects.get(id=branch_id, is_deleted=False)
         except Branch.DoesNotExist:
             raise ValidationError({"branch_id": ["Branch does not exist or does not belong to this tenant."]})
 
@@ -2549,7 +2405,6 @@ class InventoryMovementReportView(TenantFromRequestMixin, views.APIView):
 
         inventory_items = InventoryItem.objects.filter(
             branch_id=branch_id,
-            tenant=tenant,
             is_deleted=False
         )
 
@@ -2558,7 +2413,6 @@ class InventoryMovementReportView(TenantFromRequestMixin, views.APIView):
 
         total_adjustments_count = InventoryAdjustment.objects.filter(
             inventory_item__branch_id=branch_id,
-            tenant=tenant,
             adjustment_year=year,
             adjustment_month=month,
             is_deleted=False
@@ -2571,8 +2425,7 @@ class InventoryMovementReportView(TenantFromRequestMixin, views.APIView):
                 
             purchases = PurchaseInvoiceItem.objects.filter(
                 purchase_invoice__branch_id=branch_id,
-                purchase_invoice__tenant=tenant,
-                purchase_invoice__invoice_type="PURCHASE",
+                purchase_invoice__purchase_invoice__invoice_type="PURCHASE",
                 purchase_invoice__invoice_year=year,
                 purchase_invoice__invoice_month=month,
                 inventory_item=item,
@@ -2582,8 +2435,7 @@ class InventoryMovementReportView(TenantFromRequestMixin, views.APIView):
             
             returns = PurchaseInvoiceItem.objects.filter(
                 purchase_invoice__branch_id=branch_id,
-                purchase_invoice__tenant=tenant,
-                purchase_invoice__invoice_type="RETURN",
+                purchase_invoice__purchase_invoice__invoice_type="RETURN",
                 purchase_invoice__invoice_year=year,
                 purchase_invoice__invoice_month=month,
                 inventory_item=item,
@@ -2593,8 +2445,7 @@ class InventoryMovementReportView(TenantFromRequestMixin, views.APIView):
             
             sales = SaleItem.objects.filter(
                 receipt__branch_id=branch_id,
-                receipt__tenant=tenant,
-                receipt__sale_year=year,
+                receipt__receipt__sale_year=year,
                 receipt__sale_month=month,
                 inventory_item=item,
                 is_deleted=False,
@@ -2603,7 +2454,6 @@ class InventoryMovementReportView(TenantFromRequestMixin, views.APIView):
             
             surplus = InventoryAdjustment.objects.filter(
                 inventory_item=item,
-                tenant=tenant,
                 adjustment_type="SURPLUS",
                 adjustment_year=year,
                 adjustment_month=month,
@@ -2612,7 +2462,6 @@ class InventoryMovementReportView(TenantFromRequestMixin, views.APIView):
             
             deficit = InventoryAdjustment.objects.filter(
                 inventory_item=item,
-                tenant=tenant,
                 adjustment_type="DEFICIT",
                 adjustment_year=year,
                 adjustment_month=month,
@@ -2647,7 +2496,7 @@ class InventoryMovementReportView(TenantFromRequestMixin, views.APIView):
         })
 
 
-class ProfitAndLossReportView(TenantFromRequestMixin, views.APIView):
+class ProfitAndLossReportView(views.APIView):
     def get(self, request):
         
         from django.db.models import Sum
@@ -2662,7 +2511,7 @@ class ProfitAndLossReportView(TenantFromRequestMixin, views.APIView):
             raise ValidationError({"branch_id": ["Invalid ID format."]})
             
         try:
-            Branch.objects.get(id=branch_id, tenant=tenant, is_deleted=False)
+            Branch.objects.get(id=branch_id, is_deleted=False)
         except Branch.DoesNotExist:
             raise ValidationError({"branch_id": ["Branch does not exist or does not belong to this tenant."]})
 
@@ -2690,8 +2539,7 @@ class ProfitAndLossReportView(TenantFromRequestMixin, views.APIView):
 
         sale_items_qs = SaleItem.objects.filter(
             receipt__branch_id=branch_id,
-            receipt__tenant=tenant,
-            receipt__sale_year=year,
+            receipt__receipt__sale_year=year,
             receipt__sale_month=month,
             receipt__is_deleted=False,
             is_deleted=False
@@ -2815,7 +2663,6 @@ class ProfitAndLossReportView(TenantFromRequestMixin, views.APIView):
         # Operating Expenses (branch-level, not filtered by salesperson)
         expenses_total = Expense.objects.filter(
             branch_id=branch_id,
-            tenant=tenant,
             expense_year=year,
             expense_month=month,
             is_deleted=False
@@ -2836,7 +2683,7 @@ class ProfitAndLossReportView(TenantFromRequestMixin, views.APIView):
         })
 
 
-class CashDrawerReportView(TenantFromRequestMixin, views.APIView):
+class CashDrawerReportView(views.APIView):
     def get(self, request):
         
         tenant = self._get_tenant()
@@ -2850,7 +2697,7 @@ class CashDrawerReportView(TenantFromRequestMixin, views.APIView):
             raise ValidationError({"branch_id": ["Invalid ID format."]})
             
         try:
-            Branch.objects.get(id=branch_id, tenant=tenant, is_deleted=False)
+            Branch.objects.get(id=branch_id, is_deleted=False)
         except Branch.DoesNotExist:
             raise ValidationError({"branch_id": ["Branch does not exist or does not belong to this tenant."]})
 
@@ -2871,7 +2718,6 @@ class CashDrawerReportView(TenantFromRequestMixin, views.APIView):
         # 1. Cash Sales receipts
         cash_receipts = Receipt.objects.filter(
             branch_id=branch_id,
-            tenant=tenant,
             sale_year=year,
             sale_month=month,
             is_cash_sale=True,
@@ -2892,7 +2738,6 @@ class CashDrawerReportView(TenantFromRequestMixin, views.APIView):
         # 2. Down payments (for credit sales where down_payment > 0)
         down_payment_receipts = Receipt.objects.filter(
             branch_id=branch_id,
-            tenant=tenant,
             sale_year=year,
             sale_month=month,
             is_cash_sale=False,
@@ -2915,7 +2760,6 @@ class CashDrawerReportView(TenantFromRequestMixin, views.APIView):
         # 3. Collection payments
         collections_payments = InstallmentPayment.objects.filter(
             receipt__branch_id=branch_id,
-            tenant=tenant,
             payment_date__year=year,
             payment_date__month=month,
             is_deleted=False,
@@ -2940,7 +2784,7 @@ class CashDrawerReportView(TenantFromRequestMixin, views.APIView):
         })
 
 
-class InstallmentsReportView(TenantFromRequestMixin, views.APIView):
+class InstallmentsReportView(views.APIView):
     def get(self, request):
         from django.db.models import Sum, F, ExpressionWrapper, IntegerField, Q
         from django.utils import timezone
@@ -2956,7 +2800,7 @@ class InstallmentsReportView(TenantFromRequestMixin, views.APIView):
             raise ValidationError({"branch_id": ["Invalid ID format."]})
             
         try:
-            Branch.objects.get(id=branch_id, tenant=tenant, is_deleted=False)
+            Branch.objects.get(id=branch_id, is_deleted=False)
         except Branch.DoesNotExist:
             raise ValidationError({"branch_id": ["Branch does not exist or does not belong to this tenant."]})
 
@@ -2974,7 +2818,7 @@ class InstallmentsReportView(TenantFromRequestMixin, views.APIView):
         year = int(year_str) if year_str else None
         month = int(month_str) if month_str else None
 
-        filters = Q(receipt__branch_id=branch_id, tenant=tenant, is_deleted=False, receipt__is_deleted=False)
+        filters = Q(receipt__branch_id=branch_id, is_deleted=False, receipt__is_deleted=False)
         
         if year: filters &= Q(payment_date__year=year)
         if month: filters &= Q(payment_date__month=month)

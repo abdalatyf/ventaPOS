@@ -1,46 +1,20 @@
 """
 models.py — VentaPOS NextGen Backend
 =====================================
-Single Source of Truth: d:/Projects/VentaPOS/database_schema.md
-API Contract:           d:/Projects/VentaPOS/api_contract.md
+Single Source of Truth: d:/Projects/VentaPOS/VentaPOS_NextGen/docs/architecture/02_data_models.md
 
-Design policies enforced in every model:
-  1. BigAutoField primary keys (Django default).
-  2. tenant_id FK on every tenant-owned table.
+Design policies enforced:
+  1. AutoField/BigAutoField primary keys (no UUIDs).
+  2. Single-tenant (no tenant_id FK).
   3. is_deleted BOOLEAN NOT NULL DEFAULT FALSE on every transactional table.
   4. DECIMAL(12, 2) for all financial columns.
-  5. TIMESTAMP WITH TIME ZONE via DateTimeField (USE_TZ=True required in settings).
-  6. Composite unique constraints that include tenant_id to enforce per-tenant uniqueness.
-  7. DB-level CHECK constraints mapped via Django's CheckConstraint in Meta.constraints.
-
-Tables implemented (in schema order):
-  1.  Tenant
-  2.  CloudUser
-  3.  Branch
-  4.  Salesperson
-  5.  InventoryItem
-  6.  CommissionHistory
-  7.  InventoryAdjustment
-  8.  Supplier
-  9.  PurchaseInvoice
-  10. PurchaseInvoiceItem
-  11. Receipt
-  12. SaleItem
-  13. InstallmentPayment
-  14. Expense
-  15. CompanySetting
-  16. ClientLicense
-  17. UsedLicense
-  18. LicenseHistory
-  19. PendingExternalReceipt
-
-NOTE: The legacy ActionLog model is kept at the bottom to avoid breaking existing
-migrations. It is NOT part of the approved schema and will be migrated away.
+  5. Integer fields for all quantities.
 """
 
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
-
+from django.db.models import Sum, Q, Max
+import uuid
 
 # ---------------------------------------------------------------------------
 # Helper: base soft-delete queryset
@@ -48,7 +22,6 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 
 class ActiveManager(models.Manager):
     """Default manager that filters out soft-deleted rows (is_deleted=FALSE)."""
-
     def get_queryset(self):
         return super().get_queryset().filter(is_deleted=False)
 
@@ -59,98 +32,15 @@ class AllObjectsManager(models.Manager):
 
 
 # ===========================================================================
-# 1. Tenant (الشركة)
-# ===========================================================================
-
-class Tenant(models.Model):
-    """Root tenant / company entity. All other tables reference this."""
-
-    company_code = models.CharField(max_length=10, unique=True)
-    name = models.CharField(max_length=100)
-    is_active = models.BooleanField(default=True)
-    is_deleted = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    # Managers
-    objects = ActiveManager()
-    all_objects = AllObjectsManager()
-
-    class Meta:
-        db_table = "tenant"
-        verbose_name = "الشركة"
-        verbose_name_plural = "الشركات"
-        indexes = [
-            # Partial index hint — enforced at DB level via migration RunSQL
-            models.Index(fields=["id"], name="idx_tenant_active"),
-        ]
-
-    def __str__(self):
-        return f"{self.company_code} — {self.name}"
-
-
-# ===========================================================================
-# 2. CloudUser (مستخدمو السحابة)
-# ===========================================================================
-
-class CloudUser(models.Model):
-    """Cloud-level user accounts with role-based access."""
-
-    ROLE_CHOICES = [
-        ("ADMIN", "مدير النظام"),
-        ("CASHIER", "أمين الخزنة"),
-        ("VIEWER", "مستخدم السحابة"),
-        ("BRANCH_MANAGER", "مدير الفرع"),
-    ]
-
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="cloud_users", db_constraint=False
-    )
-    username = models.CharField(max_length=150)
-    password_hash = models.CharField(max_length=255)
-    role = models.CharField(max_length=50, choices=ROLE_CHOICES)
-    is_active = models.BooleanField(default=True)
-    is_deleted = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    objects = ActiveManager()
-    all_objects = AllObjectsManager()
-
-    class Meta:
-        db_table = "cloud_user"
-        verbose_name = "مستخدم السحابة"
-        verbose_name_plural = "مستخدمو السحابة"
-        constraints = [
-            # UNIQUE (tenant_id, username) — per schema §4.2
-            models.UniqueConstraint(
-                fields=["tenant", "username"],
-                name="uq_tenant_username",
-                condition=models.Q(is_deleted=False),
-            ),
-            models.CheckConstraint(
-                condition=models.Q(role__in=["ADMIN", "CASHIER", "VIEWER", "BRANCH_MANAGER"]),
-                name="chk_cloud_user_role",
-            ),
-        ]
-        indexes = [
-            models.Index(fields=["tenant"], name="idx_cloud_user_tenant"),
-        ]
-
-    def __str__(self):
-        return f"{self.tenant.company_code}/{self.username}"
-
-
-# ===========================================================================
-# 3. Branch (المخزن / الفرع)
+# 1. Branch (المخزن / الفرع)
 # ===========================================================================
 
 class Branch(models.Model):
-    """Physical branch or warehouse within a tenant."""
-
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="branches"
+    name = models.CharField(max_length=150, unique=True, verbose_name="اسم الفرع")
+    collection_commission_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0.00,
+        verbose_name="نسبة عمولة التحصيل"
     )
-    local_id = models.IntegerField()          # SQLite sequential ID from local device
-    name = models.CharField(max_length=150)
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -158,48 +48,23 @@ class Branch(models.Model):
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "branch"
+        db_table = "salesapp_branch"
         verbose_name = "الفرع / المخزن"
         verbose_name_plural = "الفروع / المخازن"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["tenant", "local_id"],
-                name="uq_tenant_branch_local_id",
-            ),
-            models.UniqueConstraint(
-                fields=["tenant", "name"],
-                name="uq_tenant_branch_name",
-                condition=models.Q(is_deleted=False),
-            ),
-            models.CheckConstraint(
-                condition=models.Q(local_id__gte=0),
-                name="chk_branch_local_id_gte_0",
-            ),
-        ]
-        indexes = [
-            models.Index(fields=["tenant"], name="idx_branch_tenant"),
-        ]
 
     def __str__(self):
-        return f"{self.tenant.company_code}/{self.name}"
+        return self.name
 
 
 # ===========================================================================
-# 4. Salesperson (المندوب)
+# 2. Salesperson (المندوب)
 # ===========================================================================
 
 class Salesperson(models.Model):
-    """Sales representative linked to a branch."""
-
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="salespeople"
-    )
-    branch = models.ForeignKey(
-        Branch, on_delete=models.CASCADE, related_name="salespeople"
-    )
-    local_id = models.IntegerField()          # Local device sequential ID
     name = models.CharField(max_length=100)
-    is_device_active = models.BooleanField(default=True)
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="salespeople")
+    device_token = models.UUIDField(default=uuid.uuid4, null=True, blank=True)
+    is_device_active = models.BooleanField(default=False)
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -207,235 +72,128 @@ class Salesperson(models.Model):
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "salesperson"
+        db_table = "salesapp_salesperson"
         verbose_name = "المندوب"
         verbose_name_plural = "المناديب"
         constraints = [
-            models.UniqueConstraint(
-                fields=["tenant", "local_id"],
-                name="uq_tenant_salesperson_local_id",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(local_id__gte=0),
-                name="chk_salesperson_local_id_gte_0",
-            ),
-        ]
-        indexes = [
-            models.Index(fields=["tenant"], name="idx_salesperson_tenant"),
+            models.UniqueConstraint(fields=["name", "branch"], name="uq_salesperson_name_branch")
         ]
 
     def __str__(self):
-        return f"{self.name} ({self.tenant.company_code})"
+        return f"{self.name} ({self.branch.name})"
 
 
 # ===========================================================================
-# 5. InventoryItem (البضاعة / الصنف)
+# 3. InventoryItem (البضاعة / الصنف)
 # ===========================================================================
 
 class InventoryItem(models.Model):
-    """Catalog item tracked per branch."""
-
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="inventory_items"
-    )
-    branch = models.ForeignKey(
-        Branch, on_delete=models.CASCADE, related_name="inventory_items"
-    )
-    local_id = models.IntegerField()
     name = models.CharField(max_length=200)
-    initial_quantity = models.IntegerField(default=0, validators=[MinValueValidator(0)])
-    initial_purchase_price = models.IntegerField(
-        default=0, validators=[MinValueValidator(0)]
-    )
-    initial_commission_amount = models.IntegerField(
-        default=0, validators=[MinValueValidator(0)]
-    )
-    initial_month = models.IntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(12)]
-    )
-    initial_year = models.IntegerField(validators=[MinValueValidator(2025)])
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="inventory_items")
+    initial_quantity = models.PositiveIntegerField(default=0)
+    initial_purchase_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    initial_commission_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    initial_month = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(12)])
+    initial_year = models.PositiveIntegerField(default=2026, validators=[MinValueValidator(2025)])
+    
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     objects = ActiveManager()
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "inventory_item"
+        db_table = "salesapp_inventoryitem"
         verbose_name = "صنف البضاعة"
         verbose_name_plural = "أصناف البضاعة"
         constraints = [
-            models.UniqueConstraint(
-                fields=["tenant", "local_id"],
-                name="uq_tenant_item_local_id",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(local_id__gte=0),
-                name="chk_inventory_item_local_id_gte_0",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(initial_quantity__gte=0),
-                name="chk_inventory_item_initial_qty_gte_0",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(initial_purchase_price__gte=0),
-                name="chk_inventory_item_purchase_price_gte_0",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(initial_commission_amount__gte=0),
-                name="chk_inventory_item_commission_gte_0",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(initial_month__gte=1, initial_month__lte=12),
-                name="chk_inventory_item_month_range",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(initial_year__gte=2025),
-                name="chk_inventory_item_year_gte_2025",
-            ),
+            models.UniqueConstraint(fields=["name", "branch"], name="uq_inventory_item_name_branch")
         ]
+        ordering = ['name']
         indexes = [
-            models.Index(
-                fields=["tenant", "branch"], name="idx_inv_item_ten_branch"
-            ),
+            models.Index(fields=["branch", "name"], name="idx_inv_item_branch_name"),
         ]
 
     def __str__(self):
-        return f"{self.name} [{self.tenant.company_code}]"
+        return f"{self.name} ({self.branch.name})"
 
-    # ------------------------------------------------------------------
-    # Business Logic: stock & commission calculators (schema §1.3)
-    # ------------------------------------------------------------------
+    def get_stock_at_date(self, month, year):
+        if year < self.initial_year or (year == self.initial_year and month < self.initial_month):
+            return 0
 
-    def get_stock_at_date(self, month: int, year: int) -> int:
-        """
-        Returns the net stock level of this item as of the given month/year
-        by aggregating initial quantity, purchases, returns, sales, and
-        inventory adjustments up to and including that period.
+        total_purchased = self.purchaseinvoiceitem_set.filter(
+            invoice__invoice_type='PURCHASE',
+            is_deleted=False, invoice__is_deleted=False
+        ).filter(
+            Q(invoice__invoice_year__lt=year) |
+            Q(invoice__invoice_year=year, invoice__invoice_month__lte=month)
+        ).aggregate(total=Sum('quantity'))['total'] or 0
 
-        Uses pessimistic locking internally when called inside a transaction.
-        """
-        from django.db.models import Sum, Q
+        total_returned = self.purchaseinvoiceitem_set.filter(
+            invoice__invoice_type='RETURN',
+            is_deleted=False, invoice__is_deleted=False
+        ).filter(
+            Q(invoice__invoice_year__lt=year) |
+            Q(invoice__invoice_year=year, invoice__invoice_month__lte=month)
+        ).aggregate(total=Sum('quantity'))['total'] or 0
 
-        before_or_eq = Q(activation_year__lt=year) | (
-            Q(activation_year=year) & Q(activation_month__lte=month)
+        total_sold = self.saleitem_set.filter(
+            is_deleted=False, receipt__is_deleted=False
+        ).filter(
+            Q(receipt__sale_year__lt=year) |
+            Q(receipt__sale_year=year, receipt__sale_month__lte=month)
+        ).aggregate(total=Sum('quantity'))['total'] or 0
+
+        adjustments = self.adjustments.filter(
+            is_deleted=False
+        ).filter(
+            Q(year__lt=year) | Q(year=year, month__lte=month)
         )
-        before_or_eq_invoice = Q(purchase_invoice__invoice_year__lt=year) | (
-            Q(purchase_invoice__invoice_year=year) & Q(purchase_invoice__invoice_month__lte=month)
-        )
-        before_or_eq_receipt = Q(receipt__sale_year__lt=year) | (
-            Q(receipt__sale_year=year) & Q(receipt__sale_month__lte=month)
-        )
-        before_or_eq_adj = Q(adjustment_year__lt=year) | (
-            Q(adjustment_year=year) & Q(adjustment_month__lte=month)
-        )
+        total_deficit = adjustments.filter(adjustment_type='DEFICIT').aggregate(total=Sum('quantity'))['total'] or 0
+        total_surplus = adjustments.filter(adjustment_type='SURPLUS').aggregate(total=Sum('quantity'))['total'] or 0
 
-        stock = 0
-        if self.initial_year < year or (
-            self.initial_year == year and self.initial_month <= month
-        ):
-            stock = self.initial_quantity
+        final_stock = (
+            self.initial_quantity + total_purchased + total_surplus
+        ) - (total_sold + total_returned + total_deficit)
+        return max(0, final_stock)
 
-        purchases = (
-            self.purchase_invoice_items.filter(
-                purchase_invoice__invoice_type="PURCHASE", is_deleted=False, purchase_invoice__is_deleted=False
-            )
-            .filter(before_or_eq_invoice)
-            .aggregate(total=Sum("quantity"))["total"] or 0
-        )
+    def get_commission_at_date(self, month, year):
+        latest_comm = self.commission_records.filter(
+            is_deleted=False
+        ).filter(
+            Q(activation_year__lt=year) |
+            Q(activation_year=year, activation_month__lte=month)
+        ).order_by('-activation_year', '-activation_month', '-id').first()
 
-        returns = (
-            self.purchase_invoice_items.filter(
-                purchase_invoice__invoice_type="RETURN", is_deleted=False
-            )
-            .filter(before_or_eq_invoice)
-            .aggregate(total=Sum("quantity"))["total"] or 0
-        )
+        if latest_comm:
+            return latest_comm.commission_amount
+        return self.initial_commission_amount
 
-        sales = (
-            self.sale_items.filter(is_deleted=False)
-            .filter(before_or_eq_receipt)
-            .aggregate(total=Sum("quantity"))["total"] or 0
-        )
+    def get_price_at_date(self, month, year):
+        latest_purchase = self.purchaseinvoiceitem_set.filter(
+            invoice__invoice_type='PURCHASE',
+            is_deleted=False, invoice__is_deleted=False
+        ).filter(
+            Q(invoice__invoice_year__lt=year) |
+            Q(invoice__invoice_year=year, invoice__invoice_month__lte=month)
+        ).order_by('-invoice__invoice_year', '-invoice__invoice_month', '-id').first()
 
-        adj_plus = (
-            self.inventory_adjustments.filter(
-                adjustment_type="SURPLUS", is_deleted=False
-            )
-            .filter(before_or_eq_adj)
-            .aggregate(total=Sum("quantity"))["total"] or 0
-        )
-
-        adj_minus = (
-            self.inventory_adjustments.filter(
-                adjustment_type="DEFICIT", is_deleted=False
-            )
-            .filter(before_or_eq_adj)
-            .aggregate(total=Sum("quantity"))["total"] or 0
-        )
-
-        return max(0, stock + purchases + adj_plus - sales - returns - adj_minus)
-
-    def get_price_at_date(self, month: int, year: int) -> int:
-        from django.db.models import Q
-        
-        latest_purchase = (
-            self.purchase_invoice_items.filter(
-                purchase_invoice__invoice_type="PURCHASE", is_deleted=False, purchase_invoice__is_deleted=False
-            )
-            .filter(
-                Q(purchase_invoice__invoice_year__lt=year)
-                | (Q(purchase_invoice__invoice_year=year) & Q(purchase_invoice__invoice_month__lte=month))
-            )
-            .order_by("-purchase_invoice__invoice_year", "-purchase_invoice__invoice_month", "-created_at")
-            .first()
-        )
-        
         if latest_purchase:
             return latest_purchase.purchase_price
         return self.initial_purchase_price
 
-    def get_commission_at_date(self, month: int, year: int):
-        """Returns the active commission rate for this item as of the given period."""
-        from django.db.models import Q
-
-        commission = (
-            self.commission_history.filter(
-                is_deleted=False
-            )
-            .filter(
-                Q(activation_year__lt=year)
-                | (Q(activation_year=year) & Q(activation_month__lte=month))
-            )
-            .order_by("-activation_year", "-activation_month", "-created_at")
-            .first()
-        )
-
-        if commission:
-            return commission.commission_amount
-        return self.initial_commission_amount
-
 
 # ===========================================================================
-# 6. CommissionHistory (سجل عمولات المناديب)
+# 4. CommissionHistory (سجل عمولات المناديب)
 # ===========================================================================
 
 class CommissionHistory(models.Model):
-    """Tracks commission rate changes per inventory item over time."""
-
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="commission_histories"
-    )
-    inventory_item = models.ForeignKey(
-        InventoryItem, on_delete=models.CASCADE, related_name="commission_history"
-    )
-    commission_amount = models.IntegerField(
-        default=0, validators=[MinValueValidator(0)]
-    )
-    activation_month = models.IntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(12)]
-    )
-    activation_year = models.IntegerField(validators=[MinValueValidator(2025)])
+    item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, related_name="commission_records")
+    commission_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    activation_month = models.PositiveIntegerField(validators=[MinValueValidator(1), MaxValueValidator(12)])
+    activation_year = models.PositiveIntegerField(validators=[MinValueValidator(2025)])
+    
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -443,61 +201,35 @@ class CommissionHistory(models.Model):
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "commission_history"
+        db_table = "salesapp_commissionhistory"
         verbose_name = "سجل العمولة"
         verbose_name_plural = "سجل العمولات"
         constraints = [
-            models.CheckConstraint(
-                condition=models.Q(commission_amount__gte=0),
-                name="chk_commission_amount_gte_0",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(activation_month__gte=1, activation_month__lte=12),
-                name="chk_commission_month_range",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(activation_year__gte=2025),
-                name="chk_commission_year_gte_2025",
-            ),
+            models.UniqueConstraint(fields=["item", "activation_month", "activation_year"], name="uq_comm_hist_item_date")
         ]
-        indexes = [
-            models.Index(
-                fields=["inventory_item"], name="idx_commission_history_item"
-            ),
-        ]
+        ordering = ['-activation_year', '-activation_month']
 
     def __str__(self):
-        return (
-            f"{self.inventory_item.name} — {self.commission_amount} "
-            f"({self.activation_month}/{self.activation_year})"
-        )
+        return f"{self.item.name} — {self.commission_amount} ({self.activation_month}/{self.activation_year})"
 
 
 # ===========================================================================
-# 7. InventoryAdjustment (جرد وتسويات البضاعة)
+# 5. InventoryAdjustment (جرد وتسويات البضاعة)
 # ===========================================================================
 
 class InventoryAdjustment(models.Model):
-    """Stock adjustment records (deficit or surplus)."""
-
     ADJUSTMENT_TYPES = [
         ("DEFICIT", "عجز (-)"),
         ("SURPLUS", "زيادة (+)"),
     ]
 
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="inventory_adjustments"
-    )
-    inventory_item = models.ForeignKey(
-        InventoryItem, on_delete=models.CASCADE, related_name="inventory_adjustments"
-    )
-    adjustment_type = models.CharField(max_length=20, choices=ADJUSTMENT_TYPES)
-    quantity = models.IntegerField(validators=[MinValueValidator(0)])
+    item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, related_name="adjustments")
+    adjustment_type = models.CharField(max_length=10, choices=ADJUSTMENT_TYPES)
+    quantity = models.PositiveIntegerField()
     reason = models.CharField(max_length=255, blank=True, null=True)
-    adjustment_month = models.IntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(12)]
-    )
-    adjustment_year = models.IntegerField(validators=[MinValueValidator(2025)])
+    month = models.PositiveIntegerField(validators=[MinValueValidator(1), MaxValueValidator(12)])
+    year = models.PositiveIntegerField(validators=[MinValueValidator(2025)])
+    
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -505,49 +237,22 @@ class InventoryAdjustment(models.Model):
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "inventory_adjustment"
+        db_table = "salesapp_inventoryadjustment"
         verbose_name = "تسوية المخزون"
         verbose_name_plural = "تسويات المخزون"
-        constraints = [
-            models.CheckConstraint(
-                condition=models.Q(adjustment_type__in=["DEFICIT", "SURPLUS"]),
-                name="chk_adjustment_type_valid",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(quantity__gte=0),
-                name="chk_adjustment_quantity_gte_0",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(adjustment_month__gte=1, adjustment_month__lte=12),
-                name="chk_adjustment_month_range",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(adjustment_year__gte=2025),
-                name="chk_adjustment_year_gte_2025",
-            ),
-        ]
-        indexes = [
-            models.Index(
-                fields=["inventory_item"], name="idx_inventory_adjustment_item"
-            ),
-        ]
+        ordering = ['-year', '-month', '-id']
 
     def __str__(self):
         sign = "+" if self.adjustment_type == "SURPLUS" else "-"
-        return f"{sign}{self.quantity} × {self.inventory_item.name}"
+        return f"{sign}{self.quantity} × {self.item.name}"
 
 
 # ===========================================================================
-# 8. Supplier (الموردين)
+# 6. Supplier (الموردين)
 # ===========================================================================
 
 class Supplier(models.Model):
-    """Procurement vendor / supplier entity."""
-
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="suppliers"
-    )
-    name = models.CharField(max_length=200)
+    name = models.CharField(max_length=200, unique=True)
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -555,51 +260,31 @@ class Supplier(models.Model):
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "supplier"
+        db_table = "salesapp_supplier"
         verbose_name = "المورد"
         verbose_name_plural = "الموردون"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["tenant", "name"],
-                name="uq_tenant_supplier_name",
-                condition=models.Q(is_deleted=False),
-            ),
-        ]
-        indexes = [
-            models.Index(fields=["tenant"], name="idx_supplier_tenant"),
-        ]
 
     def __str__(self):
-        return f"{self.name} ({self.tenant.company_code})"
+        return self.name
 
 
 # ===========================================================================
-# 9. PurchaseInvoice (فاتورة الشراء / المرتجع)
+# 7. PurchaseInvoice (فاتورة الشراء / المرتجع)
 # ===========================================================================
 
 class PurchaseInvoice(models.Model):
-    """Vendor purchase or return invoice header."""
-
     INVOICE_TYPES = [
         ("PURCHASE", "فاتورة شراء"),
         ("RETURN", "فاتورة مرتجع"),
     ]
 
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="purchase_invoices"
-    )
-    branch = models.ForeignKey(
-        Branch, on_delete=models.CASCADE, related_name="purchase_invoices"
-    )
-    supplier = models.ForeignKey(
-        Supplier, on_delete=models.CASCADE, related_name="purchase_invoices"
-    )
-    invoice_number = models.IntegerField(validators=[MinValueValidator(0)])
-    invoice_type = models.CharField(max_length=20, choices=INVOICE_TYPES)
-    invoice_month = models.IntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(12)]
-    )
-    invoice_year = models.IntegerField(validators=[MinValueValidator(2025)])
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="purchase_invoices")
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name="purchase_invoices")
+    invoice_number = models.PositiveIntegerField()
+    invoice_type = models.CharField(max_length=20, choices=INVOICE_TYPES, default="PURCHASE")
+    invoice_month = models.PositiveIntegerField(db_index=True, validators=[MinValueValidator(1), MaxValueValidator(12)])
+    invoice_year = models.PositiveIntegerField(db_index=True, validators=[MinValueValidator(2025)])
+    
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -607,61 +292,28 @@ class PurchaseInvoice(models.Model):
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "purchase_invoice"
+        db_table = "salesapp_purchaseinvoice"
         verbose_name = "فاتورة الشراء"
         verbose_name_plural = "فواتير الشراء"
         constraints = [
-            models.UniqueConstraint(
-                fields=["tenant", "branch", "invoice_number", "invoice_type"],
-                name="uq_tenant_branch_invoice_num_type",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(invoice_number__gte=0),
-                name="chk_purchase_invoice_number_gte_0",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(invoice_type__in=["PURCHASE", "RETURN"]),
-                name="chk_purchase_invoice_type_valid",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(invoice_month__gte=1, invoice_month__lte=12),
-                name="chk_purchase_invoice_month_range",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(invoice_year__gte=2025),
-                name="chk_purchase_invoice_year_gte_2025",
-            ),
+            models.UniqueConstraint(fields=["branch", "invoice_number", "supplier"], name="uq_pur_inv_branch_num_supp")
         ]
-        indexes = [
-            models.Index(
-                fields=["tenant", "branch"], name="idx_pur_inv_ten_branch"
-            ),
-        ]
+        ordering = ['-invoice_year', '-invoice_month', '-id']
 
     def __str__(self):
         return f"#{self.invoice_number} {self.invoice_type} — {self.supplier.name}"
 
 
 # ===========================================================================
-# 10. PurchaseInvoiceItem (أصناف فاتورة الشراء)
+# 8. PurchaseInvoiceItem (أصناف فاتورة الشراء)
 # ===========================================================================
 
 class PurchaseInvoiceItem(models.Model):
-    """Line item within a purchase or return invoice."""
-
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="purchase_invoice_items"
-    )
-    purchase_invoice = models.ForeignKey(
-        PurchaseInvoice, on_delete=models.CASCADE, related_name="items"
-    )
-    inventory_item = models.ForeignKey(
-        InventoryItem, on_delete=models.CASCADE, related_name="purchase_invoice_items"
-    )
-    quantity = models.IntegerField(validators=[MinValueValidator(0)])
-    purchase_price = models.IntegerField(
-        default=0, validators=[MinValueValidator(0)]
-    )
+    invoice = models.ForeignKey(PurchaseInvoice, on_delete=models.CASCADE, related_name="items")
+    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, related_name="purchaseinvoiceitem_set")
+    quantity = models.PositiveIntegerField(default=1)
+    purchase_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True)
+    
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -669,140 +321,93 @@ class PurchaseInvoiceItem(models.Model):
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "purchase_invoice_item"
+        db_table = "salesapp_purchaseinvoiceitem"
         verbose_name = "صنف فاتورة شراء"
         verbose_name_plural = "أصناف فواتير الشراء"
-        constraints = [
-            models.CheckConstraint(
-                condition=models.Q(quantity__gte=0),
-                name="chk_pi_item_quantity_gte_0",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(purchase_price__gte=0),
-                name="chk_pi_item_purchase_price_gte_0",
-            ),
-        ]
-        indexes = [
-            models.Index(
-                fields=["purchase_invoice"],
-                name="idx_pur_inv_item_inv",
-            ),
-        ]
 
     def __str__(self):
         return f"{self.inventory_item.name} × {self.quantity}"
 
 
 # ===========================================================================
-# 11. Receipt (الفاتورة / الوصل)
+# 9. Receipt (الفاتورة / الوصل)
 # ===========================================================================
 
 class Receipt(models.Model):
-    """Sales transaction / invoice record."""
-
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="receipts"
-    )
-    branch = models.ForeignKey(
-        Branch, on_delete=models.CASCADE, related_name="receipts"
-    )
-    salesperson = models.ForeignKey(
-        Salesperson, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name="receipts"
-    )
-    # local_id maps to the SQLite row id on the originating device
-    local_id = models.IntegerField(validators=[MinValueValidator(0)])
-    receipt_number = models.IntegerField(validators=[MinValueValidator(0)])
-    # Idempotency key (schema §1.4)
-    # Tamper-proof hash (schema §1.5)
-    receipt_hash = models.CharField(max_length=255, unique=True)
-    customer_name = models.CharField(max_length=200)
-    phone_number = models.CharField(max_length=50, blank=True, null=True)
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="receipts", db_index=True)
+    salesperson = models.ForeignKey(Salesperson, on_delete=models.PROTECT, related_name="receipts", null=True, blank=True)
+    receipt_number = models.PositiveIntegerField(db_index=True)
+    client_uuid = models.UUIDField(default=uuid.uuid4)
+    receipt_hash = models.CharField(max_length=64, null=True, blank=True)
+    
+    customer_name = models.CharField(max_length=150, blank=True, null=True, db_index=True)
+    phone_number = models.CharField(max_length=20, blank=True, null=True, db_index=True)
     address = models.CharField(max_length=255, blank=True, null=True)
-    area = models.CharField(max_length=150, blank=True, null=True)
-    total_amount = models.IntegerField(
-        default=0, validators=[MinValueValidator(0)]
-    )
-    down_payment = models.IntegerField(
-        default=0, validators=[MinValueValidator(0)]
-    )
-    installment_system = models.CharField(max_length=255, blank=True, null=True)
-    sale_year = models.IntegerField(validators=[MinValueValidator(2025)])
-    sale_month = models.IntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(12)]
-    )
+    area = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    down_payment = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    installment_system = models.CharField(max_length=200, blank=True, null=True)
+    
+    sale_year = models.PositiveIntegerField(db_index=True)
+    sale_month = models.PositiveIntegerField(db_index=True)
     is_cash_sale = models.BooleanField(default=False)
+    
     products_text = models.TextField(blank=True, null=True)
-    is_confirmed = models.BooleanField(default=False)
+    source = models.CharField(max_length=20, default="DESKTOP")
+    sync_action = models.CharField(max_length=20, default="NEW")
+    is_confirmed = models.BooleanField(default=True)
+    
     is_deleted = models.BooleanField(default=False)
-    # Timestamps: local device time vs. server UTC ingestion time
-    created_at_local = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     objects = ActiveManager()
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "receipt"
+        db_table = "salesapp_receipt"
         verbose_name = "الفاتورة"
         verbose_name_plural = "الفواتير"
         constraints = [
-            models.CheckConstraint(
-                condition=models.Q(local_id__gte=0),
-                name="chk_receipt_local_id_gte_0",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(receipt_number__gte=0),
-                name="chk_receipt_number_gte_0",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(total_amount__gte=0),
-                name="chk_receipt_total_amount_gte_0",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(down_payment__gte=0),
-                name="chk_receipt_down_payment_gte_0",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(sale_year__gte=2025),
-                name="chk_receipt_sale_year_gte_2025",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(sale_month__gte=1, sale_month__lte=12),
-                name="chk_receipt_sale_month_range",
-            ),
+            models.UniqueConstraint(fields=["branch", "receipt_number"], name="uq_receipt_branch_number")
         ]
+        ordering = ['-receipt_number']
         indexes = [
-            models.Index(
-                fields=["tenant", "branch"], name="idx_receipt_tenant_branch"
-            ),
+            models.Index(fields=["branch", "sale_year", "sale_month"], name="idx_receipt_branch_date"),
             models.Index(fields=["receipt_hash"], name="idx_receipt_hash"),
         ]
 
     def __str__(self):
         return f"فاتورة #{self.receipt_number} — {self.customer_name}"
 
+    @classmethod
+    def get_next_receipt_number(cls, branch):
+        last_num = cls.objects.filter(branch=branch).aggregate(Max('receipt_number'))['receipt_number__max']
+        return (last_num or 0) + 1
+
+    @property
+    def is_authentic(self):
+        try:
+            from .utils.security_utils import generate_receipt_signature
+            expected_hash = generate_receipt_signature(
+                self.receipt_number, self.total_amount, self.sale_month, self.sale_year
+            )
+            return self.receipt_hash == expected_hash
+        except ImportError:
+            return True
+
 
 # ===========================================================================
-# 12. SaleItem (أصناف الفاتورة المباعة)
+# 10. SaleItem (أصناف الفاتورة المباعة)
 # ===========================================================================
 
 class SaleItem(models.Model):
-    """Line item within a sale receipt."""
-
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="sale_items"
-    )
-    receipt = models.ForeignKey(
-        Receipt, on_delete=models.CASCADE, related_name="sale_items"
-    )
-    inventory_item = models.ForeignKey(
-        InventoryItem, on_delete=models.CASCADE, related_name="sale_items"
-    )
-    quantity = models.IntegerField(validators=[MinValueValidator(0)])
-    unit_price = models.IntegerField(
-        default=0, validators=[MinValueValidator(0)]
-    )
+    receipt = models.ForeignKey(Receipt, on_delete=models.CASCADE, related_name="sale_items")
+    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, related_name="saleitem_set")
+    quantity = models.PositiveIntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -810,45 +415,23 @@ class SaleItem(models.Model):
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "sale_item"
-        verbose_name = "صنف مباع"
+        db_table = "salesapp_saleitem"
+        verbose_name = "الصنف المباع"
         verbose_name_plural = "الأصناف المباعة"
-        constraints = [
-            models.CheckConstraint(
-                condition=models.Q(quantity__gte=0),
-                name="chk_sale_item_quantity_gte_0",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(unit_price__gte=0),
-                name="chk_sale_item_unit_price_gte_0",
-            ),
-        ]
-        indexes = [
-            models.Index(fields=["receipt"], name="idx_sale_item_receipt"),
-        ]
 
     def __str__(self):
-        return f"{self.inventory_item.name} × {self.quantity} @ {self.unit_price}"
+        return f"{self.inventory_item.name} × {self.quantity}"
 
 
 # ===========================================================================
-# 13. InstallmentPayment (القسط المجدول)
+# 11. InstallmentPayment (القسط)
 # ===========================================================================
 
 class InstallmentPayment(models.Model):
-    """Scheduled installment payment tied to a receipt."""
-
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="installment_payments"
-    )
-    receipt = models.ForeignKey(
-        Receipt, on_delete=models.CASCADE, related_name="installment_payments"
-    )
-    # Absolute due date (25th-of-month rule enforced by business logic layer)
+    receipt = models.ForeignKey(Receipt, on_delete=models.CASCADE, related_name="payments")
     payment_date = models.DateField()
-    amount = models.IntegerField(
-        default=0, validators=[MinValueValidator(0)]
-    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -856,98 +439,52 @@ class InstallmentPayment(models.Model):
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "installment_payment"
-        verbose_name = "قسط"
+        db_table = "salesapp_installmentpayment"
+        verbose_name = "القسط"
         verbose_name_plural = "الأقساط"
-        constraints = [
-            models.CheckConstraint(
-                condition=models.Q(amount__gte=0),
-                name="chk_installment_amount_gte_0",
-            ),
-        ]
-        indexes = [
-            models.Index(
-                fields=["receipt"], name="idx_inst_pay_receipt"
-            ),
-        ]
 
     def __str__(self):
-        return f"قسط {self.amount} — {self.payment_date}"
+        return f"قسط {self.amount} مستحق في {self.payment_date}"
 
 
 # ===========================================================================
-# 14. Expense (دفتر المصاريف / الخزنة)
+# 12. Expense (المصاريف / الخزنة)
 # ===========================================================================
 
 class Expense(models.Model):
-    """Operational overhead expense logged against a branch."""
-
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="expenses"
-    )
-    branch = models.ForeignKey(
-        Branch, on_delete=models.CASCADE, related_name="expenses"
-    )
-    amount = models.IntegerField(
-        default=0, validators=[MinValueValidator(0)]
-    )
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name="expenses")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
     description = models.CharField(max_length=255)
-    expense_year = models.IntegerField(validators=[MinValueValidator(2025)])
-    expense_month = models.IntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(12)]
-    )
+    expense_year = models.IntegerField()
+    expense_month = models.IntegerField()
+    
     is_deleted = models.BooleanField(default=False)
-    # Local device timestamp vs. server ingestion time
-    created_at_local = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
 
     objects = ActiveManager()
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "expense"
-        verbose_name = "مصروف"
+        db_table = "salesapp_expense"
+        verbose_name = "المصروف"
         verbose_name_plural = "المصروفات"
-        constraints = [
-            models.CheckConstraint(
-                condition=models.Q(amount__gte=0),
-                name="chk_expense_amount_gte_0",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(expense_year__gte=2025),
-                name="chk_expense_year_gte_2025",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(expense_month__gte=1, expense_month__lte=12),
-                name="chk_expense_month_range",
-            ),
-        ]
-        indexes = [
-            models.Index(
-                fields=["tenant", "branch"], name="idx_expense_tenant_branch"
-            ),
-        ]
 
     def __str__(self):
-        return f"{self.description} — {self.amount}"
+        return f"{self.description} ({self.amount})"
 
 
 # ===========================================================================
-# 15. CompanySetting (إعدادات الشركة — Singleton per tenant)
+# 13. CompanySetting (إعدادات الشركة)
 # ===========================================================================
 
 class CompanySetting(models.Model):
-    """Per-tenant company profile settings. One row per tenant (singleton)."""
-
-    tenant = models.OneToOneField(
-        Tenant, on_delete=models.CASCADE, related_name="company_setting", db_constraint=False
-    )
     name = models.CharField(max_length=100)
     description = models.CharField(max_length=200, blank=True, null=True)
     phone1 = models.CharField(max_length=20)
     phone2 = models.CharField(max_length=20, blank=True, null=True)
-    footer_text = models.CharField(max_length=250, blank=True, null=True)
+    footer_text = models.CharField(max_length=250, default="تطبق الشروط والأحكام")
     is_cloud_viewer = models.BooleanField(default=False)
+    
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -955,52 +492,39 @@ class CompanySetting(models.Model):
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "company_setting"
+        db_table = "salesapp_companysetting"
         verbose_name = "إعدادات الشركة"
-        verbose_name_plural = "إعدادات الشركات"
-        constraints = [
-            # OneToOneField already enforces this at Django level;
-            # the DB constraint is added for belt-and-suspenders safety.
-            models.UniqueConstraint(
-                fields=["tenant"],
-                name="uq_tenant_company_setting",
-            ),
-        ]
+        verbose_name_plural = "إعدادات الشركة"
+
+    def save(self, *args, **kwargs):
+        if not self.pk and CompanySetting.objects.exists():
+            # Ensure Singleton
+            existing = CompanySetting.objects.first()
+            self.pk = existing.pk
+        super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"إعدادات {self.name}"
+        return self.name
 
 
 # ===========================================================================
-# 16. ClientLicense (ترخيص العميل وتأمين السجل)
+# 14. ClientLicense (الترخيص)
 # ===========================================================================
 
 class ClientLicense(models.Model):
-    """
-    Active activation profile for a local POS device.
-    Row integrity enforced via HMAC-SHA256 signature in license_code_hash
-    (schema §1.5).
-    """
-
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="client_licenses", db_constraint=False
-    )
-    product_id = models.IntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(16)]
-    )
-    start_date = models.DateField()
+    product_id = models.IntegerField()
+    start_date = models.DateField(null=True, blank=True)
     expiry_date = models.DateField(null=True, blank=True)
-    invoices_balance = models.IntegerField(
-        default=0, validators=[MinValueValidator(0)]
-    )
+    invoices_balance = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
-    machine_id = models.CharField(max_length=255)
-    company_code = models.CharField(max_length=10)
-    license_code_hash = models.CharField(max_length=64)
+    machine_id = models.CharField(max_length=255, null=True, blank=True)
+    company_code = models.CharField(max_length=10, null=True, blank=True)
+    license_code_hash = models.CharField(max_length=64, null=True, blank=True)
     is_online_active = models.BooleanField(default=False)
     online_start_date = models.DateField(null=True, blank=True)
     online_expiry_date = models.DateField(null=True, blank=True)
     last_checkin = models.DateTimeField(auto_now=True)
+    
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -1008,40 +532,19 @@ class ClientLicense(models.Model):
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "client_license"
-        verbose_name = "ترخيص عميل"
-        verbose_name_plural = "تراخيص العملاء"
-        constraints = [
-            models.CheckConstraint(
-                condition=models.Q(product_id__gte=1, product_id__lte=16),
-                name="chk_client_license_product_id_range",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(invoices_balance__gte=0),
-                name="chk_client_license_balance_gte_0",
-            ),
-        ]
-        indexes = [
-            models.Index(fields=["tenant"], name="idx_client_license_tenant"),
-            models.Index(
-                fields=["license_code_hash"], name="idx_client_license_hash"
-            ),
-        ]
+        db_table = "salesapp_clientlicense"
+        verbose_name = "الترخيص"
+        verbose_name_plural = "التراخيص"
 
     def __str__(self):
-        return f"License P{self.product_id} — {self.machine_id[:12]}…"
+        return f"License Type {self.product_id} - Active: {self.is_active}"
 
 
 # ===========================================================================
-# 17. UsedLicense (منع تكرار تفعيل الأكواد)
+# 15. UsedLicense (الأكواد المستخدمة)
 # ===========================================================================
 
 class UsedLicense(models.Model):
-    """Registry of consumed license activation codes (prevents replay)."""
-
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="used_licenses", db_constraint=False
-    )
     code_hash = models.CharField(max_length=64, unique=True)
     used_at = models.DateTimeField(auto_now_add=True)
     is_deleted = models.BooleanField(default=False)
@@ -1050,72 +553,50 @@ class UsedLicense(models.Model):
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "used_license"
-        verbose_name = "كود مستخدم"
+        db_table = "salesapp_usedlicense"
+        verbose_name = "الكود المستخدم"
         verbose_name_plural = "الأكواد المستخدمة"
-        indexes = [
-            models.Index(fields=["code_hash"], name="idx_used_license_hash"),
-        ]
 
     def __str__(self):
-        return f"UsedLicense {self.code_hash[:16]}…"
+        return self.code_hash
 
 
 # ===========================================================================
-# 18. LicenseHistory (أرشيف سجل التراخيص)
+# 16. LicenseHistory (أرشيف التراخيص)
 # ===========================================================================
 
 class LicenseHistory(models.Model):
-    """Audit log of all licensing operations (activations, renewals, etc.)."""
-
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="license_histories", db_constraint=False
-    )
-    machine_id = models.CharField(max_length=255)
+    machine_id = models.CharField(max_length=100)
     product_name = models.CharField(max_length=100)
-    operation_type = models.CharField(max_length=50)
+    operation_type = models.CharField(max_length=50, default="تجديد/تفعيل")
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     added_balance = models.IntegerField(default=0)
     archived_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=50)
+    status = models.CharField(max_length=50, default="أرشيف")
+    
     is_deleted = models.BooleanField(default=False)
 
     objects = ActiveManager()
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "license_history"
-        verbose_name = "سجل ترخيص"
-        verbose_name_plural = "سجلات التراخيص"
-
-    def __str__(self):
-        return f"{self.operation_type} — {self.product_name} ({self.status})"
+        db_table = "salesapp_licensehistory"
+        verbose_name = "أرشيف الترخيص"
+        verbose_name_plural = "أرشيف التراخيص"
 
 
 # ===========================================================================
-# 19. PendingExternalReceipt (الوصلات الخارجية المؤقتة)
+# 17. PendingExternalReceipt (الفواتير الخارجية المعلقة)
 # ===========================================================================
 
 class PendingExternalReceipt(models.Model):
-    """Temporary staging table for external receipts awaiting processing."""
-
-    SOURCE_CHOICES = [
-        ("CLOUD", "سحابة"),
-        ("USB", "USB"),
-        ("FILE", "ملف"),
-    ]
-
-    tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="pending_external_receipts"
-    )
-    branch = models.ForeignKey(
-        Branch, on_delete=models.CASCADE, related_name="pending_external_receipts"
-    )
-    batch_id = models.CharField(max_length=100)
-    source = models.CharField(max_length=20, choices=SOURCE_CHOICES)
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name="pending_receipts")
+    batch_id = models.CharField(max_length=100, default="", blank=True)
+    source = models.CharField(max_length=20)
     payload = models.JSONField()
     is_processed = models.BooleanField(default=False)
+    
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -1123,41 +604,10 @@ class PendingExternalReceipt(models.Model):
     all_objects = AllObjectsManager()
 
     class Meta:
-        db_table = "pending_external_receipt"
-        verbose_name = "وصل خارجي مؤقت"
-        verbose_name_plural = "الوصلات الخارجية المؤقتة"
-        constraints = [
-            models.CheckConstraint(
-                condition=models.Q(source__in=["CLOUD", "USB", "FILE"]),
-                name="chk_pending_receipt_source_valid",
-            ),
-        ]
+        db_table = "salesapp_pendingexternalreceipt"
+        verbose_name = "الفاتورة المعلقة"
+        verbose_name_plural = "الفواتير المعلقة"
+        ordering = ['-created_at']
 
     def __str__(self):
-        return f"Batch {self.batch_id} [{self.source}]"
-
-
-# ===========================================================================
-# LEGACY — ActionLog (not in approved schema; kept to avoid migration breakage)
-# ===========================================================================
-
-class ActionLog(models.Model):
-    """
-    Legacy audit log. NOT part of the approved database_schema.md.
-    Will be removed in a future migration once the audit trail is handled
-    by the LicenseHistory and a future dedicated AuditLog table.
-    """
-
-    actor = models.CharField(max_length=100, null=True, blank=True)
-    action_type = models.CharField(max_length=20)
-    model_name = models.CharField(max_length=50)
-    details = models.TextField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "action_log"
-        verbose_name = "سجل الإجراءات"
-        verbose_name_plural = "سجلات الإجراءات"
-
-    def __str__(self):
-        return f"{self.action_type} on {self.model_name} by {self.actor}"
+        return f"Pending Receipt (Batch {self.batch_id}) - {self.source}"

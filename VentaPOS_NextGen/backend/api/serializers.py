@@ -21,8 +21,6 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 from .models import (
-    Tenant,
-    CloudUser,
     Branch,
     Salesperson,
     InventoryItem,
@@ -40,8 +38,7 @@ from .models import (
     UsedLicense,
     LicenseHistory,
     PendingExternalReceipt,
-    ActionLog,
-)
+    )
 from .utils.security_utils import (
     generate_receipt_signature,
     generate_record_signature,
@@ -53,49 +50,16 @@ from .utils.security_utils import (
 # 1. Tenant
 # ---------------------------------------------------------------------------
 
-class TenantSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Tenant
-        fields = [
-            "id", "company_code", "name", "is_active",
-            "is_deleted", "created_at",
-        ]
-        read_only_fields = ["id", "is_deleted", "created_at"]
-
-
-# ---------------------------------------------------------------------------
-# 2. CloudUser
-# ---------------------------------------------------------------------------
-
-class CloudUserSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
-
-    class Meta:
-        model = CloudUser
-        fields = [
-            "id", "tenant_id", "username", "password_hash", "role",
-            "is_active", "is_deleted", "created_at",
-        ]
-        read_only_fields = ["id", "tenant_id", "is_deleted", "created_at"]
-        extra_kwargs = {
-            "password_hash": {"write_only": True},
-        }
-
-
-# ---------------------------------------------------------------------------
-# 3. Branch
-# ---------------------------------------------------------------------------
-
 class BranchSerializer(serializers.ModelSerializer):
     tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
 
     class Meta:
         model = Branch
         fields = [
-            "id", "tenant_id", "local_id", "name",
+            "id", "local_id", "name",
             "is_deleted", "created_at",
         ]
-        read_only_fields = ["id", "tenant_id", "is_deleted", "created_at"]
+        read_only_fields = ["id", "is_deleted", "created_at"]
 
 
 # ---------------------------------------------------------------------------
@@ -108,10 +72,10 @@ class SalespersonSerializer(serializers.ModelSerializer):
     class Meta:
         model = Salesperson
         fields = [
-            "id", "tenant_id", "branch", "local_id", "name",
+            "id", "branch", "local_id", "name",
             "device_token", "is_device_active", "is_deleted", "created_at",
         ]
-        read_only_fields = ["id", "tenant_id", "device_token", "is_deleted", "created_at"]
+        read_only_fields = ["id", "device_token", "is_deleted", "created_at"]
 
 
 # ---------------------------------------------------------------------------
@@ -136,12 +100,12 @@ class InventoryItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = InventoryItem
         fields = [
-            "id", "tenant_id", "branch", "local_id", "name",
+            "id", "branch", "local_id", "name",
             "initial_quantity", "initial_purchase_price",
             "initial_commission_amount", "initial_month", "initial_year",
             "is_deleted", "created_at", "current_stock",
         ]
-        read_only_fields = ["id", "tenant_id", "is_deleted", "created_at", "current_stock"]
+        read_only_fields = ["id", "is_deleted", "created_at", "current_stock"]
 
     def get_current_stock(self, obj):
         from django.utils import timezone
@@ -159,10 +123,10 @@ class CommissionHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = CommissionHistory
         fields = [
-            "id", "tenant_id", "inventory_item", "commission_amount",
+            "id", "inventory_item", "commission_amount",
             "activation_month", "activation_year", "is_deleted", "created_at",
         ]
-        read_only_fields = ["id", "tenant_id", "is_deleted", "created_at"]
+        read_only_fields = ["id", "is_deleted", "created_at"]
 
 
 # ---------------------------------------------------------------------------
@@ -175,11 +139,11 @@ class InventoryAdjustmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = InventoryAdjustment
         fields = [
-            "id", "tenant_id", "inventory_item", "adjustment_type",
+            "id", "inventory_item", "adjustment_type",
             "quantity", "reason", "adjustment_month", "adjustment_year",
             "is_deleted", "created_at",
         ]
-        read_only_fields = ["id", "tenant_id", "is_deleted", "created_at"]
+        read_only_fields = ["id", "is_deleted", "created_at"]
 
     def validate(self, data):
         if data.get("adjustment_type") == "DEFICIT":
@@ -215,8 +179,8 @@ class SupplierSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Supplier
-        fields = ["id", "tenant_id", "name", "is_deleted", "created_at"]
-        read_only_fields = ["id", "tenant_id", "is_deleted", "created_at"]
+        fields = ["id", "name", "is_deleted", "created_at"]
+        read_only_fields = ["id", "is_deleted", "created_at"]
 
 
 # ---------------------------------------------------------------------------
@@ -229,10 +193,10 @@ class PurchaseInvoiceItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseInvoiceItem
         fields = [
-            "id", "tenant_id", "purchase_invoice", "inventory_item",
+            "id", "purchase_invoice", "inventory_item",
             "quantity", "purchase_price", "is_deleted", "created_at",
         ]
-        read_only_fields = ["id", "tenant_id", "purchase_invoice", "is_deleted", "created_at"]
+        read_only_fields = ["id", "purchase_invoice", "is_deleted", "created_at"]
 
 
 class PurchaseInvoiceSerializer(serializers.ModelSerializer):
@@ -243,11 +207,11 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseInvoice
         fields = [
-            "id", "tenant_id", "branch", "supplier",
+            "id", "branch", "supplier",
             "invoice_number", "invoice_type", "invoice_month", "invoice_year",
             "is_deleted", "created_at", "items",
         ]
-        read_only_fields = ["id", "tenant_id", "is_deleted", "created_at"]
+        read_only_fields = ["id", "is_deleted", "created_at"]
 
     def create(self, validated_data):
         items_data = validated_data.pop("items", [])
@@ -302,10 +266,10 @@ class SaleItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = SaleItem
         fields = [
-            "id", "tenant_id", "receipt", "inventory_item", "product_name",
+            "id", "receipt", "inventory_item", "product_name",
             "quantity", "unit_price", "is_deleted", "created_at",
         ]
-        read_only_fields = ["id", "tenant_id", "receipt", "product_name", "is_deleted", "created_at"]
+        read_only_fields = ["id", "receipt", "product_name", "is_deleted", "created_at"]
 
     def to_internal_value(self, data):
         # Allow the API contract field alias `inventory_item_id`
@@ -328,11 +292,11 @@ class InstallmentPaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = InstallmentPayment
         fields = [
-            "id", "tenant_id", "receipt", "payment_date",
+            "id", "receipt", "payment_date",
             "payment_month", "payment_year",
             "amount", "is_deleted", "created_at",
         ]
-        read_only_fields = ["id", "tenant_id", "receipt", "is_deleted", "created_at"]
+        read_only_fields = ["id", "receipt", "is_deleted", "created_at"]
         extra_kwargs = {
             "payment_date": {"required": False},
         }
@@ -366,7 +330,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
     class Meta:
         model = Receipt
         fields = [
-            "id", "tenant_id", "branch", "salesperson",
+            "id", "branch", "salesperson",
             "local_id", "receipt_number", "receipt_hash",
             "customer_name", "phone_number", "address", "area",
             "total_amount", "down_payment", "installment_system",
@@ -376,7 +340,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
             "sale_items", "installment_payments",
         ]
         read_only_fields = [
-            "id", "tenant_id", "receipt_hash", "is_confirmed",
+            "id", "receipt_hash", "is_confirmed",
             "is_deleted", "created_at",
         ]
         extra_kwargs = {
@@ -641,11 +605,11 @@ class ExpenseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Expense
         fields = [
-            "id", "tenant_id", "branch", "amount", "description",
+            "id", "branch", "amount", "description",
             "expense_year", "expense_month",
             "is_deleted", "created_at_local", "created_at",
         ]
-        read_only_fields = ["id", "tenant_id", "is_deleted", "created_at"]
+        read_only_fields = ["id", "is_deleted", "created_at"]
 
 
 # ---------------------------------------------------------------------------
@@ -658,11 +622,11 @@ class CompanySettingSerializer(serializers.ModelSerializer):
     class Meta:
         model = CompanySetting
         fields = [
-            "id", "tenant_id", "name", "description",
+            "id", "name", "description",
             "phone1", "phone2", "footer_text",
             "is_cloud_viewer", "is_deleted", "created_at",
         ]
-        read_only_fields = ["id", "tenant_id", "is_deleted", "created_at"]
+        read_only_fields = ["id", "is_deleted", "created_at"]
 
 
 # ---------------------------------------------------------------------------
@@ -675,14 +639,14 @@ class ClientLicenseSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClientLicense
         fields = [
-            "id", "tenant_id", "product_id",
+            "id", "product_id",
             "start_date", "expiry_date", "invoices_balance",
             "is_active", "machine_id", "company_code", "license_code_hash",
             "is_online_active", "online_start_date", "online_expiry_date",
             "last_checkin", "is_deleted", "created_at",
         ]
         read_only_fields = [
-            "id", "tenant_id", "license_code_hash",
+            "id", "license_code_hash",
             "last_checkin", "is_deleted", "created_at",
         ]
         extra_kwargs = {
@@ -699,8 +663,8 @@ class UsedLicenseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UsedLicense
-        fields = ["id", "tenant_id", "code_hash", "used_at", "is_deleted"]
-        read_only_fields = ["id", "tenant_id", "used_at", "is_deleted"]
+        fields = ["id", "code_hash", "used_at", "is_deleted"]
+        read_only_fields = ["id", "used_at", "is_deleted"]
 
 
 # ---------------------------------------------------------------------------
@@ -713,11 +677,11 @@ class LicenseHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = LicenseHistory
         fields = [
-            "id", "tenant_id", "machine_id", "product_name", "operation_type",
+            "id", "machine_id", "product_name", "operation_type",
             "start_date", "end_date", "added_balance", "archived_at",
             "status", "is_deleted",
         ]
-        read_only_fields = ["id", "tenant_id", "archived_at", "is_deleted"]
+        read_only_fields = ["id", "archived_at", "is_deleted"]
 
 
 # ---------------------------------------------------------------------------
@@ -725,23 +689,11 @@ class LicenseHistorySerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class PendingExternalReceiptSerializer(serializers.ModelSerializer):
-    tenant_id = serializers.IntegerField(source="tenant.id", read_only=True)
-
     class Meta:
         model = PendingExternalReceipt
         fields = [
-            "id", "tenant_id", "branch", "batch_id", "source",
+            "id", "branch", "batch_id", "source",
             "payload", "is_processed", "is_deleted", "created_at",
         ]
-        read_only_fields = ["id", "tenant_id", "is_deleted", "created_at"]
+        read_only_fields = ["id", "is_deleted", "created_at"]
 
-
-# ---------------------------------------------------------------------------
-# LEGACY — ActionLog (not in approved schema)
-# ---------------------------------------------------------------------------
-
-class ActionLogSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ActionLog
-        fields = ["id", "actor", "action_type", "model_name", "details", "created_at"]
-        read_only_fields = ["id", "created_at"]

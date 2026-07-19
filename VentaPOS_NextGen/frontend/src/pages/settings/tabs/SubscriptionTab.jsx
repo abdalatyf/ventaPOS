@@ -1,26 +1,63 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IconCalendarCheck, IconCheck, IconX, IconCloudCheck } from '@tabler/icons-react';
 import MachineIdDisplay from '../../../components/settings/MachineIdDisplay';
 import LicenseKeyInput from '../../../components/settings/LicenseKeyInput';
+import api from '../../../api';
 
 export default function SubscriptionTab() {
-  const [machineId] = useState('8F3A9C-D7E1B2-4C59A0-F6E8D2-99B4C1');
-  const [licenseInfo] = useState({
-    isValid: true,
-    expiryDate: '2026-12-31',
-    daysRemaining: 171,
-    isOnlineActive: true,
-    onlineExpiryDate: '2026-12-31'
+  const [machineId, setMachineId] = useState('جاري التحميل...');
+  const [licenseInfo, setLicenseInfo] = useState({
+    isValid: false,
+    expiryDate: null,
+    daysRemaining: 0,
+    isOnlineActive: false,
+    onlineExpiryDate: null,
+    totalBalance: 0
   });
   const [isActivating, setIsActivating] = useState(false);
 
-  const handleActivation = (code) => {
+  const fetchLicenseStatus = async () => {
+    try {
+      const response = await api.get('/license/status/');
+      const data = response.data;
+      if (data) {
+        setMachineId(data.machine_id || 'غير متوفر');
+        
+        let days = 0;
+        if (data.expiry_date) {
+          const diff = new Date(data.expiry_date).getTime() - new Date().getTime();
+          days = Math.max(0, Math.ceil(diff / (1000 * 3600 * 24)));
+        }
+
+        setLicenseInfo({
+          isValid: data.status === 'active',
+          expiryDate: data.expiry_date,
+          daysRemaining: days,
+          totalBalance: data.total_invoices_balance || 0,
+          isOnlineActive: false, // Not implemented in current API response
+          onlineExpiryDate: null
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch license status", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchLicenseStatus();
+  }, []);
+
+  const handleActivation = async (code) => {
     setIsActivating(true);
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const response = await api.post('/license/activate/', { license_code: code });
+      alert(response.data?.message || 'تم التفعيل بنجاح');
+      await fetchLicenseStatus();
+    } catch (error) {
+      alert(error.response?.data?.error || 'حدث خطأ أثناء التفعيل');
+    } finally {
       setIsActivating(false);
-      alert(`تم تنفيذ الطلب للكود: ${code}`);
-    }, 1500);
+    }
   };
 
   const historyRecords = [

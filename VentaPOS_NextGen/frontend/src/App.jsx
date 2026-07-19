@@ -17,6 +17,8 @@ import PurchaseEntry from './pages/PurchaseEntry';
 import SearchPurchases from './pages/SearchPurchases';
 import Expenses from './pages/Expenses';
 import SearchReceipts from './pages/SearchReceipts';
+import Inventory from './pages/Inventory';
+import ProductLedger from './pages/ProductLedger';
 
 // استيراد شاشات التقارير الجديدة
 import DashboardReport from './pages/reports/DashboardReport';
@@ -106,8 +108,8 @@ function App() {
           <Route path="receipts" element={<SearchReceipts />} />
           
           {/* مسارات المخزون */}
-          <Route path="inventory" element={<PlaceholderPage title="الأصناف" />} />
-          <Route path="product-ledger/:id" element={<PlaceholderPage title="حركة صنف" />} />
+          <Route path="inventory" element={<Inventory />} />
+          <Route path="product-ledger/:id" element={<ProductLedger />} />
           <Route path="search-purchases" element={<SearchPurchases />} />
           <Route path="purchases/new" element={<PurchaseEntry />} />
           <Route path="purchases/edit/:id" element={<PurchaseEntry />} />
@@ -122,6 +124,7 @@ function App() {
             <Route path="salesperson" element={<SalespersonPerformanceReport />} />
             <Route path="inventory" element={<InventoryMovementReport />} />
             <Route path="profit-and-loss" element={<ProfitAndLossReport />} />
+            <Route path="cash-drawer" element={<CashDrawerReport />} />
             <Route path="installments" element={<InstallmentsReport />} />
           </Route>
           

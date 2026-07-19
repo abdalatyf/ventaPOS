@@ -1,16 +1,65 @@
-# React + Vite
+# VentaPOS NextGen - Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Welcome to the **VentaPOS NextGen** frontend repository! This is a modern, offline-first Desktop POS application built with React, Vite, and Tabler UI. It is designed entirely in Arabic (RTL) with a professional and easy-to-use interface tailored for local markets.
 
-Currently, two official plugins are available:
+## 1. Project Overview
+The frontend is designed to be fast, responsive, and robust, providing an offline-first POS experience where the frontend runs locally on the cashier's machine alongside the backend. 
+- **Core Framework**: React 19
+- **Build Tool**: Vite (Lightning fast HMR and optimized builds)
+- **UI Component Library**: Tabler UI (via `@tabler/core` and custom React integration)
+- **Language & Direction**: Arabic (RTL) native.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 2. Setup and Installation
 
-## React Compiler
+### Prerequisites
+Make sure you have [Node.js](https://nodejs.org/) (v18+ recommended) and npm installed on your machine.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Installation
+Clone the repository, navigate to the frontend directory, and install dependencies:
 
-## Expanding the Oxlint configuration
+```bash
+cd D:/Projects/VentaPOS/VentaPOS_NextGen/frontend
+npm install
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+### Environment Variables
+You can configure the application by creating a `.env` file in the root of the frontend directory.
+- `VITE_API_URL`: The base URL for the backend API. 
+  *(Default: `http://127.0.0.1:8000/api/v1` if not provided)*
+
+## 3. Running the Development Server
+To start the Vite development server with Hot-Module Replacement (HMR):
+
+```bash
+npm run dev
+```
+The server will typically start at `http://localhost:5173`.
+
+## 4. Folder Structure Overview
+
+- **`src/pages/`**: Contains the main page components corresponding to different routes (e.g., `POS.jsx`, `Dashboard.jsx`, `Inventory.jsx`, `Login.jsx`). It also includes subdirectories for `reports/`, `settings/`, and `tools/`.
+- **`src/components/`**: Reusable and shared UI components (e.g., `AppShell.jsx`, `Navbar.jsx`, `ActivationModal.jsx`).
+- **`src/hooks/`**: Custom React hooks encapsulating reusable logic (e.g., `useSmartScroll.js`, `useDefaultDate.js`).
+- **`src/utils/`**: Helper scripts, parsers, and generic utilities.
+- **`src/api.js`**: Axios instance configuration, base URL setup, and request/response interceptors.
+- **`src/App.jsx`**: Main application component containing the React Router configuration and route protections.
+
+## 5. Key Architectural Choices
+
+- **Token-based Auth & Multi-Tenant Setup**: 
+  Authentication uses standard Token-based Auth. Additionally, multi-tenancy is handled via custom headers. `api.js` automatically intercepts outgoing requests to inject `Authorization`, `X-Company-Code`, `X-Machine-ID`, and `X-Branch-ID` headers retrieved from `LocalStorage`.
+- **LocalStorage for Branch Context**: 
+  The POS operates under a strict Branch Context. After login, users must select a branch. The `branchId` is persisted in `LocalStorage` and is required to access the main application shell.
+- **React Router & Protected Routes**: 
+  Routing is managed by `react-router-dom`. The `ProtectedRoute` component acts as a gatekeeper, ensuring the user has both a valid auth `token` and a selected `branchId` before rendering the `AppShell`.
+- **Offline-First & Interceptors**: 
+  The frontend seamlessly handles subscription and local license validations. Global Axios response interceptors catch `402 Payment Required` to enforce a "Read-Only Mode" when subscriptions expire, broadcasting custom events like `subscription_expired` to trigger UI modals globally.
+
+## 6. Building for Production
+
+To build the application for production deployment:
+
+```bash
+npm run build
+```
+This command bundles the React application in production mode and outputs the optimized static files into the `dist/` directory, ready to be served or packaged with the local desktop shell. You can preview the production build locally by running `npm run preview`.

@@ -5,13 +5,14 @@ from .views import (
     CommissionHistoryViewSet, InventoryAdjustmentViewSet, SupplierViewSet,
     PurchaseInvoiceViewSet, PurchaseInvoiceItemViewSet, ReceiptViewSet,
     SaleItemViewSet, InstallmentPaymentViewSet, PendingExternalReceiptViewSet,
-    ClientLicenseViewSet, UsedLicenseViewSet, LicenseHistoryViewSet, ActionLogViewSet,
+    ClientLicenseViewSet, UsedLicenseViewSet, LicenseHistoryViewSet,
     LicenseStatusView, LicenseActivateView, SystemInitializationView, CustomAuthToken,
-    DemoAuthToken, PasswordRecoveryView,
+    DemoAuthToken, PasswordRecoveryView, ChangePasswordView,
     CustomerSuggestionsView, ProductSuggestionsView,
     DashboardReportView, SalespersonPerformanceReportView, InventoryMovementReportView,
     ProfitAndLossReportView, CashDrawerReportView, DefaultDateView, InstallmentsReportView
 )
+from .views import ExpenseViewSet
 from .tools_views import (
     BackupDownloadView, BackupUploadView, OfflineExportItemsView,
     OfflineImportReceiptsView, ApprovePendingReceiptView, SmartImportWizardView
@@ -27,6 +28,7 @@ router.register(r'inventory-adjustments', InventoryAdjustmentViewSet)
 router.register(r'suppliers', SupplierViewSet)
 router.register(r'purchase-invoices', PurchaseInvoiceViewSet)
 router.register(r'purchase-invoice-items', PurchaseInvoiceItemViewSet)
+router.register(r'expenses', ExpenseViewSet)
 router.register(r'receipts', ReceiptViewSet)
 router.register(r'sale-items', SaleItemViewSet)
 router.register(r'installment-payments', InstallmentPaymentViewSet)
@@ -34,13 +36,13 @@ router.register(r'pending-external-receipts', PendingExternalReceiptViewSet)
 router.register(r'client-licenses', ClientLicenseViewSet)
 router.register(r'used-licenses', UsedLicenseViewSet)
 router.register(r'license-history', LicenseHistoryViewSet)
-router.register(r'action-logs', ActionLogViewSet)
 
 urlpatterns = [
     path('init/', SystemInitializationView.as_view(), name='system_init'),
     path('auth/local/', CustomAuthToken.as_view(), name='auth_local'),
     path('auth/demo/', DemoAuthToken.as_view(), name='auth_demo'),
     path('auth/recover/', PasswordRecoveryView.as_view(), name='auth_recover'),
+    path('auth/change-password/', ChangePasswordView.as_view(), name='auth_change_password'),
     path('license/status/', LicenseStatusView.as_view(), name='license-status'),
     path('license/activate/', LicenseActivateView.as_view(), name='license-activate'),
     path('customer-suggestions/', CustomerSuggestionsView.as_view(), name='customer-suggestions'),

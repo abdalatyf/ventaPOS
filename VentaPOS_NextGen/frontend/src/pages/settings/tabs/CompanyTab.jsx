@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IconBuildingStore, IconDeviceFloppy, IconReceiptTax } from '@tabler/icons-react';
+import api from '../../../api';
 
 export default function CompanyTab() {
   const [formData, setFormData] = useState({
@@ -7,18 +8,66 @@ export default function CompanyTab() {
     description: 'مفروشات - ادوات منزلية - اجهزة كهربائية',
     phone1: '01114630467',
     phone2: '',
-    footerText: 'رجاء الاحتفاظ بهذا الايصال'
+    footerText: 'رجاء الاحتفاظ بهذا الايصال',
+    footer_text: '' // Maps to backend field
   });
+  const [settingId, setSettingId] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchCompanySettings = async () => {
+      try {
+        const response = await api.get('/company-settings/');
+        if (response.data && response.data.results && response.data.results.length > 0) {
+          const setting = response.data.results[0];
+          setSettingId(setting.id);
+          setFormData({
+            name: setting.name || '',
+            description: setting.description || '',
+            phone1: setting.phone1 || '',
+            phone2: setting.phone2 || '',
+            footerText: setting.footer_text || '',
+            footer_text: setting.footer_text || ''
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch company settings", error);
+      }
+    };
+    fetchCompanySettings();
+  }, []);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Save logic
-    console.log('Saved company data', formData);
-    alert('تم حفظ بيانات الشركة بنجاح');
+    setIsLoading(true);
+    
+    const payload = {
+      name: formData.name,
+      description: formData.description,
+      phone1: formData.phone1,
+      phone2: formData.phone2,
+      footer_text: formData.footerText // map to backend field
+    };
+
+    try {
+      if (settingId) {
+        await api.patch(`/company-settings/${settingId}/`, payload);
+      } else {
+        const response = await api.post('/company-settings/', payload);
+        setSettingId(response.data.id);
+      }
+      localStorage.setItem('company_name', formData.name);
+      alert('تم حفظ بيانات الشركة بنجاح');
+    } catch (error) {
+      console.error("Failed to save company settings", error);
+      alert('حدث خطأ أثناء حفظ البيانات');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const currentDate = new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' });
@@ -129,8 +178,10 @@ export default function CompanyTab() {
               </div>
 
               <div className="col-12 text-end border-top pt-3 mt-4">
-                <button type="submit" className="btn btn-primary fw-bold px-4">
-                  <IconDeviceFloppy className="me-2" /> حفظ التعديلات
+                <button type="submit" className="btn btn-primary fw-bold px-4" disabled={isLoading}>
+                  {isLoading ? 'جاري الحفظ...' : (
+                    <><IconDeviceFloppy className="me-2" /> حفظ التعديلات</>
+                  )}
                 </button>
               </div>
             </div>

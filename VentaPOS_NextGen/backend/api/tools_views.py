@@ -15,7 +15,7 @@ from django.db import transaction
 
 from .models import (
     InventoryItem, PendingExternalReceipt, Receipt, SaleItem, 
-    ActionLog, Salesperson, Branch, Tenant
+    Salesperson, Branch
 )
 from .serializers import InventoryItemSerializer
 
@@ -23,9 +23,8 @@ class ToolsBaseView(APIView):
     permission_classes = [IsAuthenticated]
     
     def dispatch(self, request, *args, **kwargs):
-        tenant = Tenant.objects.filter(is_deleted=False).first()
-        branch = Branch.objects.filter(tenant=tenant, is_deleted=False).first()
-        request.tenant = tenant
+        from .models import Branch
+        branch = Branch.objects.filter(is_deleted=False).first()
         request.branch = branch
         return super().dispatch(request, *args, **kwargs)
 
@@ -106,11 +105,11 @@ class OfflineExportItemsView(ToolsBaseView):
             return JsonResponse({"error": "يرجى تحديد المندوب"}, status=400)
 
         from .models import Salesperson
-        salesperson = Salesperson.objects.filter(id=salesperson_id, tenant=request.tenant).first()
+        salesperson = Salesperson.objects.filter(id=salesperson_id).first()
         if not salesperson:
             return JsonResponse({"error": "المندوب غير موجود"}, status=404)
 
-        items = InventoryItem.objects.filter(tenant=request.tenant, branch=request.branch)
+        items = InventoryItem.objects.filter(branch=request.branch)
         items_data = [{"id": item.id, "name": item.name} for item in items]
         
         data = {
@@ -146,7 +145,6 @@ class OfflineImportReceiptsView(ToolsBaseView):
         with transaction.atomic():
             for rcpt in data:
                 PendingExternalReceipt.objects.create(
-                    tenant=request.tenant,
                     branch=request.branch,
                     batch_id=batch_id,
                     source='USB',  # Generic for offline JSON/USB
@@ -162,7 +160,7 @@ class ApprovePendingReceiptView(ToolsBaseView):
 
     def post(self, request, pk):
         try:
-            pending = PendingExternalReceipt.objects.get(pk=pk, tenant=request.tenant, branch=request.branch)
+            pending = PendingExternalReceipt.objects.get(pk=pk, branch=request.branch)
         except PendingExternalReceipt.DoesNotExist:
             return Response({"error": "الفاتورة المعلقة غير موجودة"}, status=404)
 
@@ -186,8 +184,8 @@ class ApprovePendingReceiptView(ToolsBaseView):
         try:
             with transaction.atomic():
                 # Get max local_id and receipt_number
-                max_local = Receipt.objects.filter(tenant=request.tenant).aggregate(Max('local_id'))['local_id__max'] or 0
-                max_rn = Receipt.objects.filter(tenant=request.tenant).aggregate(Max('receipt_number'))['receipt_number__max'] or 0
+                max_local = Receipt.objects.filter().aggregate(Max('local_id'))['local_id__max'] or 0
+                max_rn = Receipt.objects.filter().aggregate(Max('receipt_number'))['receipt_number__max'] or 0
 
                 local_time = data.get('created_at_local')
                 if local_time:
@@ -199,9 +197,8 @@ class ApprovePendingReceiptView(ToolsBaseView):
                 else:
                     local_time = timezone.now()
 
-                salesperson = Salesperson.objects.filter(tenant=request.tenant, branch=request.branch).first() # Fallback
+                salesperson = Salesperson.objects.filter(branch=request.branch).first() # Fallback
                 receipt = Receipt.objects.create(
-                    tenant=request.tenant,
                     branch=request.branch,
                     local_id=max_local + 1,
                     receipt_number=max_rn + 1,
@@ -222,15 +219,14 @@ class ApprovePendingReceiptView(ToolsBaseView):
                     qty = int(float(item.get('quantity') or item.get('qty') or 1))
                     price = int(float(item.get('price') or item.get('unit_price') or 0))
                     
-                    inv_item = InventoryItem.objects.filter(id=item_id, tenant=request.tenant).first()
+                    inv_item = InventoryItem.objects.filter(id=item_id).first()
                     if not inv_item:
-                        inv_item = InventoryItem.objects.filter(name=item.get('name'), tenant=request.tenant).first()
+                        inv_item = InventoryItem.objects.filter(name=item.get('name')).first()
 
                     if not inv_item:
                         raise Exception(f"الصنف غير موجود: {item.get('name', item_id)}")
 
                     SaleItem.objects.create(
-                        tenant=request.tenant,
                         receipt=receipt,
                         inventory_item=inv_item,
                         quantity=qty,
@@ -272,7 +268,6 @@ class SmartImportWizardView(ToolsBaseView):
                     qty = float(row.get('الكمية', 0) or 0)
                     
                     InventoryItem.objects.update_or_create(
-                        tenant=request.tenant,
                         branch=request.branch,
                         name=name,
                         defaults={
