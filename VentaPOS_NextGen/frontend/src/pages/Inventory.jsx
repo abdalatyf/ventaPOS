@@ -3,12 +3,6 @@ import { Link } from 'react-router-dom';
 import api from '../api';
 import { fmt } from '../utils/formatUtils';
 
-const MOCK_INVENTORY = [
-  { id: 1, name: 'لاب توب ديل', quantity: 15, purchase_price: 10000 },
-  { id: 2, name: 'ماوس لاسلكي', quantity: 4, purchase_price: 150 },
-  { id: 3, name: 'شاشة سامسونج', quantity: 8, purchase_price: 3500 }
-];
-
 const Inventory = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,8 +31,7 @@ const Inventory = () => {
       }));
       setItems(mappedData);
     } catch (err) {
-      console.warn("Backend not ready, using mock data.", err);
-      setItems(MOCK_INVENTORY);
+      console.error("Failed to fetch inventory", err);
     } finally {
       setLoading(false);
     }
@@ -87,16 +80,9 @@ const Inventory = () => {
       }
       fetchInventory();
       setShowModal(false);
-    } catch(err) {
-      console.warn("Using mock update fallback");
-      if (modalType === 'add') {
-        setItems([...items, { id: Date.now(), ...formData }]);
-      } else if (modalType === 'edit') {
-        setItems(items.map(i => i.id === selectedItem.id ? { ...i, ...formData } : i));
-      } else if (modalType === 'delete') {
-        setItems(items.filter(i => i.id !== selectedItem.id));
-      }
-      setShowModal(false);
+    } catch (err) {
+      console.error("Failed to save", err);
+      alert("حدث خطأ أثناء الحفظ. يرجى المحاولة مرة أخرى.");
     }
   };
 

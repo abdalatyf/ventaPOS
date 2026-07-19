@@ -5,7 +5,7 @@ import './App.css';
 // استيراد الشاشات الأساسية
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import POS from './pages/POS';
+import PosEntry from './pages/PosEntry';
 import Setup from './pages/Setup';
 import AppShell from './components/AppShell';
 import ActivationModal from './components/ActivationModal';
@@ -99,7 +99,7 @@ function App() {
         <Route path="/" element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
           <Route index element={<Navigate to="/receipts" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
-          <Route path="pos" element={<POS />} />
+          <Route path="pos" element={<PosEntry />} />
           
           {/* التأسيس والإعدادات */}
           <Route path="setup" element={<Setup />} />

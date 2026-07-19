@@ -14,16 +14,11 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
-    // Fallback to '1234' for local testing if not logged in
-    const companyCode = localStorage.getItem('company_code') || '1234'; 
     const machineId = localStorage.getItem('machine_id') || 'DEV-MACHINE-001';
     const branchId = localStorage.getItem('branchId');
 
     if (token) {
       config.headers['Authorization'] = `Token ${token}`;
-    }
-    if (companyCode) {
-      config.headers['X-Company-Code'] = companyCode;
     }
     if (machineId) {
       config.headers['X-Machine-ID'] = machineId;
