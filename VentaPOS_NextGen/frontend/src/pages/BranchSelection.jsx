@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
-import { IconBuildingStore, IconPlus, IconEdit, IconCheck } from '@tabler/icons-react';
+import { IconBuildingStore, IconPlus, IconEdit, IconCheck, IconTrash } from '@tabler/icons-react';
 
 export default function BranchSelection() {
   const [branches, setBranches] = useState([]);
@@ -12,7 +12,6 @@ export default function BranchSelection() {
   const [showModal, setShowModal] = useState(false);
   const [editingBranch, setEditingBranch] = useState(null);
   const [branchName, setBranchName] = useState('');
-  const [branchPhone, setBranchPhone] = useState('');
 
   const navigate = useNavigate();
 
@@ -23,7 +22,13 @@ export default function BranchSelection() {
   const fetchBranches = async () => {
     try {
       const res = await api.get('/branches/');
-      setBranches(res.data.results || res.data);
+      const fetchedBranches = res.data.results || res.data;
+      setBranches(fetchedBranches);
+      
+      // Auto-skip if there is only 1 branch AND no branch is currently selected in localStorage
+      if (fetchedBranches.length === 1 && !localStorage.getItem('branchId')) {
+        handleSelectBranch(fetchedBranches[0]);
+      }
     } catch (err) {
       setError('تعذر جلب الفروع. يرجى المحاولة لاحقاً.');
     } finally {
@@ -43,17 +48,32 @@ export default function BranchSelection() {
 
     try {
       if (editingBranch) {
-        await api.patch(`/branches/${editingBranch.id}/`, { name: branchName, phone: branchPhone });
+        await api.patch(`/branches/${editingBranch.id}/`, { name: branchName });
       } else {
-        await api.post('/branches/', { name: branchName, phone: branchPhone });
+        await api.post('/branches/', { name: branchName });
       }
       setShowModal(false);
       setEditingBranch(null);
       setBranchName('');
-      setBranchPhone('');
       fetchBranches();
     } catch (err) {
       alert('حدث خطأ أثناء حفظ الفرع.');
+    }
+  };
+
+  const handleDeleteBranch = async (e, branch) => {
+    e.stopPropagation();
+    if (window.confirm(`هل أنت متأكد من حذف فرع "${branch.name}"؟ سيتم حذف جميع الفواتير والمنتجات والمصروفات المتعلقة بهذا الفرع نهائياً ولا يمكن التراجع عن هذه الخطوة!`)) {
+      try {
+        await api.delete(`/branches/${branch.id}/`);
+        fetchBranches();
+        if (localStorage.getItem('branchId') == branch.id) {
+          localStorage.removeItem('branchId');
+          localStorage.removeItem('branchName');
+        }
+      } catch (err) {
+        alert('حدث خطأ أثناء الحذف.');
+      }
     }
   };
 
@@ -64,7 +84,6 @@ export default function BranchSelection() {
     }
     setEditingBranch(null);
     setBranchName('');
-    setBranchPhone('');
     setShowModal(true);
   };
 
@@ -72,12 +91,11 @@ export default function BranchSelection() {
     e.stopPropagation(); // prevent selecting the branch
     setEditingBranch(branch);
     setBranchName(branch.name);
-    setBranchPhone(branch.phone || '');
     setShowModal(true);
   };
 
   return (
-    <div className="page page-center" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', fontFamily: "'Cairo', sans-serif" }}>
+    <div className="page page-center" style={{ backgroundColor: '#f8f9fa', overflow: 'hidden', height: '100vh', fontFamily: "'Cairo', sans-serif" }}>
       <div className="container-fluid px-4 py-5">
         <div className="text-center mb-4">
           <h2 className="fw-bold text-dark mb-1">اختيار الفرع</h2>
@@ -104,16 +122,24 @@ export default function BranchSelection() {
                       </span>
                       <div>
                         <div className="font-weight-medium fs-3 text-dark">{branch.name}</div>
-                        <div className="text-muted small mt-1">{branch.phone || 'بدون رقم'}</div>
                       </div>
                     </div>
-                    <button 
-                      className="btn btn-icon btn-light" 
-                      onClick={(e) => openEditModal(e, branch)}
-                      title="تعديل اسم الفرع"
-                    >
-                      <IconEdit size={18} />
-                    </button>
+                    <div className="d-flex gap-2">
+                      <button 
+                        className="btn btn-icon btn-light" 
+                        onClick={(e) => openEditModal(e, branch)}
+                        title="تعديل اسم الفرع"
+                      >
+                        <IconEdit size={18} />
+                      </button>
+                      <button 
+                        className="btn btn-icon btn-danger-outline text-danger border-0" 
+                        onClick={(e) => handleDeleteBranch(e, branch)}
+                        title="حذف الفرع"
+                      >
+                        <IconTrash size={18} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -149,26 +175,18 @@ export default function BranchSelection() {
               <form onSubmit={handleSaveBranch}>
                 <div className="modal-body p-4">
                   <div className="mb-3">
-                    <label className="form-label fw-bold">اسم الفرع <span className="text-danger">*</span></label>
+                    <label className="form-label fw-bold">اسم الفرع</label>
                     <input 
                       type="text" 
-                      className="form-control form-control-lg" 
+                      className="form-control" 
                       value={branchName} 
-                      onChange={e => setBranchName(e.target.value)} 
+                      onChange={(e) => setBranchName(e.target.value)} 
                       required 
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label fw-bold">رقم التليفون (اختياري)</label>
-                    <input 
-                      type="text" 
-                      className="form-control form-control-lg" 
-                      value={branchPhone} 
-                      onChange={e => setBranchPhone(e.target.value)} 
+                      autoFocus
                     />
                   </div>
                 </div>
-                <div className="modal-footer bg-light" style={{ borderRadius: '0 0 12px 12px' }}>
+                <div className="modal-footer bg-light border-0 py-3" style={{ borderRadius: '0 0 12px 12px' }}>
                   <button type="button" className="btn btn-link link-secondary" onClick={() => setShowModal(false)}>
                     إلغاء
                   </button>

@@ -69,8 +69,9 @@ export default function InstallmentsReport() {
   const { setTableRef } = useSmartScroll();
   const { year, month, branchId } = useContext(ReportsContext);
   const navigate = useNavigate();
-  
+  const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
   const tableContainerRef = useRef(null);
+
   const [selectedIds, setSelectedIds] = useState([]);
   
   const [saleFromYear, setSaleFromYear] = useState('');
@@ -101,6 +102,18 @@ export default function InstallmentsReport() {
     installments_count: 0,
     installments: []
   });
+
+  const handleSelectAll = useCallback((e) => {
+    if (e.target.checked && data.installments) {
+      setSelectedIds(data.installments.map(item => item.payment_id));
+    } else {
+      setSelectedIds([]);
+    }
+  }, [data.installments]);
+
+  const toggleSelect = useCallback((id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }, []);
 
   const years = Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - 5 + i);
   const months = Array.from({ length: 12 }, (_, i) => i + 1);

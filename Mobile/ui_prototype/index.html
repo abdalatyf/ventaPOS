@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VentaPOS Mobile UI Prototype - Realistic Data</title>
+    <!-- Bootstrap 5 RTL -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
+    <!-- Google Fonts (Cairo for Arabic) -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    
+    <style>
+        body {
+            background-color: #e9ecef;
+            font-family: 'Cairo', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .mobile-frame {
+            width: 100%;
+            max-width: 400px;
+            height: 800px;
+            background-color: #f8f9fa;
+            border-radius: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            border: 8px solid #343a40;
+        }
+
+        .status-bar {
+            background: #ffffff;
+            height: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 15px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .app-header {
+            background: linear-gradient(135deg, #0d6efd, #0dcaf0);
+            color: white;
+            padding: 15px 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .app-header h5 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .app-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            background-color: #f4f6f9;
+        }
+
+        .proto-nav {
+            background: white;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+        
+        .proto-nav .btn {
+            border-radius: 20px;
+            margin-left: 5px;
+            font-size: 13px;
+        }
+
+        /* 1. Card View Styles */
+        .receipt-card {
+            background: white;
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            margin-bottom: 15px;
+        }
+        .card-price {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #198754;
+        }
+        .status-badge {
+            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 12px;
+        }
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #6c757d;
+            margin-bottom: 4px;
+        }
+        .product-chips {
+            display: inline-block;
+            background: #e9ecef;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin-left: 3px;
+            margin-bottom: 3px;
+            color: #495057;
+        }
+
+        /* 2. Fixed Column Styles */
+        .table-responsive-fixed {
+            overflow-x: auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .table-fixed-col th, .table-fixed-col td {
+            white-space: nowrap;
+            vertical-align: middle;
+            font-size: 12px;
+        }
+        .table-fixed-col th:first-child,
+        .table-fixed-col td:first-child {
+            position: sticky;
+            right: 0;
+            background-color: #f8f9fa;
+            z-index: 2;
+            border-left: 2px solid #dee2e6;
+            font-weight: bold;
+        }
+
+        /* 3. Accordion Styles */
+        .accordion-button {
+            font-size: 13px;
+            font-weight: 600;
+            padding: 12px 15px;
+        }
+        .accordion-body {
+            font-size: 12px;
+            padding: 15px;
+        }
+
+        /* 4. Master-Detail Styles */
+        .master-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background: white;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.04);
+            cursor: pointer;
+            border-right: 4px solid transparent;
+        }
+        .master-item.draft { border-right-color: #ffc107; }
+        .master-item.synced { border-right-color: #198754; }
+
+        .detail-modal {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #f4f6f9;
+            z-index: 1000;
+            flex-direction: column;
+            animation: slideIn 0.2s forwards;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+
+        .detail-header {
+            background: white;
+            padding: 15px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+        }
+        
+        .custom-select-ui {
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 15px;
+            border: 1px solid white;
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+<div class="mobile-frame">
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <span>14:40</span>
+        <span><i class="bi bi-wifi"></i> <i class="bi bi-battery-full"></i></span>
+    </div>
+
+    <!-- App Header -->
+    <div class="app-header">
+        <h5><i class="bi bi-receipt"></i> سجل الفواتير</h5>
+        <!-- User View Mode Toggle Idea -->
+        <select class="custom-select-ui" onchange="showTab(this.value)">
+            <option value="tab4">طريقة: رئيسي/تفاصيل</option>
+            <option value="tab1">طريقة: بطاقات كاملة</option>
+            <option value="tab2">طريقة: جدول أفقي</option>
+            <option value="tab3">طريقة: القوائم المنسدلة</option>
+        </select>
+    </div>
+
+    <!-- Content Area -->
+    <div class="app-content" id="contentArea">
+
+        <!-- ==========================================
+             TAB 4: Master-Detail (Recommended/Default)
+             ========================================== -->
+        <div id="tab4" class="tab-pane">
+            <h6 class="mb-3 text-muted" style="font-size: 13px;">طريقة العرض: شاشة رئيسية (اضغط للتفاصيل)</h6>
+
+            <!-- Master Item 1 (Draft / Installment) -->
+            <div class="master-item draft" onclick="openDetailModal('modal1')">
+                <div>
+                    <div class="fw-bold text-dark fs-6">محمود عبد الله</div>
+                    <div class="text-muted" style="font-size: 11px;">#1042 • 14/07/2026 • ⏳ مسودة</div>
+                </div>
+                <div class="text-end">
+                    <div class="text-primary fw-bold">15,400 ج</div>
+                    <span class="badge bg-light text-dark border" style="font-size: 9px;">قسط 12 شهر</span>
+                </div>
+            </div>
+
+            <!-- Master Item 2 (Synced / Cash) -->
+            <div class="master-item synced" onclick="openDetailModal('modal2')">
+                <div>
+                    <div class="fw-bold text-dark fs-6">سوبر ماركت الهدى</div>
+                    <div class="text-muted" style="font-size: 11px;">#1043 • 13/07/2026 • ✅ مرحلة</div>
+                </div>
+                <div class="text-end">
+                    <div class="text-success fw-bold">4,200 ج</div>
+                    <span class="badge bg-light text-dark border" style="font-size: 9px;">دفع كاش</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             TAB 1: Card View (Full Data)
+             ========================================== -->
+        <div id="tab1" class="tab-pane" style="display: none;">
+            <h6 class="mb-3 text-muted" style="font-size: 13px;">طريقة العرض: بطاقات شاملة التفاصيل</h6>
+            
+            <!-- Card 1 -->
+            <div class="receipt-card p-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="fw-bold text-primary">محمود عبد الله</span>
+                    <span class="status-badge bg-warning text-dark">مسودة ⏳</span>
+                </div>
+                <div class="text-muted mb-2" style="font-size: 11px;">فاتورة #1042 • 14/07/2026</div>
+                
+                <div class="data-row">
+                    <span class="fw-bold text-dark">الإجمالي:</span>
+                    <span class="fw-bold text-danger">15,400 ج.م</span>
+                </div>
+                <div class="data-row">
+                    <span>المقدم / الدفعة:</span>
+                    <span>5,000 ج.م</span>
+                </div>
+                <div class="data-row">
+                    <span>نظام الدفع:</span>
+                    <span>قسط (12 شهر)</span>
+                </div>
+                <hr class="my-2" style="border-color:#eee">
+                <div class="data-row">
+                    <span>الهاتف:</span>
+                    <span dir="ltr">01023456789</span>
+                </div>
+                <div class="data-row">
+                    <span>المنطقة:</span>
+                    <span>فيصل - شارع فيصل الرئيسي</span>
+                </div>
+                <hr class="my-2" style="border-color:#eee">
+                <div class="mb-1 text-muted" style="font-size: 11px;">المنتجات:</div>
+                <div>
+                    <span class="product-chips">ثلاجة توشيبا 14 (1)</span>
+                    <span class="product-chips">غسالة زانوسي 7 (1)</span>
+                </div>
+            </div>
+
+            <!-- Card 2 -->
+            <div class="receipt-card p-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="fw-bold text-primary">سوبر ماركت الهدى</span>
+                    <span class="status-badge bg-success text-white">مرحلة ✅</span>
+                </div>
+                <div class="text-muted mb-2" style="font-size: 11px;">فاتورة #1043 • 13/07/2026</div>
+                
+                <div class="data-row">
+                    <span class="fw-bold text-dark">الإجمالي:</span>
+                    <span class="fw-bold text-success">4,200 ج.م</span>
+                </div>
+                <div class="data-row">
+                    <span>المقدم / الدفعة:</span>
+                    <span>4,200 ج.م</span>
+                </div>
+                <div class="data-row">
+                    <span>نظام الدفع:</span>
+                    <span>دفع كاش</span>
+                </div>
+                <hr class="my-2" style="border-color:#eee">
+                <div class="data-row">
+                    <span>الهاتف:</span>
+                    <span dir="ltr">01198765432</span>
+                </div>
+                <div class="data-row">
+                    <span>المنطقة:</span>
+                    <span>بولاق الدكرور</span>
+                </div>
+                <hr class="my-2" style="border-color:#eee">
+                <div class="mb-1 text-muted" style="font-size: 11px;">المنتجات:</div>
+                <div>
+                    <span class="product-chips">كرتونة شيبسي (5)</span>
+                    <span class="product-chips">كرتونة بيبسي (10)</span>
+                    <span class="product-chips">كرتونة جهينة (2)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             TAB 2: Fixed Column Scroll
+             ========================================== -->
+        <div id="tab2" class="tab-pane" style="display: none;">
+            <h6 class="mb-2 text-muted" style="font-size: 13px;">طريقة العرض: جدول أفقي شامل</h6>
+            <div class="alert alert-primary py-1 px-2 mb-2" style="font-size:11px;"><i class="bi bi-arrows-expand"></i> اسحب الجدول يميناً ويساراً ↔️ لرؤية باقي الـ 10 أعمدة</div>
+            
+            <div class="table-responsive-fixed">
+                <table class="table table-bordered table-fixed-col mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>رقم/عميل</th>
+                            <th>المبلغ الإجمالي</th>
+                            <th>المقدم</th>
+                            <th>نوع البيع</th>
+                            <th>نظام التقسيط</th>
+                            <th>المنتجات المباعة</th>
+                            <th>الهاتف</th>
+                            <th>المنطقة/العنوان</th>
+                            <th>التاريخ</th>
+                            <th>حالة المزامنة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                <strong>#1042</strong><br>
+                                <span class="text-primary">محمود عبد الله</span>
+                            </td>
+                            <td class="text-danger fw-bold">15,400 ج</td>
+                            <td>5,000 ج</td>
+                            <td>قسط</td>
+                            <td>12 شهر</td>
+                            <td>ثلاجة (1), غسالة (1)</td>
+                            <td dir="ltr">01023456789</td>
+                            <td>فيصل</td>
+                            <td>14/07</td>
+                            <td><span class="badge bg-warning text-dark">مسودة</span></td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <strong>#1043</strong><br>
+                                <span class="text-primary">ماركت الهدى</span>
+                            </td>
+                            <td class="text-success fw-bold">4,200 ج</td>
+                            <td>4,200 ج</td>
+                            <td>كاش</td>
+                            <td>-</td>
+                            <td>شيبسي (5), بيبسي (10)</td>
+                            <td dir="ltr">01198765432</td>
+                            <td>بولاق الدكرور</td>
+                            <td>13/07</td>
+                            <td><span class="badge bg-success">مرحلة</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             TAB 3: Expandable Rows (Accordion)
+             ========================================== -->
+        <div id="tab3" class="tab-pane" style="display: none;">
+            <h6 class="mb-3 text-muted" style="font-size: 13px;">طريقة العرض: القوائم المنسدلة (Accordion)</h6>
+
+            <div class="accordion" id="receiptsAccordion">
+                <!-- Row 1 -->
+                <div class="accordion-item border-0 shadow-sm mb-2 rounded">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed rounded" type="button" data-bs-toggle="collapse" data-bs-target="#collapse1">
+                            <div class="d-flex justify-content-between w-100 pe-2">
+                                <div>
+                                    <div class="fw-bold">محمود عبد الله</div>
+                                    <div class="text-muted" style="font-size:10px">#1042 • ⏳ مسودة</div>
+                                </div>
+                                <div class="text-end fw-bold text-danger">15,400 ج.م</div>
+                            </div>
+                        </button>
+                    </h2>
+                    <div id="collapse1" class="accordion-collapse collapse" data-bs-parent="#receiptsAccordion">
+                        <div class="accordion-body bg-white border-top">
+                            <div class="data-row"><span>المنتجات:</span> <span class="fw-bold">ثلاجة توشيبا، غسالة زانوسي</span></div>
+                            <div class="data-row"><span>نظام الدفع:</span> <span>قسط (12 شهر)</span></div>
+                            <div class="data-row"><span>المقدم المندفع:</span> <span>5,000 ج.م</span></div>
+                            <div class="data-row"><span>المنطقة:</span> <span>فيصل - شارع فيصل الرئيسي</span></div>
+                            <div class="data-row"><span>الهاتف:</span> <span dir="ltr">01023456789</span></div>
+                            <div class="data-row"><span>التاريخ:</span> <span>14-07-2026</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 2 -->
+                <div class="accordion-item border-0 shadow-sm mb-2 rounded">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed rounded" type="button" data-bs-toggle="collapse" data-bs-target="#collapse2">
+                            <div class="d-flex justify-content-between w-100 pe-2">
+                                <div>
+                                    <div class="fw-bold">سوبر ماركت الهدى</div>
+                                    <div class="text-muted" style="font-size:10px">#1043 • ✅ مرحلة</div>
+                                </div>
+                                <div class="text-end fw-bold text-success">4,200 ج.م</div>
+                            </div>
+                        </button>
+                    </h2>
+                    <div id="collapse2" class="accordion-collapse collapse" data-bs-parent="#receiptsAccordion">
+                        <div class="accordion-body bg-white border-top">
+                            <div class="data-row"><span>المنتجات:</span> <span class="fw-bold">شيبسي (5)، بيبسي (10)، جهينة (2)</span></div>
+                            <div class="data-row"><span>نظام الدفع:</span> <span>كاش</span></div>
+                            <div class="data-row"><span>المقدم المندفع:</span> <span>4,200 ج.م</span></div>
+                            <div class="data-row"><span>المنطقة:</span> <span>بولاق الدكرور</span></div>
+                            <div class="data-row"><span>الهاتف:</span> <span dir="ltr">01198765432</span></div>
+                            <div class="data-row"><span>التاريخ:</span> <span>13-07-2026</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ==============================================
+         DETAIL MODAL 1 (For Master-Detail View)
+         ============================================== -->
+    <div class="detail-modal" id="modal1">
+        <div class="detail-header">
+            <button class="btn btn-sm btn-light border me-3" onclick="closeDetailModal('modal1')">
+                <i class="bi bi-arrow-right fw-bold"></i> عودة
+            </button>
+            <h6 class="mb-0 fw-bold">تفاصيل الفاتورة #1042</h6>
+        </div>
+        <div class="p-3" style="overflow-y: auto; flex:1;">
+            
+            <div class="text-center mb-4 mt-2">
+                <h4 class="fw-bold text-primary mb-1">محمود عبد الله</h4>
+                <div class="text-muted" style="font-size:13px"><i class="bi bi-geo-alt"></i> فيصل، شارع فيصل الرئيسي</div>
+                <div class="text-muted" style="font-size:13px"><i class="bi bi-telephone"></i> <span dir="ltr">01023456789</span></div>
+            </div>
+
+            <div class="row text-center mb-3 g-2">
+                <div class="col-6">
+                    <div class="bg-white p-2 rounded shadow-sm border">
+                        <div class="text-muted" style="font-size:11px">الإجمالي</div>
+                        <div class="fw-bold fs-5 text-danger">15,400</div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="bg-white p-2 rounded shadow-sm border">
+                        <div class="text-muted" style="font-size:11px">المدفوع (المقدم)</div>
+                        <div class="fw-bold fs-5 text-success">5,000</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded shadow-sm border p-3 mb-3" style="font-size:13px">
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">طريقة البيع</span>
+                    <span class="fw-bold"><i class="bi bi-calendar3"></i> بيع قسط</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">نظام التقسيط</span>
+                    <span class="fw-bold">12 شهر</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">تاريخ البيع</span>
+                    <span class="fw-bold">14-07-2026</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted">المزامنة مع السيرفر</span>
+                    <span class="badge bg-warning text-dark"><i class="bi bi-cloud-upload"></i> مسودة محلية</span>
+                </div>
+            </div>
+
+            <h6 class="fw-bold mb-2" style="font-size:14px">المنتجات المباعة (2)</h6>
+            <div class="bg-white rounded shadow-sm border overflow-hidden">
+                <div class="d-flex justify-content-between p-3 border-bottom align-items-center">
+                    <div>
+                        <div class="fw-bold" style="font-size:13px">ثلاجة توشيبا 14 قدم</div>
+                        <div class="text-muted" style="font-size:11px">الكمية: 1</div>
+                    </div>
+                    <div class="fw-bold" style="font-size:13px">12,000 ج.م</div>
+                </div>
+                <div class="d-flex justify-content-between p-3 align-items-center">
+                    <div>
+                        <div class="fw-bold" style="font-size:13px">غسالة زانوسي 7 كيلو</div>
+                        <div class="text-muted" style="font-size:11px">الكمية: 1</div>
+                    </div>
+                    <div class="fw-bold" style="font-size:13px">3,400 ج.م</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ==============================================
+         DETAIL MODAL 2
+         ============================================== -->
+    <div class="detail-modal" id="modal2">
+        <div class="detail-header">
+            <button class="btn btn-sm btn-light border me-3" onclick="closeDetailModal('modal2')">
+                <i class="bi bi-arrow-right fw-bold"></i> عودة
+            </button>
+            <h6 class="mb-0 fw-bold">تفاصيل الفاتورة #1043</h6>
+        </div>
+        <div class="p-3" style="overflow-y: auto; flex:1;">
+            
+            <div class="text-center mb-4 mt-2">
+                <h4 class="fw-bold text-primary mb-1">سوبر ماركت الهدى</h4>
+                <div class="text-muted" style="font-size:13px"><i class="bi bi-geo-alt"></i> بولاق الدكرور، متفرع من العشرين</div>
+                <div class="text-muted" style="font-size:13px"><i class="bi bi-telephone"></i> <span dir="ltr">01198765432</span></div>
+            </div>
+
+            <div class="bg-white rounded shadow-sm border p-3 mb-3" style="font-size:13px">
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">طريقة البيع</span>
+                    <span class="fw-bold text-success"><i class="bi bi-cash"></i> دفع كاش</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">المدفوع</span>
+                    <span class="fw-bold">4,200 ج.م (بالكامل)</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted">المزامنة مع السيرفر</span>
+                    <span class="badge bg-success"><i class="bi bi-cloud-check"></i> تم الترحيل</span>
+                </div>
+            </div>
+
+            <h6 class="fw-bold mb-2" style="font-size:14px">المنتجات المباعة (3)</h6>
+            <div class="bg-white rounded shadow-sm border overflow-hidden">
+                <div class="d-flex justify-content-between p-3 border-bottom align-items-center">
+                    <div>
+                        <div class="fw-bold" style="font-size:13px">كرتونة شيبسي عائلي</div>
+                        <div class="text-muted" style="font-size:11px">الكمية: 5 (السعر: 150)</div>
+                    </div>
+                    <div class="fw-bold" style="font-size:13px">750 ج.م</div>
+                </div>
+                <div class="d-flex justify-content-between p-3 border-bottom align-items-center">
+                    <div>
+                        <div class="fw-bold" style="font-size:13px">كرتونة بيبسي جيب</div>
+                        <div class="text-muted" style="font-size:11px">الكمية: 10 (السعر: 200)</div>
+                    </div>
+                    <div class="fw-bold" style="font-size:13px">2,000 ج.م</div>
+                </div>
+                <div class="d-flex justify-content-between p-3 align-items-center">
+                    <div>
+                        <div class="fw-bold" style="font-size:13px">كرتونة عصير جهينة</div>
+                        <div class="text-muted" style="font-size:11px">الكمية: 2 (السعر: 725)</div>
+                    </div>
+                    <div class="fw-bold" style="font-size:13px">1,450 ج.م</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    function showTab(tabId) {
+        document.querySelectorAll('.tab-pane').forEach(el => el.style.display = 'none');
+        document.getElementById(tabId).style.display = 'block';
+    }
+
+    function openDetailModal(modalId) {
+        document.getElementById(modalId).style.display = 'flex';
+    }
+    
+    function closeDetailModal(modalId) {
+        document.getElementById(modalId).style.display = 'none';
+    }
+</script>
+
+</body>
+</html>

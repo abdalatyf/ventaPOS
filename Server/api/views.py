@@ -146,3 +146,32 @@ class SalespersonViewSet(View):
             return JsonResponse({'message': 'Deleted successfully'}, status=204)
         except ServerSalesperson.DoesNotExist:
             return JsonResponse({'error': 'Not found'}, status=404)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class DefaultDateView(View):
+    def get(self, request):
+        branch_id = request.GET.get('branch_id')
+        from django.utils import timezone
+        from sync_api.models import ServerReceipt
+        import datetime
+
+        try:
+            # 1. Try to get the latest receipt for the branch
+            qs = ServerReceipt.objects.all()
+            if branch_id:
+                try:
+                    qs = qs.filter(local_branch_id=int(branch_id))
+                except ValueError:
+                    pass
+
+            last_receipt = qs.order_by('-sale_year', '-sale_month').first()
+            if last_receipt:
+                return JsonResponse({'year': last_receipt.sale_year, 'month': last_receipt.sale_month})
+
+            # 2. Skip active license for now in the new backend, default to today
+            now = timezone.now()
+            return JsonResponse({'year': now.year, 'month': now.month})
+
+        except Exception as e:
+            now = timezone.now()
+            return JsonResponse({'year': now.year, 'month': now.month, 'error': str(e)})

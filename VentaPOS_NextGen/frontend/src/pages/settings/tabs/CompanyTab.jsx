@@ -9,7 +9,8 @@ export default function CompanyTab() {
     phone1: '01114630467',
     phone2: '',
     footerText: 'رجاء الاحتفاظ بهذا الايصال',
-    footer_text: '' // Maps to backend field
+    footer_text: '', // Maps to backend field
+    collection_commission_rate: 0
   });
   const [settingId, setSettingId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -27,7 +28,8 @@ export default function CompanyTab() {
             phone1: setting.phone1 || '',
             phone2: setting.phone2 || '',
             footerText: setting.footer_text || '',
-            footer_text: setting.footer_text || ''
+            footer_text: setting.footer_text || '',
+            collection_commission_rate: setting.collection_commission_rate || 0
           });
         }
       } catch (error) {
@@ -50,7 +52,8 @@ export default function CompanyTab() {
       description: formData.description,
       phone1: formData.phone1,
       phone2: formData.phone2,
-      footer_text: formData.footerText // map to backend field
+      footer_text: formData.footerText, // map to backend field
+      collection_commission_rate: formData.collection_commission_rate
     };
 
     try {
@@ -175,6 +178,11 @@ export default function CompanyTab() {
               <div className="col-md-12">
                 <label className="form-label fw-bold">نص ذيل الفاتورة (Footer)</label>
                 <textarea className="form-control" name="footerText" rows="2" value={formData.footerText} onChange={handleChange}></textarea>
+              </div>
+
+              <div className="col-md-6">
+                <label className="form-label fw-bold">نسبة عمولة التحصيل للبرنامج (%)</label>
+                <input type="number" step="0.01" className="form-control" name="collection_commission_rate" value={formData.collection_commission_rate} onChange={handleChange} />
               </div>
 
               <div className="col-12 text-end border-top pt-3 mt-4">

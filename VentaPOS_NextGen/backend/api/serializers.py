@@ -55,7 +55,7 @@ class BranchSerializer(serializers.ModelSerializer):
     class Meta:
         model = Branch
         fields = [
-            "id", "local_id", "name",
+            "id", "name",
             "is_deleted", "created_at",
         ]
         read_only_fields = ["id", "is_deleted", "created_at"]
@@ -70,7 +70,7 @@ class SalespersonSerializer(serializers.ModelSerializer):
     class Meta:
         model = Salesperson
         fields = [
-            "id", "branch", "local_id", "name",
+            "id", "branch", "name",
             "device_token", "is_device_active", "is_deleted", "created_at",
         ]
         read_only_fields = ["id", "device_token", "is_deleted", "created_at"]
@@ -97,7 +97,7 @@ class InventoryItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = InventoryItem
         fields = [
-            "id", "branch", "local_id", "name",
+            "id", "branch", "name",
             "initial_quantity", "initial_purchase_price",
             "initial_commission_amount", "initial_month", "initial_year",
             "is_deleted", "created_at", "current_stock",
@@ -185,10 +185,10 @@ class PurchaseInvoiceItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseInvoiceItem
         fields = [
-            "id", "purchase_invoice", "inventory_item",
+            "id", "invoice", "inventory_item",
             "quantity", "purchase_price", "is_deleted", "created_at",
         ]
-        read_only_fields = ["id", "purchase_invoice", "is_deleted", "created_at"]
+        read_only_fields = ["id", "invoice", "is_deleted", "created_at"]
 
 
 class PurchaseInvoiceSerializer(serializers.ModelSerializer):
@@ -238,7 +238,7 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
             invoice = PurchaseInvoice.objects.create(**validated_data)
             for item_data in items_data:
                 PurchaseInvoiceItem.objects.create(
-                    purchase_invoice=invoice,
+                    invoice=invoice,
                     **item_data,
                 )
         return invoice
@@ -311,18 +311,18 @@ class ReceiptSerializer(serializers.ModelSerializer):
 
     # Nested writable collections
     sale_items = SaleItemSerializer(many=True, required=False)
-    installment_payments = InstallmentPaymentSerializer(many=True, required=False)
+    installment_payments = InstallmentPaymentSerializer(source="payments", many=True, required=False)
 
     class Meta:
         model = Receipt
         fields = [
             "id", "branch", "salesperson",
-            "local_id", "receipt_number", "receipt_hash",
+            "receipt_number", "receipt_hash",
             "customer_name", "phone_number", "address", "area",
             "total_amount", "down_payment", "installment_system",
             "sale_year", "sale_month", "is_cash_sale", "products_text",
             "is_confirmed", "is_deleted",
-            "created_at_local", "created_at",
+            "created_at",
             "sale_items", "installment_payments",
         ]
         read_only_fields = [
@@ -330,9 +330,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
             "is_deleted", "created_at",
         ]
         extra_kwargs = {
-            "local_id": {"required": False},
             "receipt_number": {"required": False},
-            "created_at_local": {"required": False},
             "products_text": {"required": False},
             "address": {"required": False, "allow_blank": True},
             "area": {"required": False, "allow_blank": True},
@@ -358,9 +356,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
         if "installments" in data and "installment_payments" not in data:
             data["installment_payments"] = data.pop("installments")
             
-        # Support id -> local_id conversion for client compatibility
-        if "id" in data and "local_id" not in data:
-            data["local_id"] = data.pop("id")
+        # Support id -> local_id removed
 
         # If is_cash_sale is True and customer_name is empty/blank/None, default to "عميل نقدي"
         is_cash = data.get("is_cash_sale")
@@ -409,11 +405,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
                     (last.receipt_number + 1) if last else 1
                 )
 
-            # Auto-assign local time if not provided by frontend
-            if "created_at_local" not in validated_data:
-                from django.utils import timezone
-                validated_data["created_at_local"] = timezone.now()
-                
+            # Auto-assign logic for local_id and created_at_local removed
             # Stock validation
             from api.views import get_default_date_for_tenant
             default_year, default_month = get_default_date_for_tenant()
@@ -428,9 +420,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
                         "error": f"عفواً، لا يمكن البيع! أقصى كمية يمكن بيعها بأثر رجعي للصنف '{item.name}' هي ({safe_limit}) لتجنب حدوث رصيد سالب في الشهور اللاحقة."
                     })
 
-            if "local_id" not in validated_data:
-                last_receipt = Receipt.objects.filter().order_by('-local_id').first()
-                validated_data["local_id"] = (last_receipt.local_id + 1) if last_receipt else 1
+            # legacy local_id assignment removed
 
             if "products_text" not in validated_data and items_data:
                 validated_data["products_text"] = " + ".join([f"{i['inventory_item'].name}" if i['quantity'] == 1 else f"{i['quantity']} {i['inventory_item'].name}" for i in items_data])
@@ -535,7 +525,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
                     )
 
             if installments_data is not None:
-                instance.installment_payments.all().update(is_deleted=True)
+                instance.payments.all().update(is_deleted=True)
                 for inst_data in installments_data:
                     payment_month = inst_data.pop("payment_month", 1)
                     payment_year = inst_data.pop("payment_year", 2026)
@@ -598,8 +588,9 @@ class CompanySettingSerializer(serializers.ModelSerializer):
         model = CompanySetting
         fields = [
             "id", "name", "description",
-            "phone1", "phone2", "footer_text",
-            "is_cloud_viewer", "is_deleted", "created_at",
+            "phone1", "phone2", "footer_text", "is_cloud_viewer",
+            "collection_commission_rate", "zoom_level",
+            "is_deleted", "created_at"
         ]
         read_only_fields = ["id", "is_deleted", "created_at"]
 

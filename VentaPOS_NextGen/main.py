@@ -92,7 +92,7 @@ def is_demo_mode():
         import sqlite3
         con = sqlite3.connect(RUNTIME_DB)
         cursor = con.cursor()
-        cursor.execute("SELECT COUNT(*) FROM api_clientlicense WHERE is_active=1")
+        cursor.execute("SELECT COUNT(*) FROM api_clientlicense WHERE is_active=1 AND machine_id != 'DEMO_MACHINE'")
         count = cursor.fetchone()[0]
         con.close()
         return count == 0
@@ -100,9 +100,7 @@ def is_demo_mode():
         return True
 
 def encrypt_and_save_db():
-    if is_demo_mode():
-        # Do not save changes in Demo Mode, so they wipe on restart.
-        return
+    # Database saving now applies to both activated and demo environments
 
     if os.path.exists(RUNTIME_DB):
         try:
@@ -158,13 +156,12 @@ def get_free_port():
 def ensure_databases_are_ready():
     print("🛠️ Running Migrations...")
     try:
-        call_command('migrate', database='system', interactive=False)
         call_command('migrate', interactive=False)
         
         # Populate demo data if no license exists
         if is_demo_mode():
             print("📦 Populating Demo Data...")
-            call_command('init_demo_db', interactive=False)
+            call_command('init_demo_db')
             
     except Exception as e:
         print(f"❌ Migration/Init Failed: {e}")

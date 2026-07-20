@@ -117,7 +117,7 @@ The `Receipt` model has a `client_uuid` field (`UUIDField`) that serves as an id
 - **No barcode/SKU** — products identified by name only
 - **No fixed selling price** on product — cashier enters price per sale
 - **Commission (المندبة)**: Fixed value per product (not percentage), tracked via `CommissionHistory`
-- **Collection commission (عمولة تحصيل)**: Percentage per branch, stored on `Branch.collection_commission_rate`
+- **Collection commission (عمولة تحصيل)**: Percentage per company, stored globally on `CompanySetting.collection_commission_rate`.
 
 ### 1.10 Date System
 
@@ -183,12 +183,13 @@ Product ID `16` ("كود الطوارئ") is a special license type stored in th
 **Description**: Physical branch or warehouse. Also holds the collection commission rate for that branch.
 
 | Field | Type | Constraints | Notes |
-|-------|------|-------------|-------|
-| `id` | AutoField | PK, auto-increment | Implicit Django PK |
+|---|---|---|---|
+| `id` | BigAutoField | PK | |
 | `name` | CharField(150) | UNIQUE, NOT NULL | Branch display name |
-| `collection_commission_rate` | DecimalField(5,2) | DEFAULT 0.00 | عمولة تحصيل — percentage per branch |
-| `is_deleted` | BooleanField | DEFAULT FALSE | Soft-delete flag |
+| `is_deleted` | BooleanField | DEFAULT False | Soft delete flag |
 | `created_at` | DateTimeField | auto_now_add | |
+
+> **Note on Deletion**: While the system uses soft deletes via `is_deleted=True` for normal operations, `BranchViewSet.destroy` is explicitly overridden to perform a full, irreversible **hard delete cascade** of the branch and ALL its related operational data (Receipts, Invoices, Salespersons, etc.) upon user request, ignoring standard PROTECT configurations.
 
 **Constraints**: `UNIQUE(name)`
 
@@ -426,12 +427,14 @@ Product ID `16` ("كود الطوارئ") is a special license type stored in th
 |-------|------|-------------|-------|
 | `id` | AutoField | PK | |
 | `name` | CharField(100) | NOT NULL | اسم الشركة |
-| `description` | CharField(200) | nullable | وصف الشركة |
-| `phone1` | CharField(20) | NOT NULL | رقم تليفون 1 |
-| `phone2` | CharField(20) | nullable | رقم تليفون 2 |
-| `footer_text` | CharField(250) | DEFAULT "تطبق الشروط والأحكام" | Invoice footer text |
-| `is_cloud_viewer` | BooleanField | DEFAULT FALSE | Is this a cloud viewer device? |
-| `is_deleted` | BooleanField | DEFAULT FALSE | |
+| `description` | TextField | NULL, BLANK | |
+| `phone1` | CharField(50) | NULL, BLANK | Primary support/contact |
+| `phone2` | CharField(50) | NULL, BLANK | Secondary contact |
+| `footer_text` | TextField | NULL, BLANK | Receipt footer note |
+| `is_cloud_viewer` | BooleanField | DEFAULT False | Feature toggle |
+| `collection_commission_rate` | DecimalField(5,2) | DEFAULT 0.00 | Global collection commission (%) |
+| `zoom_level` | DecimalField(4,2) | DEFAULT 1.00 | Global UI zoom level multiplier |
+| `is_deleted` | BooleanField | DEFAULT False | |
 | `created_at` | DateTimeField | auto_now_add | |
 
 **Singleton Enforcement**: The `save()` method prevents creation of a second row — redirects to update the existing one.

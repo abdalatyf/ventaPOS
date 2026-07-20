@@ -195,7 +195,7 @@ class DemoAuthToken(views.APIView):
     
     def post(self, request, *args, **kwargs):
         from api.models import ClientLicense
-        if ClientLicense.objects.filter(is_active=True).exists():
+        if ClientLicense.objects.filter(is_active=True).exclude(machine_id="DEMO_MACHINE").exists():
             return Response({"error": "النظام مفعل مسبقاً، الرجاء تسجيل الدخول العادي."}, status=status.HTTP_400_BAD_REQUEST)
         
         user, _ = User.objects.get_or_create(username='demo', defaults={'is_superuser': False})
@@ -259,7 +259,7 @@ class SystemInitializationView(views.APIView):
         company = CompanySetting.objects.first()
         return Response({
             "initialized": is_initialized,
-            "company_name": company.company_name if company else None
+            "company_name": company.name if company else None
         })
 
     def post(self, request):
@@ -293,6 +293,21 @@ class SystemInitializationView(views.APIView):
         recovery_code = f"VNTA-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
         
         with transaction.atomic():
+            # If we are activating from Demo Mode, wipe all demo data first
+            is_demo = ClientLicense.objects.filter(machine_id="DEMO_MACHINE").exists()
+            if is_demo:
+                from .models import Receipt, PurchaseInvoice, InventoryItem, Branch, Supplier, Salesperson, CompanySetting
+                # Delete high-level objects first to cascade and clear PROTECT references
+                Receipt.all_objects.all().delete()
+                PurchaseInvoice.all_objects.all().delete()
+                
+                # Now safe to delete foundational objects
+                InventoryItem.all_objects.all().delete()
+                Salesperson.all_objects.all().delete()
+                Supplier.all_objects.all().delete()
+                Branch.all_objects.all().delete()
+                CompanySetting.all_objects.all().delete()
+
             # Create master user
             User.objects.filter(is_superuser=True).delete() # clean up any partial state
             user = User.objects.create_superuser('admin', 'admin@ventapos.local', password)
@@ -302,12 +317,12 @@ class SystemInitializationView(views.APIView):
             company = CompanySetting.objects.first()
             if not company:
                 company = CompanySetting.objects.create(
-                    company_name=company_name,
+                    name=company_name,
                     phone1=phone1,
                     phone2=phone2
                 )
             else:
-                company.company_name = company_name
+                company.name = company_name
                 company.phone1 = phone1
                 company.phone2 = phone2
                 company.save()
@@ -315,7 +330,7 @@ class SystemInitializationView(views.APIView):
             # Create default branch
             branch = Branch.objects.filter(name=branch_name).first()
             if not branch:
-                Branch.objects.create(name=branch_name, local_id=1)
+                Branch.objects.create(name=branch_name, id=1)
                 
             # Store recovery code as special license type
             from .utils.security_utils import generate_record_signature
@@ -362,6 +377,40 @@ class BranchViewSet(SoftDeleteModelViewSet):
     queryset = Branch.objects.all()
     serializer_class = BranchSerializer
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        from django.db import transaction
+        with transaction.atomic():
+            from api.models import SaleItem, InstallmentPayment, PurchaseInvoiceItem, CommissionHistory, InventoryAdjustment, Receipt, PurchaseInvoice, InventoryItem, Expense, TemporaryReceipt, Salesperson
+            
+            # 1. SaleItems & Payments
+            SaleItem.all_objects.filter(receipt__branch=instance).delete()
+            InstallmentPayment.all_objects.filter(receipt__branch=instance).delete()
+            # 2. Receipts
+            Receipt.all_objects.filter(branch=instance).delete()
+            
+            # 3. PurchaseInvoiceItems
+            PurchaseInvoiceItem.all_objects.filter(invoice__branch=instance).delete()
+            # 4. PurchaseInvoices
+            PurchaseInvoice.all_objects.filter(branch=instance).delete()
+            
+            # 5. CommissionHistory & Adjustments
+            CommissionHistory.all_objects.filter(item__branch=instance).delete()
+            InventoryAdjustment.all_objects.filter(item__branch=instance).delete()
+            
+            # 6. InventoryItems & Expenses & Temp
+            InventoryItem.all_objects.filter(branch=instance).delete()
+            Expense.all_objects.filter(branch=instance).delete()
+            TemporaryReceipt.all_objects.filter(branch=instance).delete()
+            
+            # 7. Salespersons
+            Salesperson.all_objects.filter(branch=instance).delete()
+            
+            # Finally, delete the branch itself permanently (Hard delete overrides the SoftDeleteViewSet)
+            instance.delete()
+            
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class SalespersonViewSet(SoftDeleteModelViewSet):
     queryset = Salesperson.objects.select_related("branch").all()
@@ -382,7 +431,7 @@ class InventoryItemViewSet(SoftDeleteModelViewSet):
                 qs = qs.filter(branch__id=uuid_val)
             except ValueError:
                 # If it's an integer (Legacy Sync script)
-                qs = qs.filter(branch__local_id=branch_id_param)
+                qs = qs.filter(branch__id=branch_id_param)
         return qs
 
     # ------------------------------------------------------------------
@@ -459,20 +508,20 @@ class InventoryItemViewSet(SoftDeleteModelViewSet):
 
         for p in PurchaseInvoiceItem.objects.filter(
             inventory_item=item, is_deleted=False
-        ).select_related("purchase_invoice", "purchase_invoice__supplier"):
+        ).select_related("invoice", "invoice__supplier"):
             timeline.append({
-                "type": p.purchase_invoice.invoice_type,
-                "year": p.purchase_invoice.invoice_year,
-                "month": p.purchase_invoice.invoice_month,
+                "type": p.invoice.invoice_type,
+                "year": p.invoice.invoice_year,
+                "month": p.invoice.invoice_month,
                 "quantity": p.quantity,
                 "price": str(p.purchase_price),
-                "invoice_number": p.purchase_invoice.invoice_number,
-                "supplier": p.purchase_invoice.supplier.name,
+                "invoice_number": p.invoice.invoice_number,
+                "supplier": p.invoice.supplier.name,
                 "sort_key": (
-                    p.purchase_invoice.invoice_year,
-                    p.purchase_invoice.invoice_month,
+                    p.invoice.invoice_year,
+                    p.invoice.invoice_month,
                     1,
-                    p.purchase_invoice.invoice_number,
+                    p.invoice.invoice_number,
                 ),
             })
 
@@ -500,11 +549,11 @@ class InventoryItemViewSet(SoftDeleteModelViewSet):
         for adj in InventoryAdjustment.objects.filter(inventory_item=item, is_deleted=False):
             timeline.append({
                 "type": f"ADJUSTMENT_{adj.adjustment_type}",
-                "year": adj.adjustment_year,
-                "month": adj.adjustment_month,
+                "year": adj.year,
+                "month": adj.month,
                 "quantity": adj.quantity,
                 "reason": adj.reason,
-                "sort_key": (adj.adjustment_year, adj.adjustment_month, 3, 0),
+                "sort_key": (adj.year, adj.month, 3, 0),
             })
 
         timeline.sort(key=lambda x: x["sort_key"])
@@ -602,7 +651,7 @@ class CommissionHistoryViewSet(SoftDeleteModelViewSet):
         qs = super().get_queryset().order_by("-activation_year", "-activation_month")
         item_id = self.request.query_params.get("item_id")
         if item_id:
-            qs = qs.filter(inventory_item__local_id=item_id)
+            qs = qs.filter(inventory_item__id=item_id)
         return qs
 
 
@@ -625,7 +674,7 @@ class PurchaseInvoicePagination(PageNumberPagination):
         from django.db.models import Sum, F
         # Calculate total cost by multiplying quantity by purchase_price for all items in these invoices
         total_purchases = PurchaseInvoiceItem.objects.filter(
-            purchase_invoice__in=self.page.paginator.object_list
+            invoice__in=self.page.paginator.object_list
         ).aggregate(
             total=Sum(F('quantity') * F('purchase_price'))
         )["total"] or 0
@@ -734,7 +783,7 @@ class PurchaseInvoiceViewSet(SoftDeleteModelViewSet):
 
 class PurchaseInvoiceItemViewSet(SoftDeleteModelViewSet):
     queryset = PurchaseInvoiceItem.objects.select_related(
-        "purchase_invoice", "inventory_item"
+        "invoice", "inventory_item"
     ).all()
     serializer_class = PurchaseInvoiceItemSerializer
 
@@ -761,7 +810,7 @@ class ReceiptPagination(PageNumberPagination):
 class ReceiptViewSet(SoftDeleteModelViewSet):
     queryset = Receipt.objects.select_related(
         "branch", "salesperson"
-    ).prefetch_related("sale_items", "installment_payments").all()
+    ).prefetch_related("sale_items", "payments").all()
     serializer_class = ReceiptSerializer
     pagination_class = ReceiptPagination
 
@@ -831,7 +880,7 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
         if not isinstance(receipt_ids, list) or not receipt_ids:
             return Response({"error": "receipt_ids must be a non-empty list"}, status=status.HTTP_400_BAD_REQUEST)
 
-        receipts = self.get_queryset().filter(id__in=receipt_ids).prefetch_related('installment_payments')
+        receipts = self.get_queryset().filter(id__in=receipt_ids).prefetch_related('payments')
         if not receipts.exists():
             return Response({"error": "No valid receipts found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -842,7 +891,7 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
         pages_html = []
 
         for receipt in receipts:
-            installments_from_db = list(receipt.installment_payments.filter(is_deleted=False).order_by('payment_date'))
+            installments_from_db = list(receipt.payments.filter(is_deleted=False).order_by('payment_date'))
             total_installments = len(installments_from_db)
             paid_so_far = receipt.down_payment
 
@@ -926,9 +975,9 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
             'phone_number': ed2ad(str(receipt.phone_number)) if receipt.phone_number else '',
             'amount_to_pay': ed2ad(str(inst.amount)) if inst else ed2ad(str(total)),
             'amount_in_words': get_num_to_words_ar(int(inst.amount if inst else total)),
-            'payment_date': ed2ad(inst.payment_date.strftime("%Y/%m/%d")) if inst and inst.payment_date else ed2ad(receipt.created_at_local.strftime("%Y/%m/%d")),
+            'payment_date': ed2ad(inst.payment_date.strftime("%Y/%m/%d")) if inst and inst.payment_date else ed2ad(receipt.created_at.strftime("%Y/%m/%d")),
             'products_text': receipt.products_text or '',
-            'sale_date': ed2ad(receipt.created_at_local.strftime("%Y/%m/%d")),
+            'sale_date': ed2ad(receipt.created_at.strftime("%Y/%m/%d")),
             'installment_system': receipt.installment_system or ('كاش' if receipt.is_cash_sale else ''),
             'salesperson_name': receipt.salesperson.name if receipt.salesperson else '',
         }
@@ -938,7 +987,7 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
         qs = super().get_queryset()
         params = self.request.query_params
 
-        # branch_id: filter branch__local_id=branch_id or branch_id=branch_id
+        # branch_id: filter branch__id=branch_id or branch_id=branch_id
         if branch_id_param := params.get("branch_id"):
             if str(branch_id_param).strip():
                 clean_branch_id = to_english_numerals(str(branch_id_param).strip())
@@ -946,9 +995,9 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
                     uuid_val = int(clean_branch_id)
                     qs = qs.filter(branch_id=uuid_val)
                 except ValueError:
-                    qs = qs.filter(branch__local_id=clean_branch_id)
+                    qs = qs.filter(branch__id=clean_branch_id)
 
-        # salesperson_id / salesperson: filter salesperson__local_id=salesperson_id or salesperson_id=salesperson_id
+        # salesperson_id / salesperson: filter salesperson__id=salesperson_id or salesperson_id=salesperson_id
         if sp_param := (params.get("salesperson_id") or params.get("salesperson")):
             if str(sp_param).strip():
                 clean_sp_id = to_english_numerals(str(sp_param).strip())
@@ -956,7 +1005,7 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
                     uuid_val = int(clean_sp_id)
                     qs = qs.filter(salesperson_id=uuid_val)
                 except ValueError:
-                    qs = qs.filter(salesperson__local_id=clean_sp_id)
+                    qs = qs.filter(salesperson__id=clean_sp_id)
 
         # year: filter sale_year=to_english_numerals(year)
         if year := params.get("year"):
@@ -1014,7 +1063,7 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
             if str(has_down_payment).strip().lower() == "true":
                 qs = qs.filter(is_cash_sale=False, down_payment__gt=0)
 
-        return qs.order_by("-created_at_local", "-local_id")
+        return qs.order_by("-created_at", "-id")
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
@@ -1056,7 +1105,7 @@ class ExpenseViewSet(SoftDeleteModelViewSet):
         qs = super().get_queryset()
         params = self.request.query_params
         if branch_id := params.get("branch_id"):
-            qs = qs.filter(branch__local_id=branch_id)
+            qs = qs.filter(branch__id=branch_id)
         if year := params.get("year"):
             qs = qs.filter(expense_year=year)
         if month := params.get("month"):
@@ -1225,7 +1274,7 @@ def to_arabic_numerals(text):
     return text.translate(translation_table)
 
 def get_default_date_for_tenant():
-    latest_receipt = Receipt.objects.filter(is_deleted=False).order_by('-created_at_local').first()
+    latest_receipt = Receipt.objects.filter(is_deleted=False).order_by('-created_at').first()
     if latest_receipt:
         return latest_receipt.sale_year, latest_receipt.sale_month
     
@@ -1267,7 +1316,7 @@ def resolve_salesperson_id(tenant, salesperson_id):
         pass
     try:
         local_id = int(salesperson_id)
-        sp = Salesperson.objects.filter(local_id=local_id, is_deleted=False).first()
+        sp = Salesperson.objects.filter(id=local_id, is_deleted=False).first()
         if sp:
             return sp.id
     except ValueError:
@@ -1404,7 +1453,7 @@ class ProductSuggestionsView(views.APIView):
             except ValueError:
                 try:
                     branch_local_id = int(branch_id)
-                    items_qs = items_qs.filter(branch__local_id=branch_local_id)
+                    items_qs = items_qs.filter(branch__id=branch_local_id)
                 except ValueError:
                     pass
 
@@ -1498,7 +1547,7 @@ class DashboardReportView(views.APIView):
 
         collection_inflow = InstallmentPayment.objects.filter(
             receipt__branch_id=branch_id,
-            receipt__payment_date__year=year,
+            payment_date__year=year,
             payment_date__month=month,
             is_deleted=False,
             receipt__is_deleted=False
@@ -1517,7 +1566,7 @@ class DashboardReportView(views.APIView):
         # 3. COGS and Sales Commission
         sale_items = SaleItem.objects.filter(
             receipt__branch_id=branch_id,
-            receipt__receipt__sale_year=year,
+            receipt__sale_year=year,
             receipt__sale_month=month,
             receipt__is_deleted=False,
             is_deleted=False
@@ -1564,7 +1613,7 @@ class DashboardReportView(views.APIView):
             sp_sale_items = SaleItem.objects.filter(
                 receipt__salesperson=sp,
                 receipt__branch_id=branch_id,
-                receipt__receipt__sale_year=year,
+                receipt__sale_year=year,
                 receipt__sale_month=month,
                 receipt__is_deleted=False,
                 is_deleted=False
@@ -1578,7 +1627,7 @@ class DashboardReportView(views.APIView):
             sp_collected = InstallmentPayment.objects.filter(
                 receipt__salesperson=sp,
                 receipt__branch_id=branch_id,
-                receipt__payment_date__year=year,
+                payment_date__year=year,
                 payment_date__month=month,
                 is_deleted=False,
                 receipt__is_deleted=False
@@ -1592,12 +1641,12 @@ class DashboardReportView(views.APIView):
         from django.db.models import F
 
         total_purchases = PurchaseInvoiceItem.objects.filter(
-            purchase_invoice__branch_id=branch_id,
-            purchase_invoice__purchase_invoice__invoice_year=year,
-            purchase_invoice__invoice_month=month,
-            purchase_invoice__invoice_type="PURCHASE",
+            invoice__branch_id=branch_id,
+            invoice__invoice_year=year,
+            invoice__invoice_month=month,
+            invoice__invoice_type="PURCHASE",
             is_deleted=False,
-            purchase_invoice__is_deleted=False
+            invoice__is_deleted=False
         ).aggregate(s=Sum(F('quantity') * F('purchase_price')))['s'] or 0
 
         # 7. Net Cash in Hand and Safe Balance
@@ -1633,7 +1682,7 @@ class DashboardReportView(views.APIView):
         # 11. Top Products
         top_products_qs = SaleItem.objects.filter(
             receipt__branch_id=branch_id,
-            receipt__receipt__sale_year=year,
+            receipt__sale_year=year,
             receipt__sale_month=month,
             receipt__is_deleted=False,
             is_deleted=False
@@ -1759,7 +1808,7 @@ class SalespersonPerformanceReportView(views.APIView):
             collected = InstallmentPayment.objects.filter(
                 receipt__salesperson=sp,
                 receipt__branch_id=branch_id,
-                receipt__payment_date__year=year,
+                payment_date__year=year,
                 payment_date__month=month,
                 is_deleted=False,
                 receipt__is_deleted=False
@@ -1768,7 +1817,7 @@ class SalespersonPerformanceReportView(views.APIView):
             sp_sale_items = SaleItem.objects.filter(
                 receipt__salesperson=sp,
                 receipt__branch_id=branch_id,
-                receipt__receipt__sale_year=year,
+                receipt__sale_year=year,
                 receipt__sale_month=month,
                 receipt__is_deleted=False,
                 is_deleted=False
@@ -1791,7 +1840,7 @@ class SalespersonPerformanceReportView(views.APIView):
             
             list_data.append({
                 "salesperson_id": str(sp.id),
-                "local_id": sp.local_id,
+                "id": sp.id,
                 "name": sp.name,
                 "receipts_count": receipts_count,
                 "cash_sales": cash_sales,
@@ -1865,9 +1914,9 @@ class InventoryMovementReportView(views.APIView):
         total_inventory_value = 0
 
         total_adjustments_count = InventoryAdjustment.objects.filter(
-            inventory_item__branch_id=branch_id,
-            adjustment_year=year,
-            adjustment_month=month,
+            item__branch_id=branch_id,
+            year=year,
+            month=month,
             is_deleted=False
         ).count()
 
@@ -1877,28 +1926,28 @@ class InventoryMovementReportView(views.APIView):
                 opening_stock += item.initial_quantity
                 
             purchases = PurchaseInvoiceItem.objects.filter(
-                purchase_invoice__branch_id=branch_id,
-                purchase_invoice__purchase_invoice__invoice_type="PURCHASE",
-                purchase_invoice__invoice_year=year,
-                purchase_invoice__invoice_month=month,
+                invoice__branch_id=branch_id,
+                invoice__invoice_type="PURCHASE",
+                invoice__invoice_year=year,
+                invoice__invoice_month=month,
                 inventory_item=item,
                 is_deleted=False,
-                purchase_invoice__is_deleted=False
+                invoice__is_deleted=False
             ).aggregate(s=Sum('quantity'))['s'] or 0
             
             returns = PurchaseInvoiceItem.objects.filter(
-                purchase_invoice__branch_id=branch_id,
-                purchase_invoice__purchase_invoice__invoice_type="RETURN",
-                purchase_invoice__invoice_year=year,
-                purchase_invoice__invoice_month=month,
+                invoice__branch_id=branch_id,
+                invoice__invoice_type="RETURN",
+                invoice__invoice_year=year,
+                invoice__invoice_month=month,
                 inventory_item=item,
                 is_deleted=False,
-                purchase_invoice__is_deleted=False
+                invoice__is_deleted=False
             ).aggregate(s=Sum('quantity'))['s'] or 0
             
             sales = SaleItem.objects.filter(
                 receipt__branch_id=branch_id,
-                receipt__receipt__sale_year=year,
+                receipt__sale_year=year,
                 receipt__sale_month=month,
                 inventory_item=item,
                 is_deleted=False,
@@ -1906,18 +1955,18 @@ class InventoryMovementReportView(views.APIView):
             ).aggregate(s=Sum('quantity'))['s'] or 0
             
             surplus = InventoryAdjustment.objects.filter(
-                inventory_item=item,
+                item=item,
                 adjustment_type="SURPLUS",
-                adjustment_year=year,
-                adjustment_month=month,
+                year=year,
+                month=month,
                 is_deleted=False
             ).aggregate(s=Sum('quantity'))['s'] or 0
             
             deficit = InventoryAdjustment.objects.filter(
-                inventory_item=item,
+                item=item,
                 adjustment_type="DEFICIT",
-                adjustment_year=year,
-                adjustment_month=month,
+                year=year,
+                month=month,
                 is_deleted=False
             ).aggregate(s=Sum('quantity'))['s'] or 0
             
@@ -1929,7 +1978,7 @@ class InventoryMovementReportView(views.APIView):
             
             items_list.append({
                 "product_id": str(item.id),
-                "local_id": item.local_id,
+                "id": item.id,
                 "product_name": item.name,
                 "opening_stock": opening_stock,
                 "purchases": purchases,
@@ -1991,7 +2040,7 @@ class ProfitAndLossReportView(views.APIView):
 
         sale_items_qs = SaleItem.objects.filter(
             receipt__branch_id=branch_id,
-            receipt__receipt__sale_year=year,
+            receipt__sale_year=year,
             receipt__sale_month=month,
             receipt__is_deleted=False,
             is_deleted=False
@@ -2051,7 +2100,7 @@ class ProfitAndLossReportView(views.APIView):
             
             cash_sales_profitability.append({
                 "id": str(item.id),
-                "local_id": getattr(item, 'local_id', 0),
+                "id": getattr(item, 'id', 0),
                 "name": item.name,
                 "qty": int(qty),
                 "avg_sell": avg_sell,
@@ -2097,7 +2146,7 @@ class ProfitAndLossReportView(views.APIView):
             
             installment_sales_profitability.append({
                 "id": str(item.id),
-                "local_id": getattr(item, 'local_id', 0),
+                "id": getattr(item, 'id', 0),
                 "name": item.name,
                 "qty": int(qty),
                 "avg_sell": avg_sell,
@@ -2173,7 +2222,7 @@ class CashDrawerReportView(views.APIView):
             sale_month=month,
             is_cash_sale=True,
             is_deleted=False
-        ).order_by('created_at_local')
+        ).order_by('created_at')
         
         cash_sales_list = [
             {
@@ -2181,7 +2230,7 @@ class CashDrawerReportView(views.APIView):
                 "receipt_number": receipt.receipt_number,
                 "customer_name": receipt.customer_name,
                 "amount": receipt.total_amount,
-                "sale_date": receipt.created_at_local.isoformat()
+                "sale_date": receipt.created_at.isoformat()
             }
             for receipt in cash_receipts
         ]
@@ -2194,7 +2243,7 @@ class CashDrawerReportView(views.APIView):
             is_cash_sale=False,
             down_payment__gt=0,
             is_deleted=False
-        ).order_by('created_at_local')
+        ).order_by('created_at')
 
         down_payments_list = [
             {
@@ -2203,7 +2252,7 @@ class CashDrawerReportView(views.APIView):
                 "customer_name": receipt.customer_name,
                 "down_payment": receipt.down_payment,
                 "total_amount": receipt.total_amount,
-                "sale_date": receipt.created_at_local.isoformat()
+                "sale_date": receipt.created_at.isoformat()
             }
             for receipt in down_payment_receipts
         ]

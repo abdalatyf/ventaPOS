@@ -24,6 +24,18 @@ export default function ExpensesReport() {
   
   const tableContainerRef = useRef(null);
 
+  const handleSelectAll = useCallback((e) => {
+    if (e.target.checked) {
+      setSelectedIds(Array.isArray(data) ? data.map(item => item.id) : []);
+    } else {
+      setSelectedIds([]);
+    }
+  }, [data]);
+
+  const toggleSelect = useCallback((id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }, []);
+
   // Calculate total
   const safeData = Array.isArray(data) ? data : [];
   const totalAmount = safeData.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);

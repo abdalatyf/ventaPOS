@@ -1,0 +1,18 @@
+Test Results:
+===================
+[PASS] /
+[PASS] /pos
+[PASS] /receipts
+[PASS] /inventory
+[PASS] /search-purchases
+[PASS] /purchases/new
+[PASS] /expenses
+[PASS] /reports/dashboard
+[PASS] /reports/receipts
+[PASS] /reports/expenses
+[PASS] /reports/salesperson
+[PASS] /reports/inventory
+[PASS] /reports/profit-and-loss
+[PASS] /reports/cash-drawer
+[FAIL] /reports/installments -> Console/Page Errors: Page Error: toggleSelect is not defined
+[PASS] /settings

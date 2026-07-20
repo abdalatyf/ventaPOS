@@ -37,10 +37,6 @@ class AllObjectsManager(models.Manager):
 
 class Branch(models.Model):
     name = models.CharField(max_length=150, unique=True, verbose_name="اسم الفرع")
-    collection_commission_rate = models.DecimalField(
-        max_digits=5, decimal_places=2, default=0.00,
-        verbose_name="نسبة عمولة التحصيل"
-    )
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -484,6 +480,14 @@ class CompanySetting(models.Model):
     phone2 = models.CharField(max_length=20, blank=True, null=True)
     footer_text = models.CharField(max_length=250, default="تطبق الشروط والأحكام")
     is_cloud_viewer = models.BooleanField(default=False)
+    collection_commission_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0.00,
+        verbose_name="نسبة عمولة التحصيل"
+    )
+    zoom_level = models.DecimalField(
+        max_digits=4, decimal_places=2, default=1.00,
+        verbose_name="مستوى التكبير"
+    )
     
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

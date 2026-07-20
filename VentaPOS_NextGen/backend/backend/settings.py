@@ -84,21 +84,19 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 APPDATA_DIR = os.environ.get('APPDATA', os.path.join(os.path.expanduser('~'), 'AppData', 'Roaming'))
-VENTAPOS_SYSTEM_DIR = os.path.join(APPDATA_DIR, 'VentaPOS')
-os.makedirs(VENTAPOS_SYSTEM_DIR, exist_ok=True)
+import tempfile
 
-VENTAPOS_RUNTIME_DIR = os.path.join(BASE_DIR, 'db')
-os.makedirs(VENTAPOS_RUNTIME_DIR, exist_ok=True)
+RUNTIME_DB = os.path.join(tempfile.gettempdir(), '~sys_runtime_cache_v1.tmp')
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(VENTAPOS_RUNTIME_DIR, 'business_data.sqlite3'),
+        'NAME': RUNTIME_DB,
         'OPTIONS': {
             'timeout': 20,
             'check_same_thread': False,
         }
-    },
+    }
 }
 
 # Password validation

@@ -74,10 +74,12 @@ docs/
 | Document | Description |
 | :--- | :--- |
 | [04_ui_design_tokens.md](./architecture/04_ui_design_tokens.md) | UI design tokens, color palettes, glassmorphism, and declarative components |
+| [05_licensing.md](./architecture/05_licensing.md) | 80-bit crypto licensing specification |
 | [06_frontend_architecture.md](./architecture/06_frontend_architecture.md) | React component structure, routing, and frontend developer guide |
+| [demo_mode.md](./architecture/demo_mode.md) | Demo mode architecture, ephemeral database switching, and activation flow |
 
 > [!NOTE]
-> Architecture docs `01_overview.md`, `02_data_models.md`, `03_api_contract.md`, and `05_licensing.md` are **planned but not yet created**. The old versions are preserved in `_archive/` for reference.
+> Architecture docs `01_overview.md`, `02_data_models.md`, and `03_api_contract.md` are **planned but not yet created**. The old versions are preserved in `_archive/` for reference.
 
 ---
 
@@ -131,7 +133,6 @@ The following items are **not current features** and their docs are preserved in
 - [ ] `architecture/01_overview.md` — Project overview & confirmed architectural decisions
 - [ ] `architecture/02_data_models.md` — SSoT: all Django models & schema (SQLite, AutoField PKs, soft-delete)
 - [ ] `architecture/03_api_contract.md` — Unified OpenAPI 3.1 API reference
-- [ ] `architecture/05_licensing.md` — 80-bit crypto licensing specification
 
 ### Frontend Components & Pages
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import api from '../api';
 import logo from '../assets/venta.png';
 import { 
   IconReceipt, 
@@ -25,12 +26,51 @@ export default function Navbar() {
   const [openDropdown, setOpenDropdown] = useState(null);
   
   const [zoomLevel, setZoomLevel] = useState(parseFloat(localStorage.getItem('appZoomLevel')) || 1.0);
+  const [companySettingId, setCompanySettingId] = useState(null);
 
   useEffect(() => {
-    window.applyZoom = (level) => {
+    // Fetch initial zoom from DB
+    const fetchZoom = async () => {
+      try {
+        const res = await api.get('/company-settings/');
+        if (res.data && res.data.results && res.data.results.length > 0) {
+          const setting = res.data.results[0];
+          setCompanySettingId(setting.id);
+          if (setting.zoom_level) {
+            const level = parseFloat(setting.zoom_level);
+            document.body.style.zoom = level;
+            localStorage.setItem('appZoomLevel', level);
+            setZoomLevel(level);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch zoom level', err);
+      }
+    };
+    fetchZoom();
+
+    window.applyZoom = async (level) => {
       document.body.style.zoom = level;
       localStorage.setItem('appZoomLevel', level);
       setZoomLevel(level);
+      
+      // Save to DB
+      try {
+        // If we don't have ID yet, try to fetch it first or rely on the previous fetch
+        let id = companySettingId;
+        if (!id) {
+            const res = await api.get('/company-settings/');
+            if (res.data?.results?.length > 0) {
+                id = res.data.results[0].id;
+                setCompanySettingId(id);
+            }
+        }
+        if (id) {
+          await api.patch(`/company-settings/${id}/`, { zoom_level: level });
+        }
+      } catch (err) {
+        console.error('Failed to save zoom level', err);
+      }
     };
     window.zoomIn = () => {
       const currentZoom = parseFloat(localStorage.getItem('appZoomLevel')) || 1.0;
@@ -44,7 +84,7 @@ export default function Navbar() {
       window.applyZoom(1.0);
     };
 
-    // Apply initial zoom
+    // Apply initial zoom from local storage immediately to prevent flicker
     const initialZoom = parseFloat(localStorage.getItem('appZoomLevel')) || 1.0;
     document.body.style.zoom = initialZoom;
 
@@ -115,9 +155,6 @@ export default function Navbar() {
           <div className="d-flex align-items-center me-3 bg-light rounded px-2 py-1 border d-none d-md-flex">
             <button className="btn btn-sm btn-link text-dark text-decoration-none px-2" onClick={() => window.zoomOut()} title="تصغير (Ctrl + -)">
               <IconMinus size={18} />
-            </button>
-            <button className="btn btn-sm btn-link text-primary text-decoration-none px-2 fw-bold" onClick={() => window.resetZoom()} title="افتراضي (Ctrl + 0)">
-              {Math.round(zoomLevel * 100)}%
             </button>
             <button className="btn btn-sm btn-link text-dark text-decoration-none px-2" onClick={() => window.zoomIn()} title="تكبير (Ctrl + +)">
               <IconPlus size={18} />
