@@ -20,26 +20,22 @@ export default function Login() {
   const [recoverySuccess, setRecoverySuccess] = useState('');
 
   useEffect(() => {
-    // Check if the system is initialized and get company name
-    api.get('/init/').then(res => {
-      if (!res.data.initialized) {
-        // Auto-login to Demo mode if not initialized
-        api.post('/auth/demo/').then(demoRes => {
-          localStorage.setItem('token', demoRes.data.token);
-          localStorage.setItem('company_name', demoRes.data.company_name);
-          navigate('/select-branch', { replace: true });
-        }).catch(err => {
-          navigate('/init', { replace: true }); // Fallback
-        });
-      } else {
-        if (res.data.company_name) {
-          setCompanyName(res.data.company_name);
-        }
-        setCheckingInit(false);
-      }
+    // Attempt Auto-Login for Demo Mode
+    api.post('/auth/demo/').then(demoRes => {
+      // Success means we are in Demo mode!
+      localStorage.setItem('token', demoRes.data.token);
+      localStorage.setItem('company_name', demoRes.data.company_name);
+      navigate('/select-branch', { replace: true });
     }).catch(err => {
-      console.error('Error checking initialization:', err);
+      // If it fails, it means the system is ACTIVATED. We must stay on Login screen.
       setCheckingInit(false);
+      
+      // Try to get the real company name for display
+      api.get('/company-settings/').then(res => {
+        if (res.data.name) setCompanyName(res.data.name);
+      }).catch(e => {
+        // Ignore 401s since we are logged out
+      });
     });
 
     const searchParams = new URLSearchParams(location.search);

@@ -4,11 +4,23 @@ import SecurityTab from './tabs/SecurityTab';
 import SubscriptionTab from './tabs/SubscriptionTab';
 import { IconBuildingStore, IconShieldLock, IconKey } from '@tabler/icons-react';
 
+import { useLocation } from 'react-router-dom';
+
 export default function SettingsIndex() {
-  const [activeTab, setActiveTab] = useState('company');
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const initialTab = searchParams.get('tab') || 'company';
+  
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  // If the URL changes (e.g. from DemoBanner), update the tab
+  React.useEffect(() => {
+    const tab = new URLSearchParams(location.search).get('tab');
+    if (tab) setActiveTab(tab);
+  }, [location.search]);
 
   return (
-    <div className="container-xl">
+    <div className="container-fluid px-0">
       {/* Removed page header to stick tabs to navbar */}
 
       <div className="card shadow-none border-0 animate__animated animate__fadeIn rounded-0" style={{ marginTop: '-1rem' }}>

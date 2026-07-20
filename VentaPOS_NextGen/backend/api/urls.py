@@ -6,8 +6,8 @@ from .views import (
     PurchaseInvoiceViewSet, PurchaseInvoiceItemViewSet, ReceiptViewSet,
     SaleItemViewSet, InstallmentPaymentViewSet, PendingExternalReceiptViewSet,
     ClientLicenseViewSet, UsedLicenseViewSet, LicenseHistoryViewSet,
-    LicenseStatusView, LicenseActivateView, SystemInitializationView, CustomAuthToken,
-    DemoAuthToken, PasswordRecoveryView, ChangePasswordView,
+    LicenseStatusView, LicenseActivateView, CustomAuthToken,
+    DemoAuthToken, PasswordRecoveryView, ChangePasswordView, HasPasswordView,
     CustomerSuggestionsView, ProductSuggestionsView,
     DashboardReportView, SalespersonPerformanceReportView, InventoryMovementReportView,
     ProfitAndLossReportView, CashDrawerReportView, DefaultDateView, InstallmentsReportView
@@ -38,10 +38,11 @@ router.register(r'used-licenses', UsedLicenseViewSet)
 router.register(r'license-history', LicenseHistoryViewSet)
 
 urlpatterns = [
-    path('init/', SystemInitializationView.as_view(), name='system_init'),
+    # Removed system_init as per new flow
     path('auth/local/', CustomAuthToken.as_view(), name='auth_local'),
     path('auth/demo/', DemoAuthToken.as_view(), name='auth_demo'),
     path('auth/recover/', PasswordRecoveryView.as_view(), name='auth_recover'),
+    path('auth/has-password/', HasPasswordView.as_view(), name='auth_has_password'),
     path('auth/change-password/', ChangePasswordView.as_view(), name='auth_change_password'),
     path('license/status/', LicenseStatusView.as_view(), name='license-status'),
     path('license/activate/', LicenseActivateView.as_view(), name='license-activate'),

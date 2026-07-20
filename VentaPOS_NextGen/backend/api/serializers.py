@@ -583,6 +583,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class CompanySettingSerializer(serializers.ModelSerializer):
+    admin_password = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = CompanySetting
@@ -593,6 +594,27 @@ class CompanySettingSerializer(serializers.ModelSerializer):
             "is_deleted", "created_at"
         ]
         read_only_fields = ["id", "is_deleted", "created_at"]
+
+    def update(self, instance, validated_data):
+        admin_password = validated_data.pop('admin_password', None)
+        if admin_password:
+            from django.contrib.auth.models import User
+            user = User.objects.filter(is_superuser=True).first()
+            if user:
+                user.set_password(admin_password)
+                user.save()
+        return super().update(instance, validated_data)
+
+    def create(self, validated_data):
+        admin_password = validated_data.pop('admin_password', None)
+        instance = super().create(validated_data)
+        if admin_password:
+            from django.contrib.auth.models import User
+            user = User.objects.filter(is_superuser=True).first()
+            if user:
+                user.set_password(admin_password)
+                user.save()
+        return instance
 
 
 # ---------------------------------------------------------------------------

@@ -198,12 +198,16 @@ class DemoAuthToken(views.APIView):
         if ClientLicense.objects.filter(is_active=True).exclude(machine_id="DEMO_MACHINE").exists():
             return Response({"error": "النظام مفعل مسبقاً، الرجاء تسجيل الدخول العادي."}, status=status.HTTP_400_BAD_REQUEST)
         
-        user, _ = User.objects.get_or_create(username='demo', defaults={'is_superuser': False})
+        user = User.objects.filter(is_superuser=True).first()
+        if not user:
+            # Fallback if somehow missing
+            user, _ = User.objects.get_or_create(username='admin', defaults={'is_superuser': True})
+            
         token, _ = Token.objects.get_or_create(user=user)
         return Response({
             'token': token.key,
             'user_id': user.pk,
-            'company_name': 'شركة تجريبية (Demo)',
+            'company_name': 'نسخة تجريبية VentaPOS',
             'is_cloud': False
         })
 
@@ -227,147 +231,34 @@ class PasswordRecoveryView(views.APIView):
             return Response({"message": "تم تغيير كلمة المرور بنجاح."})
         else:
             return Response({"error": "كود الاسترداد غير صحيح."}, status=400)
+class HasPasswordView(views.APIView):
+    def get(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"error": "غير مصرح لك"}, status=status.HTTP_401_UNAUTHORIZED)
+        return Response({"has_password": user.has_usable_password() and user.check_password("") is False})
 
 class ChangePasswordView(views.APIView):
     def post(self, request):
-        old_password = request.data.get("old_password")
-        new_password = request.data.get("new_password")
-        if not old_password or not new_password:
-            return Response({"error": "الرجاء إدخال كلمة المرور الحالية والجديدة"}, status=400)
+        old_password = request.data.get("old_password", "")
+        new_password = request.data.get("new_password", "")
+        
+        if old_password is None or new_password is None:
+            return Response({"error": "بيانات غير صالحة"}, status=400)
         
         user = request.user
         if not user.is_authenticated:
             return Response({"error": "غير مصرح لك"}, status=status.HTTP_401_UNAUTHORIZED)
 
-        if not user.check_password(old_password):
+        has_password = user.has_usable_password() and user.check_password("") is False
+        
+        if has_password and not user.check_password(old_password):
             return Response({"error": "كلمة المرور الحالية غير صحيحة"}, status=400)
             
         user.set_password(new_password)
         user.save()
-        return Response({"message": "تم تغيير كلمة المرور بنجاح."})
-
-
-class SystemInitializationView(views.APIView):
-    """
-    Handles the first-time setup of the system.
-    Creates the default Branch, CompanySettings, and the master Admin User.
-    """
-    permission_classes = [] # Allow unauthenticated access for init
-
-    def get(self, request):
-        is_initialized = User.objects.filter(is_superuser=True).exists()
-        company = CompanySetting.objects.first()
-        return Response({
-            "initialized": is_initialized,
-            "company_name": company.name if company else None
-        })
-
-    def post(self, request):
-        if User.objects.filter(is_superuser=True).exists():
-            return Response({"error": "النظام مهيأ بالفعل."}, status=status.HTTP_400_BAD_REQUEST)
-            
-        company_name = request.data.get('company_name')
-        branch_name = request.data.get('branch_name')
-        password = request.data.get('password')
-        license_code = request.data.get('license_code')
-        phone1 = request.data.get('phone1', '')
-        phone2 = request.data.get('phone2', '')
-        
-        if not all([company_name, branch_name, password, license_code]):
-            return Response({"error": "الرجاء إدخال جميع البيانات الإلزامية بما فيها كود التفعيل"}, status=status.HTTP_400_BAD_REQUEST)
-            
-        from .utils.license_validator import LicenseValidator
-        from .utils.security_utils import get_machine_id
-        from django.db import transaction
-        
-        machine_id = get_machine_id()
-        validation_result = LicenseValidator.validate(license_code, machine_id)
-        
-        if not validation_result.get("valid"):
-            return Response({"error": validation_result.get("error", "كود تفعيل غير صالح")}, status=status.HTTP_400_BAD_REQUEST)
-            
-        import random
-        import string
-        from django.contrib.auth.hashers import make_password
-        
-        recovery_code = f"VNTA-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
-        
-        with transaction.atomic():
-            # If we are activating from Demo Mode, wipe all demo data first
-            is_demo = ClientLicense.objects.filter(machine_id="DEMO_MACHINE").exists()
-            if is_demo:
-                from .models import Receipt, PurchaseInvoice, InventoryItem, Branch, Supplier, Salesperson, CompanySetting
-                # Delete high-level objects first to cascade and clear PROTECT references
-                Receipt.all_objects.all().delete()
-                PurchaseInvoice.all_objects.all().delete()
-                
-                # Now safe to delete foundational objects
-                InventoryItem.all_objects.all().delete()
-                Salesperson.all_objects.all().delete()
-                Supplier.all_objects.all().delete()
-                Branch.all_objects.all().delete()
-                CompanySetting.all_objects.all().delete()
-
-            # Create master user
-            User.objects.filter(is_superuser=True).delete() # clean up any partial state
-            user = User.objects.create_superuser('admin', 'admin@ventapos.local', password)
-            user.save()
-            
-            # Create Company Setting
-            company = CompanySetting.objects.first()
-            if not company:
-                company = CompanySetting.objects.create(
-                    name=company_name,
-                    phone1=phone1,
-                    phone2=phone2
-                )
-            else:
-                company.name = company_name
-                company.phone1 = phone1
-                company.phone2 = phone2
-                company.save()
-                
-            # Create default branch
-            branch = Branch.objects.filter(name=branch_name).first()
-            if not branch:
-                Branch.objects.create(name=branch_name, id=1)
-                
-            # Store recovery code as special license type
-            from .utils.security_utils import generate_record_signature
-            import datetime
-            from dateutil.relativedelta import relativedelta
-
-            rec_license = ClientLicense.objects.create(
-                machine_id=machine_id,
-                license_code=make_password(recovery_code),
-                plan_type="RECOVERY"
-            )
-            
-            # Save the actual activation license
-            ClientLicense.objects.exclude(plan_type="RECOVERY").update(is_active=False)
-            start_date = datetime.date(validation_result["start_year"], validation_result["start_month"], 1)
-            expiry_date = start_date + relativedelta(years=1)
-
-            new_license = ClientLicense.objects.create(
-                license_code=license_code,
-                product_id=validation_result.get("product_id", 1),
-                invoices_balance=999999,
-                is_active=True,
-                expiry_date=expiry_date,
-                machine_id=machine_id
-            )
-            
-            # Sign it securely
-            new_license.license_code_hash = generate_record_signature(
-                new_license.expiry_date, 
-                new_license.invoices_balance, 
-                machine_id, 
-                new_license.product_id, 
-                True
-            )
-            new_license.save()
-                
-        return Response({"message": "تم تهيئة النظام بنجاح", "recovery_code": recovery_code}, status=status.HTTP_201_CREATED)
+        msg = "تم تغيير كلمة المرور بنجاح." if new_password else "تم إلغاء كلمة المرور، ستتمكن من الدخول مباشرة."
+        return Response({"message": msg})
 
 # ===========================================================================
 # Standard ViewSets
@@ -1145,30 +1036,33 @@ class LicenseStatusView(views.APIView):
     """
 
     def get(self, request):
-        try:
-            tenant = Tenant.objects.get(company_code=company_code, is_deleted=False)
-        except Tenant.DoesNotExist:
-            return Response({"status": "inactive", "message": "رمز الشركة غير موجود."})
-
-        active_lics = ClientLicense.objects.filter(
-            is_active=True, is_deleted=False
-        )
         from api.utils.security_utils import get_machine_id
+        import datetime
+        
         machine_id = get_machine_id()
+        active_lics = ClientLicense.objects.filter(is_active=True, is_deleted=False)
 
         if not active_lics.exists():
             return Response({"status": "inactive", "message": "لا توجد تراخيص نشطة.", "machine_id": machine_id})
 
         total_balance = sum(lic.invoices_balance for lic in active_lics)
         latest = active_lics.order_by("-expiry_date").first()
-        from api.utils.security_utils import get_machine_id
-        machine_id = get_machine_id()
         
+        is_last_month = False
+        if latest and latest.expiry_date:
+            today = datetime.date.today()
+            if today.year == latest.expiry_date.year and today.month == latest.expiry_date.month:
+                is_last_month = True
+                
+        needs_support = (total_balance <= 100)
+
         return Response({
             "status": "active",
             "total_invoices_balance": total_balance,
             "expiry_date": latest.expiry_date if latest else None,
-            "machine_id": machine_id
+            "machine_id": machine_id,
+            "is_last_month": is_last_month,
+            "needs_support": needs_support
         })
 
 
@@ -1189,13 +1083,7 @@ class LicenseActivateView(views.APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            tenant = Tenant.objects.get(company_code=company_code, is_deleted=False)
-        except Tenant.DoesNotExist:
-            return Response(
-                {"error": "رمز الشركة غير موجود."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        # Removed tenant check since company_code is no longer used
 
         code_hash = hashlib.sha256(license_code.encode()).hexdigest()
         if UsedLicense.objects.filter(code_hash=code_hash, is_deleted=False).exists():

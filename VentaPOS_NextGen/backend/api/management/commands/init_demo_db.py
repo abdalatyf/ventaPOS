@@ -11,6 +11,7 @@ from api.models import (
     Branch, Salesperson, InventoryItem, Receipt, SaleItem, InstallmentPayment,
     Supplier, PurchaseInvoice, PurchaseInvoiceItem, CommissionHistory, CompanySetting, ClientLicense
 )
+from django.contrib.auth.models import User
 
 FIRST_NAMES = ["محمد", "أحمد", "علي", "محمود", "إبراهيم", "حسن", "حسين", "خالد", "يوسف", "عمر", "مصطفى", "كريم", "سيد", "طارق", "عبدالله"]
 LAST_NAMES = ["السيد", "عبدالله", "علي", "محمود", "حسن", "خالد", "جمال", "صالح", "سعيد", "منصور", "الشريف", "النجار", "فتحي", "الرفاعي"]
@@ -159,6 +160,11 @@ class Command(BaseCommand):
                     footer_text="نسخة تجريبية - جميع البيانات وهمية وسيتم حذفها عند تفعيل النظام",
                     is_cloud_viewer=False
                 )
+                
+                # Ensure Master Admin User exists
+                if not User.objects.filter(is_superuser=True).exists():
+                    User.objects.create_superuser('admin', 'admin@ventapos.local', '')
+
                 
                 ClientLicense.objects.create(
                     product_id=7, # Lifetime Pro

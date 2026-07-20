@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { IconBuildingStore, IconDeviceFloppy, IconReceiptTax } from '@tabler/icons-react';
 import api from '../../../api';
 
-export default function CompanyTab() {
+export default function CompanyTab({ isFirstSetup = false, onSetupComplete = null }) {
   const [formData, setFormData] = useState({
     name: localStorage.getItem('company_name') || 'شركة النور والتطوير',
     description: 'مفروشات - ادوات منزلية - اجهزة كهربائية',
@@ -10,10 +10,12 @@ export default function CompanyTab() {
     phone2: '',
     footerText: 'رجاء الاحتفاظ بهذا الايصال',
     footer_text: '', // Maps to backend field
-    collection_commission_rate: 0
+    collection_commission_rate: 0,
+    admin_password: ''
   });
   const [settingId, setSettingId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   useEffect(() => {
     const fetchCompanySettings = async () => {
@@ -32,8 +34,14 @@ export default function CompanyTab() {
             collection_commission_rate: setting.collection_commission_rate || 0
           });
         }
+        
+        // Check if demo mode
+        const licenseRes = await api.get('/license/status/');
+        if (licenseRes.data && licenseRes.data.machine_id === 'DEMO_MACHINE') {
+          setIsDemoMode(true);
+        }
       } catch (error) {
-        console.error("Failed to fetch company settings", error);
+        console.error("Failed to fetch company settings or license", error);
       }
     };
     fetchCompanySettings();
@@ -53,7 +61,8 @@ export default function CompanyTab() {
       phone1: formData.phone1,
       phone2: formData.phone2,
       footer_text: formData.footerText, // map to backend field
-      collection_commission_rate: formData.collection_commission_rate
+      collection_commission_rate: formData.collection_commission_rate,
+      admin_password: formData.admin_password
     };
 
     try {
@@ -66,10 +75,12 @@ export default function CompanyTab() {
       localStorage.setItem('company_name', formData.name);
       alert('تم حفظ بيانات الشركة بنجاح');
     } catch (error) {
-      console.error("Failed to save company settings", error);
       alert('حدث خطأ أثناء حفظ البيانات');
     } finally {
       setIsLoading(false);
+      if (onSetupComplete) {
+        onSetupComplete();
+      }
     }
   };
 
@@ -77,6 +88,12 @@ export default function CompanyTab() {
 
   return (
     <div className="animate__animated animate__fadeIn">
+      {isDemoMode && (
+        <div className="alert alert-warning border-warning shadow-sm mb-4 fw-bold text-dark">
+          ⚠️ تخصيص بيانات الإيصال واسم الشركة متاح فقط في النسخة المفعلة، بادر بالاشتراك الآن!
+        </div>
+      )}
+      
       {/* Receipt Preview Section */}
       <div className="card shadow-sm border-0 mb-4 bg-light">
         <div className="card-header bg-white py-3 border-bottom-0 d-flex justify-content-between align-items-center">
@@ -152,47 +169,58 @@ export default function CompanyTab() {
         <div className="card-header bg-white py-3">
           <h5 className="mb-0 fw-bold text-dark"><IconBuildingStore className="me-2 text-primary" /> تعديل بيانات المؤسسة</h5>
         </div>
-        <div className="card-body bg-light">
+        <div className="card-body bg-light p-4">
           <form onSubmit={handleSubmit}>
-            <div className="row g-3">
-              <div className="col-md-6">
-                <label className="form-label fw-bold">اسم الشركة</label>
-                <input type="text" className="form-control" name="name" value={formData.name} onChange={handleChange} required />
-              </div>
+            <fieldset disabled={isDemoMode}>
+              <div className="row g-3">
+                <div className="col-md-6">
+                  <label className="form-label fw-bold">اسم الشركة</label>
+                  <input type="text" className="form-control" name="name" value={formData.name} onChange={handleChange} required />
+                </div>
 
-              <div className="col-md-6">
-                <label className="form-label fw-bold">وصف النشاط</label>
-                <input type="text" className="form-control" name="description" value={formData.description} onChange={handleChange} />
-              </div>
+                <div className="col-md-6">
+                  <label className="form-label fw-bold">وصف النشاط</label>
+                  <input type="text" className="form-control" name="description" value={formData.description} onChange={handleChange} />
+                </div>
 
-              <div className="col-md-6">
-                <label className="form-label fw-bold">رقم الهاتف 1</label>
-                <input type="text" className="form-control" name="phone1" value={formData.phone1} onChange={handleChange} required dir="ltr" />
-              </div>
+                <div className="col-md-6">
+                  <label className="form-label fw-bold">رقم الهاتف 1</label>
+                  <input type="text" className="form-control" name="phone1" value={formData.phone1} onChange={handleChange} required dir="ltr" />
+                </div>
 
-              <div className="col-md-6">
-                <label className="form-label fw-bold">رقم الهاتف 2</label>
-                <input type="text" className="form-control" name="phone2" value={formData.phone2} onChange={handleChange} dir="ltr" />
-              </div>
+                <div className="col-md-6">
+                  <label className="form-label fw-bold">رقم الهاتف 2</label>
+                  <input type="text" className="form-control" name="phone2" value={formData.phone2} onChange={handleChange} dir="ltr" />
+                </div>
 
-              <div className="col-md-12">
-                <label className="form-label fw-bold">نص ذيل الفاتورة (Footer)</label>
-                <textarea className="form-control" name="footerText" rows="2" value={formData.footerText} onChange={handleChange}></textarea>
-              </div>
+                <div className="col-md-12">
+                  <label className="form-label fw-bold">نص ذيل الفاتورة (Footer)</label>
+                  <textarea className="form-control" name="footerText" rows="2" value={formData.footerText} onChange={handleChange}></textarea>
+                </div>
 
-              <div className="col-md-6">
-                <label className="form-label fw-bold">نسبة عمولة التحصيل للبرنامج (%)</label>
-                <input type="number" step="0.01" className="form-control" name="collection_commission_rate" value={formData.collection_commission_rate} onChange={handleChange} />
-              </div>
+                <div className="col-md-6">
+                  <label className="form-label fw-bold">نسبة عمولة التحصيل للبرنامج (%)</label>
+                  <input type="number" step="0.01" className="form-control" name="collection_commission_rate" value={formData.collection_commission_rate} onChange={handleChange} />
+                </div>
 
-              <div className="col-12 text-end border-top pt-3 mt-4">
-                <button type="submit" className="btn btn-primary fw-bold px-4" disabled={isLoading}>
-                  {isLoading ? 'جاري الحفظ...' : (
-                    <><IconDeviceFloppy className="me-2" /> حفظ التعديلات</>
-                  )}
+                {isFirstSetup && (
+                  <div className="col-md-12 border-top pt-3 mt-3">
+                    <label className="form-label fw-bold text-success">كلمة سر مدير النظام (اختياري)</label>
+                    <input type="password" name="admin_password" className="form-control form-control-lg" value={formData.admin_password || ''} onChange={handleChange} placeholder="اتركها فارغة للاحتفاظ بالدخول السهل (بدون كلمة سر)" />
+                    <div className="form-text small">للحفاظ على سرية بياناتك وتأمين النظام بعد التفعيل، ننصح بتعيين كلمة سر الآن.</div>
+                  </div>
+                )}
+              </div>
+            </fieldset>
+
+            {!isDemoMode && (
+              <div className="mt-4">
+                <button type="submit" className="btn btn-primary fw-bold px-5 py-2 w-100" disabled={isLoading}>
+                  <IconDeviceFloppy className="me-2" />
+                  {isLoading ? 'جاري الحفظ...' : (isFirstSetup ? 'حفظ البيانات وبدء العمل' : 'حفظ التعديلات')}
                 </button>
               </div>
-            </div>
+            )}
           </form>
         </div>
       </div>

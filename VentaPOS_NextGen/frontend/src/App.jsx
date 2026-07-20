@@ -7,11 +7,12 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import PosEntry from './pages/PosEntry';
 import Setup from './pages/Setup';
+import ActivationSetup from './pages/ActivationSetup';
 import AppShell from './components/AppShell';
-import ActivationModal from './components/ActivationModal';
 import DemoBanner from './components/DemoBanner';
+import SubscriptionWarningBanner from './components/SubscriptionWarningBanner';
+import api from './api';
 
-import SystemInit from './pages/SystemInit';
 import BranchSelection from './pages/BranchSelection';
 import PurchaseEntry from './pages/PurchaseEntry';
 import SearchPurchases from './pages/SearchPurchases';
@@ -50,6 +51,7 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
+
 const TokenRoute = ({ children }) => {
   const token = localStorage.getItem('token');
   if (!token) {
@@ -69,11 +71,9 @@ const PlaceholderPage = ({ title }) => (
 );
 
 function App() {
-  const [showActivationModal, setShowActivationModal] = useState(false);
-
   useEffect(() => {
     const handleSubscriptionExpired = () => {
-      setShowActivationModal(true);
+      window.location.href = '/settings?tab=subscription';
     };
     
     window.addEventListener('subscription_expired', handleSubscriptionExpired);
@@ -82,12 +82,13 @@ function App() {
 
   return (
     <>
-      <ActivationModal isOpen={showActivationModal} onClose={() => setShowActivationModal(false)} />
+      <SubscriptionWarningBanner />
       <Router>
         <DemoBanner />
         <Routes>
-        {/* المسارات العامة خارج الـ Shell */}
-        <Route path="/init" element={<SystemInit />} />
+        {/* مسارات بدون القوائم الجانبية والعلوية */}
+        <Route path="/setup" element={<ProtectedRoute><Setup /></ProtectedRoute>} />
+        <Route path="/activation-setup" element={<ActivationSetup />} />
         <Route path="/login" element={<Login />} />
         
         {/* Gateway لاختيار الفرع - يحتاج توكن لكن لا يحتاج فرع */}
@@ -102,7 +103,7 @@ function App() {
           <Route path="pos" element={<PosEntry />} />
           
           {/* التأسيس والإعدادات */}
-          <Route path="setup" element={<Setup />} />
+          {/* تم نقل Setup لخارج الـ AppShell ليكون Distraction-free */}
           
           {/* مسارات المبيعات */}
           <Route path="receipts" element={<SearchReceipts />} />

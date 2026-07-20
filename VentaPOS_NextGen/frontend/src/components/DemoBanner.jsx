@@ -32,7 +32,7 @@ export default function DemoBanner() {
       </span>
       <button 
         className="btn btn-sm btn-dark ms-3 fw-bold"
-        onClick={() => navigate('/init')}
+        onClick={() => navigate('/settings?tab=subscription')}
       >
         تفعيل البرنامج
       </button>
