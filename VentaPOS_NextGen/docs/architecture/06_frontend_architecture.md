@@ -63,6 +63,21 @@ When a user scrolls down the page:
 
 ---
 
+## 4. UI Protection & Lock Mechanisms
+
+### Returned Invoices Lock (منطق حماية المرتجعات)
+When opening an invoice in the POS/PosEntry screen (`isEditing = true`), the system must check the `has_returns` property from the backend. If `has_returns` is `true`:
+1. **Warning Banner:** Display a red warning banner: `"مسموح بتعديل بيانات العميل فقط. لا يمكن تعديل البضاعة أو الماليات لوجود مرتجع على هذه الفاتورة."`
+2. **Form Disabling:** Apply the `disabled={hasReturns}` prop to ALL financial and product inputs, including:
+   - Product search and addition buttons
+   - Quantities and prices
+   - Cash sale toggle (`isCashSale`)
+   - Installment dates, amounts, and counts
+   - The initial down payment (`downPayment`)
+3. **Allowed Edits:** Only allow the user to modify the implicit customer details (`customer_name`, `phone_number`, `address`, `area`). The `PUT` payload must strip out all product data to prevent accidental backend overrides.
+
+---
+
 ## 4. Step-by-Step Guide: Building a New Page
 
 Follow these exact steps when creating a new screen (e.g., a new "Inventory List" or "Sales Report" page).

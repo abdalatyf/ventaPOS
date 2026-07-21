@@ -349,6 +349,8 @@ Product ID `16` ("كود الطوارئ") is a special license type stored in th
 | `sale_year` | PositiveIntegerField | NOT NULL, db_index | |
 | `sale_month` | PositiveIntegerField | NOT NULL, db_index | |
 | `is_cash_sale` | BooleanField | DEFAULT FALSE | نقدية أم آجلة |
+| `receipt_type` | CharField(20) | DEFAULT `SALE` | `SALE` or `RETURN` |
+| `parent_receipt` | FK → Receipt | ON DELETE SET_NULL, nullable, related_name=`returns` | The original sale receipt (if this is a return) |
 | `products_text` | TextField | nullable | Denormalized product summary for print |
 | `source` | CharField(20) | DEFAULT `DESKTOP` | `DESKTOP` or `MOBILE` |
 | `sync_action` | CharField(20) | DEFAULT `NEW` | Sync operation indicator |
@@ -365,6 +367,9 @@ Product ID `16` ("كود الطوارئ") is a special license type stored in th
 
 > [!NOTE]
 > The `client_uuid` field provides idempotency for mobile sync. Duplicate pushes with the same `client_uuid` are safely rejected.
+
+> [!NOTE]
+> **Return Logic (منطق المرتجعات):** Receipts are NEVER modified directly when items are returned. Instead, a new `Receipt` with `receipt_type='RETURN'` is created, linking to the original via `parent_receipt`. The `ReceiptSerializer` injects a dynamic `has_returns` boolean property (`True` if `obj.returns.exists()`). This prevents tampering with the original commission and stock ledger history while locking the UI from further financial modifications.
 
 ---
 
