@@ -1,1 +1,0 @@
-import sqlite3; conn=sqlite3.connect(r'D:\Projects\VentaPOS\VentaPOS_NextGen\dist\VentaPOS\db.sqlite3'); print(conn.execute("SELECT COUNT(*) FROM salesapp_receipt").fetchone()[0])

@@ -1,170 +1,130 @@
-# VentaPOS NextGen — Master TODO List
+# VentaPOS NextGen — Master Task & Bug Tracking List
 
-> **Approach:** Backend-first · Quality over speed · No deadline
-> **Anchor:** POS.jsx is the only trusted page — everything else needs review
-> **Format:** `[ ]` = pending · `[/]` = in progress · `[x]` = done
+> **Approach**: Backend-First · Correctness Over Speed · Zero Hallucination  
+> **Anchors**: `GEMINI.md` (Rules), `requirements.md` (Domain Specs), `UI_UX_RULES.md` (Frontend Bible)  
+> **Status Notation**: `[ ]` = Pending · `[/]` = In Progress · `[x]` = Verified & Done  
 
 ---
 
-## 0. Cleanup & Preparation
-- [x] Delete PosEntry.jsx
-- [x] Delete POS.test.jsx (references old POS)
-- [x] Delete SearchReceipts.txt (looks like a backup file)
-- [x] Review and clean up api.js — remove X-Company-Code header, verify Authorization: Token header
-- [x] Review App.jsx routing — default route is SearchReceipts, remove PosEntry references
+## Priority 0: Critical Backend Bug Fixes
 
-## 1. Backend: Models Review
-- [x] Verify all 17 models match requirements (they look clean already)
-- [x] Verify Branch model — consider if collection_commission_rate should be on Branch instead of CompanySetting (currently on CompanySetting as company-wide)
-- [x] Review get_stock_at_date() correctness
-- [x] Review get_commission_at_date() correctness
-- [x] Review get_price_at_date() correctness
-- [x] Review get_safe_available_qty() correctness
-- [x] Review Receipt.get_next_receipt_number() — ensure branch-scoped
-- [x] Review receipt hash generation (is_authentic property)
+- [ ] **Fix `InventoryItem.get_stock_at_date()` in `models.py`**:
+  - Filter `receipt__receipt_type='SALE'` for `total_sold`.
+  - Add `total_sales_returns` (where `receipt__receipt_type='RETURN'`) to the additive side of stock calculation.
+  - Formula: $\text{Stock} = \max(0, \text{initial\_qty} + \text{purchases} + \text{surplus} + \text{sales\_returns} - \text{sales} - \text{purchase\_returns} - \text{deficit})$.
+- [ ] **Fix `InventoryAdjustmentSerializer` in `serializers.py`**:
+  - Fix field names in `Meta.fields` and `validate()` to use `month`, `year`, and `item` (matching `models.py`), replacing outdated names `adjustment_month`, `adjustment_year`, and `inventory_item`.
+- [ ] **Fix `get_safe_available_qty()` Signature Mismatch**:
+  - Update `InventoryItem.get_safe_available_qty()` in `models.py` to accept `return_bottleneck=False` and optionally return `(min_stock, bottleneck_month, bottleneck_year)`, resolving the `TypeError` currently triggered by `views.py` `safe_available_qty`.
+- [ ] **Replace Hardcoded `0.10` Collection Commission in `views.py`**:
+  - Replace static `0.10` multiplier in `DashboardReportView` (L1811, L1849), `SalespersonPerformanceReportView` (L2044), `ProfitAndLossReportView` (L2360), and `ledger` with dynamic `CompanySetting.collection_commission_rate`.
+- [ ] **Enforce Universal Western Digits in `CustomerSuggestionsView`**:
+  - Remove `to_arabic_numerals()` formatting on line 1630 of `views.py`, adhering to the project-wide ASCII `0-9` rule.
+- [ ] **Align Recovery Code `product_id` across Licensing Handlers**:
+  - Verify and synchronize Recovery Code product ID (value `15` vs `16`) across `LicenseValidator.validate()`, `PasswordRecoveryView`, and `LicenseActivateView`.
 
-## 2. Backend: Serializers Review
-- [x] Review all serializers in serializers.py (31KB)
-- [x] Verify no references to removed models (Tenant, CloudUser, ActionLog)
-- [x] Verify receipt serialization handles SALE and RETURN types
-- [x] Verify installment serialization
-- [x] Verify purchase invoice serialization
-- [x] Verify inventory item serialization includes calculated stock
+---
 
-## 3. Backend: Views & API Review
-- [x] Review views.py (103KB) — audit all ViewSets and endpoints
-- [x] Verify no references to removed models
-- [x] Review InventoryItemViewSet — ledger endpoint, stock calculations
-- [x] Review ReceiptViewSet — creation, validation, hash generation, license balance deduction
-- [x] Review PurchaseInvoiceViewSet — creation, stock impact
-- [x] Review ExpenseViewSet
-- [x] Review SalespersonViewSet
-- [x] Review BranchViewSet
-- [x] Review all 6 report views: Dashboard, CashDrawer, Installments, InventoryMovement, ProfitAndLoss, SalespersonPerformance
-- [x] Review tools_views.py — sync, backup, restore
-- [x] Review DesktopPrintView — installment schedule printing only
-- [x] Review license validation endpoints
-- [x] Review auth endpoints (login, token)
+## 1. Backend Core & Dimensions
 
-## 4. Backend: Middleware & Security
-- [x] Review middleware.py — verify no tenant resolution, keep license tamper detection
-- [x] Review security_utils.py — receipt signature, license row signature, machine ID
-- [x] Review license_validator.py — 80-bit crypto, recovery code support
+- [x] Verify 17 SQLite models match requirements specification (`models.py`)
+- [x] Soft delete manager (`ActiveManager`) and `is_deleted` flags
+- [x] Branch-scoped sequential receipt numbering (`Receipt.get_next_receipt_number()`)
+- [x] Receipt HMAC cryptographic tamper detection (`receipt_hash`)
+- [x] Serializers handling nested writes, computed stock, and receipt types (`serializers.py`)
+- [x] Salesperson commission tracking (`CommissionHistory`)
+- [x] Branch-scoped supplier procurement (`PurchaseInvoice`, `PurchaseInvoiceItem`)
+- [x] Expense recording without categories (`Expense`)
 
-## 5. Backend: URLs & Settings
-- [x] Review urls.py — verify all routes, no dead routes
-- [x] Review settings.py — SQLite + WAL mode, DRF token auth
-- [x] Verify db_router.py doesn't exist (or is not needed)
+---
 
-## 6. Frontend: Login & Auth Flow
-- [x] Review/fix Login.jsx — password only → token
-- [x] Review/fix BranchSelection.jsx — select active branch (skip if only one branch exists)
-- [x] Review api.js — proper token storage and injection
-- [x] Verify auth flow: Login → Branch Selection → SearchReceipts
+## 2. Desktop Packaging & Runtime
 
-## 7. Frontend: POS (Sales Entry) — ✅ ANCHOR PAGE
-- [x] POS.jsx — working end-to-end
-- [x] Verify POS.jsx creates receipts correctly with all fields
-- [x] Verify installment schedule generation (month/year, 25th is display only)
-- [x] Verify cash sale flow
-- [x] Verify customer autocomplete from history
+- [x] PyInstaller packaging script (`build_exe.py`) bundling built frontend and backend
+- [x] Spec file hidden imports configuration (`VentaPOS.spec`)
+- [x] Desktop launcher with dynamic Waitress port allocation (`launcher.py`)
+- [x] Native window rendering via `pywebview`
+- [x] DummyWriter stream stubbing for `--windowed` mode
+- [x] Production WhiteNoise static file serving
 
-## 8. Frontend: Dimensions & Setup Data (Inventory, Salespersons, Suppliers)
-- [x] Review/fix Dimensions page (combining Inventory, Salespersons, and Suppliers into one unified tab/view)
-- [x] Inventory: show calculated stock, verify add/edit/soft-delete (don't overwrite opening balance)
-- [x] Salespersons: verify add/edit/soft-delete
-- [x] Suppliers: verify add/edit/soft-delete
-- [x] Branches: Add branch management (add/edit branches) directly to the `BranchSelection.jsx` screen
-- [x] Verify branch-scoped data isolation across all these entities
+---
 
-## 9. Frontend: Product Ledger
-- [ ] Review/fix ProductLedger.jsx — remove mock data fallback
-- [ ] Verify time-machine stock display
-- [ ] Verify commission history display
-- [ ] Verify purchase history display
-- [ ] Verify sales history display
+## 3. Frontend Core & POS Anchor
 
-## 10. Frontend: Purchases/Procurement
-- [x] Review/fix PurchaseEntry.jsx
-- [x] Review/fix SearchPurchases.jsx
-- [x] Verify creating purchase invoices adds stock
-- [x] Verify purchase returns reduce stock
+- [x] Single admin token authentication flow (`Login.jsx`)
+- [x] Branch selector with multi-branch management (`BranchSelection.jsx`)
+- [x] Anchor Page: Point of Sale transaction entry (`POS.jsx`)
+- [x] Keyboard-first data entry (Autofocus, Enter key navigation)
+- [x] Searchable dropdown autocomplete components (`ReportAutocomplete.jsx`, `Autocomplete.jsx`)
+- [x] Dual numeric date inputs (`month`, `year`) in `YYYY/MM` format
+- [x] Comma-stripping payload sanitization before DRF API submission
+- [x] Dimensions management tabs (Inventory, Salespersons, Suppliers)
 
-## 11. Frontend: Returns (مرتجع)
-- [x] Review/fix ReturnReceipt.jsx
-- [x] Verify returns create RETURN receipt with parent_receipt FK
-- [x] Verify returns add stock back
-- [x] Verify return items match original receipt items
+---
 
-## 12. Frontend: Search Receipts
-- [x] Review/fix SearchReceipts.jsx — fix known issues
-- [x] Verify filtering by date, customer, salesperson
-- [ ] Verify receipt details display
+## 4. Frontend: Product Ledger (In Progress)
 
-## 13. Frontend: Expenses
-- [x] Review/fix Expenses.jsx
-- [x] Verify adding/editing/deleting expenses
-- [x] Verify monthly filtering
+- [ ] Review/fix `ProductLedger.jsx` — eliminate mock data fallback
+- [ ] Connect live time-machine stock ledger endpoint (`/api/v1/inventory-items/{id}/ledger/`)
+- [ ] Verify chronological timeline rendering (initial stock, purchases, sales, returns, adjustments)
+- [ ] Verify commission history display per product
 
+---
 
+## 5. Procurement, Returns & Invoices
 
-## 14. [Reserved]
-- [ ] Reserved for future architectural changes
+- [x] Purchase invoice entry (`PurchaseEntry.jsx`)
+- [x] Historical purchase search and filtering (`SearchPurchases.jsx`)
+- [x] Customer sales return processing (`ReturnReceipt.jsx`)
+- [x] Linking return receipt to original sale via `parent_receipt` FK
+- [x] Historical receipts search and status filtering (`SearchReceipts.jsx`)
+- [ ] Verify full receipt detail modal inspection in `SearchReceipts.jsx`
 
-## 15. Frontend: Reports (8 total)
-- [x] Review/fix ReportsLayout.jsx and ReportsIndex.jsx
-- [x] Review/fix DashboardReport.jsx — KPIs, sales summary
-- [x] Review/fix CashDrawerReport.jsx — cash flow (possibly stub)
-- [x] Review/fix ExpensesReport.jsx — branch expenses
-- [x] Review/fix InstallmentsReport.jsx — schedule display
-- [x] Review/fix InventoryMovementReport.jsx — stock in/out
-- [x] Review/fix ProfitAndLossReport.jsx — per-product profitability
-- [x] Review/fix ReceiptsReport.jsx — historical receipts
-- [x] Review/fix SalespersonPerformanceReport.jsx — مندبة + عمولة تحصيل
+---
 
-## 16. Frontend: Settings
-- [x] Review/discover settings page structure
-- [x] Verify company settings (name, phones, footer)
-- [x] Verify password management
-- [x] Verify collection_commission_rate setting
+## 6. Reports & Analytical Suite (8 Reports)
 
-## 17. Frontend: Tools
-- [ ] Review/fix ToolsDashboard.jsx
-- [ ] Review/fix SyncTab.jsx — offline sync UI
-- [ ] Review/fix BackupTab.jsx — MUST WORK (backup & restore)
-- [ ] Remove SmartImportTab.jsx or disable it (Smart Import removed from scope)
+- [x] Unified report shell and period context (`ReportsLayout.jsx`, `ReportsIndex.jsx`)
+- [x] Dashboard Report: P&L and Cash Drawer cards (`DashboardReport.jsx`)
+- [x] Installments Report: 7 columns, 3 KPIs, phone directory (`InstallmentsReport.jsx`)
+- [x] Expenses Report: 4 columns, 2 KPIs, search (`ExpensesReport.jsx`)
+- [x] Profit and Loss Report: 7 columns, 6 KPIs, autocompletes (`ProfitAndLossReport.jsx`)
+- [x] Averages Report: 7 per-unit columns, 0 KPIs (`AveragesReport.jsx`)
+- [x] Inventory Movement Report: 10 columns, 8 KPIs (`InventoryMovementReport.jsx`)
+- [x] Salesperson Performance Report: Grouped headers, 7 KPIs (`SalespersonPerformanceReport.jsx`)
+- [x] Sales Invoices Report: 7 columns, 5 KPIs, infinite scroll (`ReceiptsReport.jsx`)
 
-## 18. Demo Mode
-- [x] Implement/review demo mode flow:
-  - First launch (no license) → Demo Mode with random sample data
-  - Every restart in demo → DB wiped, fresh demo data
-  - License entered → Demo data deleted, DB empty, go to Setup
-- [x] Review/create DemoBanner.jsx
-- [x] Backend: POST /api/auth/demo/ endpoint
-- [x] Generate realistic sample data (products, receipts, salespersons, branches)
+---
 
-## 19. System Init & Licensing
-- [x] Review/fix Setup.jsx — first-time wizard
-- [x] Review/fix ActivationSetup.jsx
-- [x] Verify license validation flow
-- [x] Implement recovery code as special license type
-- [x] Verify machine ID binding
+## 7. Data Safety, Tools & Settings
 
-## 20. Desktop Packaging
-- [x] Verify launcher.py works (PyWebView)
-- [x] Verify React production build (npm run build)
-- [x] Verify Django serves built React files
-- [x] Test full desktop launch flow
+- [x] System settings and company information tabs (`CompanyTab.jsx`, `SecurityTab.jsx`)
+- [x] Dynamic collection commission percentage configuration
+- [x] Admin password management
+- [ ] Complete and verify `ToolsDashboard.jsx`
+- [ ] Offline USB database sync UI (`SyncTab.jsx`)
+- [ ] Database backup creation and restore functionality (`BackupTab.jsx`)
+- [ ] Remove deprecated `SmartImportTab.jsx` from tools
 
-## 21. End-to-End Testing
-- [ ] Test complete flow: Launch → Demo → License → Setup → Use
-- [ ] Test: Add inventory → Create receipt → Verify stock deduction
-- [ ] Test: Create installment sale → Verify schedule
-- [ ] Test: Purchase → Verify stock increase
-- [ ] Test: Return → Verify stock restore
-- [ ] Test: All 8 reports with real data
-- [ ] Test: Backup → Restore → Verify data integrity
-- [ ] Test: All UI in Arabic RTL
-- [ ] Test: Salesperson performance (مندبة + عمولة تحصيل)
-- [ ] Run backend test suite: python manage.py test api.tests -v 2
-- [ ] Run frontend build: npm run build
+---
+
+## 8. Licensing & Demo Mode
+
+- [x] Demo mode random sample generation on initial launch
+- [x] Demo database wipe and fresh state on restart
+- [x] Cryptographic 80-bit license code validation
+- [x] Machine ID hardware binding
+- [x] License activation flow wiping demo data and directing to Setup (`ActivationSetup.jsx`)
+- [x] Password recovery via special recovery code
+
+---
+
+## 9. End-to-End Verification & Integrity
+
+- [ ] Full lifecycle test: Demo launch $\rightarrow$ License activation $\rightarrow$ Setup $\rightarrow$ Production
+- [ ] Time-machine stock verification across multiple historical months
+- [ ] Return receipt stock restoration test
+- [ ] Installment schedule calculation and silent SumatraPDF printing test
+- [ ] Full backup generation and restoration verification
+- [ ] Complete automated test suite: `python manage.py test api.tests -v 2`
+- [ ] Complete frontend production build: `npm run build`

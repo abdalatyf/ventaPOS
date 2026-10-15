@@ -1,121 +1,318 @@
-# VentaPOS NextGen — UI & UX Style Guide
+# VentaPOS NextGen — Frontend & UI/UX Architecture Bible
 
-This document defines the visual identity, user experience, and interaction rules for the VentaPOS NextGen application.
-
----
-
-## 1. Language & Tone
-- **Strictly RTL & Arabic**: The entire application MUST be in Arabic and Right-to-Left (RTL).
-- **Tone (لغة سوق مهنية ومبسطة)**: Professional but easy Egyptian Arabic.
-  - Avoid overly strict corporate Arabic.
-  - Avoid excessive street slang (like 'يا معلم').
-  - Use clear business terms: (العميل, البضاعة, الخزنة, الفاتورة, الدفتر, النقدية, المندبة, المرتجع).
+> **Scope**: Complete Frontend Visual Identity, Interaction Rules, Table Scroll Architecture, and Audited Report Specifications  
+> **Typography**: 'Cairo' Font · **Layout**: Fluid RTL · **Theme**: High-Contrast Light Mode  
 
 ---
 
-## 2. UI Framework & Aesthetics
-- **Core Framework**: Bootstrap v5 utilities (via Tabler UI), combined with custom CSS.
-- **Tailwind**: Do NOT introduce Tailwind CSS.
-- **Glassmorphism**: Use custom "premium" glassmorphism classes (e.g., `.premium-card`) to create depth and modern aesthetics.
-- **Typography**: Use the **'Cairo'** font for clean Arabic readability.
+## 1. Visual Identity & Brand Palette
+
+The user interface reflects a clean, high-contrast desktop aesthetic designed for busy retail offices and warehouse environments.
+
+### 1.1 Color System (Derived from Corporate Identity)
+- **Primary Brand Color**: Deep Navy Blue (`#123F68`) — Used for primary headers, navigation active states, branding elements, and table titles.
+- **Secondary / Accent Color**: Emerald Green (`#1DA368`) — Used for confirmation actions ("حفظ", "دفع", "تأكيد"), cash inflows, positive totals, and badges.
+- **Danger Color**: Crimson (`#D63939`) — Used for cost deductions, purchase returns, expense figures, and delete actions.
+- **Warning Color**: Amber (`#F59F00`) — Used for installment sales and pending states.
+- **Info Color**: Cyan / Blue (`#206BC4`) — Used for down payments and closing stock quantities.
+- **Surface & Backgrounds**: Crisp white (`#FFFFFF`) card surfaces on soft background (`#F8F9FA`).
+- **Framework**: Tabler UI & Bootstrap v5 utilities with custom CSS. **No Tailwind CSS.**
+
+### 1.2 Language & Tone of Voice
+- **Strictly RTL & Arabic**: The entire application is rendered Right-to-Left in Arabic.
+- **Commercial Egyptian Tone (لغة سوق مهنية ومبسطة)**:
+  - Clear, authentic Egyptian trade vocabulary: (العميل, البضاعة, الخزنة, الفاتورة, الدفتر, النقدية, المندبة, المرتجع, كاش, قسط).
+  - Avoid overly rigid academic translations and avoid excessive casual slang.
 
 ---
 
-## 3. Color Palette (Derived from Logo)
-- **Primary Brand Color**: Deep Blue (`#123F68`)
-- **Secondary / Accent Color**: Emerald Green (`#1DA368`) — used for primary success actions like "Save", "Pay", or "Confirm".
-- **Theme**: Light mode only. High-contrast is required for warehouse and office environments.
+## 2. Layout & Data Density Principles
+
+### 2.1 Fluid Width Containers
+- All views, pages, and dialogs must use **fluid containers** (`container-fluid`) to leverage modern widescreen desktop monitors.
+- Avoid fixed maximum widths (`container`) that cause wasted horizontal margins.
+
+### 2.2 High Data Density
+- Use compact padding (`p-2`, `py-1`, `table-sm`) and dense typography in data tables so the manager can inspect maximum rows at a single glance without scrolling.
 
 ---
 
-## 4. Layout & Data Density
-- **Fluid Layout**: Use **Fluid Containers** (`container-fluid`) across the app to maximize horizontal screen space.
-- **Compact Data Density**: Use smaller padding and smaller fonts in data tables. The manager must be able to see maximum rows without scrolling.
+## 3. Keyboard-First Data Entry Rules
+
+Because the manager transcribes transactions from physical paper notebooks, data entry speed is critical.
+
+1. **Auto-Focus**: Every page or modal form must automatically focus its primary input on initial render.
+2. **Enter Key Progression**: Pressing `Enter` in form inputs must move focus to the next logical input field. It must **never** trigger premature form submission.
+3. **Tab-Indexing**: Logical `tabIndex` sequences must guide the operator through fields in natural reading order.
+4. **Banned Input Types**:
+   - **No `<select>` for Dynamic Entities**: Standard HTML `<select>` dropdowns are strictly prohibited for database entities (Products, Salespersons, Suppliers, Customers). You must use `ReportAutocomplete` or `Autocomplete`.
+   - *Exception*: Standard `<select>` is only permissible for fixed, static enums (e.g. `Payment Type: CASH | INSTALLMENT` or `Status: ALL | ACTIVE`).
+5. **Date Entry via Dual Numeric Fields**:
+   - Native `<input type="date">` and `<input type="month">` are prohibited.
+   - All date inputs must use **two separate numeric inputs** placed side-by-side: Month (`1-12`) and Year (4 digits).
+6. **Date Display Format**:
+   - Displayed dates must strictly follow `YYYY/MM` format (e.g. `2026/08` — year first with leading zero for single-digit months).
+7. **Universal Western Digits (`0-9`)**:
+   - Western ASCII digits (`0-9`) are required universally across all labels, table cells, summary cards, and API payloads. Arabic-Indic digits (٠١٢٣٤٥٦٧٨٩) are banned.
+8. **Thousands-Comma Sanitization**:
+   - Before dispatching numeric inputs to the API, the frontend must strip thousands-separators (`.replace(/,/g, '')`) to prevent DRF DecimalField parsing errors.
 
 ---
 
-## 5. Data Entry UX (Keyboard-First)
-Speed is critical since the manager copies data from paper notebooks into the system.
-- **Auto-Focus**: Inputs must auto-focus on page load where appropriate.
-- **Enter Key Navigation**: Pressing "Enter" should move focus to the next logical field, NOT submit the form prematurely.
-- **Tab-Indexing**: Enforce logical `tabindex` flows for rapid data entry.
+## 4. Unified Table Scroll Architecture (Native Window Scroll)
+
+Data tables must utilize a single native window scrollbar with hierarchical sticky positioning. Internal scroll divs (`overflow-auto`, `overflow-y: scroll`) inside tables are banned.
+
+```
+┌────────────────────────────────────────────────────────┐
+│ 1. Fixed Navbar (top: 0, z-index: 1030)                │
+├────────────────────────────────────────────────────────┤
+│ 2. Sticky Toolbar (top: --navbar-height, z-index: 1020)│
+├────────────────────────────────────────────────────────┤
+│ 3. Sticky Table Headers (top: offset, z-index: 1010)   │
+├────────────────────────────────────────────────────────┤
+│ 4. Table Body Rows (Normal Window Document Flow)       │
+└────────────────────────────────────────────────────────┘
+```
+
+### 4.1 CSS Rules (`src/index.css`)
+```css
+:root {
+  --navbar-height: 64px;
+  --toolbar-height: 46px;
+}
+
+/* Page wrapper must allow document-level scrolling */
+.native-page-scroll {
+  height: auto !important;
+  min-height: 100vh;
+  overflow: visible !important;
+}
+
+/* Sticky Toolbar */
+.sticky-toolbar {
+  position: sticky;
+  top: var(--navbar-height);
+  z-index: 1020;
+  background-color: #f8f9fa;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Sticky Table Header */
+.table-sticky-header th {
+  position: sticky !important;
+  top: calc(var(--navbar-height) + var(--toolbar-height)) !important;
+  z-index: 1010;
+  background-color: #f8f9fa !important;
+  box-shadow: inset 0 -1px 0 var(--tblr-border-color);
+}
+```
+
+### 4.2 Infinite Scrolling Protocol
+Because tables expand naturally into the document, use `IntersectionObserver` attached to the final row of the dataset to trigger pagination, rather than element scroll listeners.
 
 ---
 
-## 6. Number, Date, & Input Constraints
+## 5. Audited Report Specifications (8 Reports)
 
-### 6.1 Banned Input Types
-- **No `<select>` for Dynamic Data**: You are strictly FORBIDDEN from using standard `<select>` dropdowns for data that comes from the database (e.g., Salespersons, Suppliers, Customers, Products).
-  - *Alternative*: You MUST use a custom React Autocomplete component with a searchable dropdown list (like the one used for Products in `POS.jsx`).
-  - *Exception*: Standard `<select>` is ONLY allowed for hardcoded, fixed enums (e.g., Payment Type: "Cash" vs "Installment", or Receipt Type).
-
-### 6.2 Date Inputs
-- **Adding/Editing Dates**: Since the system uses strict `MM/YYYY` business dates, do NOT use native `<input type="date">` or `<input type="month">`. You MUST use **two separate numeric inputs** (one for Month, one for Year) placed side-by-side.
-- **Filtering Dates**: For filtering tables by date, use the exact same two numeric inputs. If both inputs are left blank, it means "Select All" (no date filter applied).
-
-### 6.3 Number Formatting
-- **Western Digits Only**: All numbers displayed to the user MUST use standard Western digits (0-9) to improve rendering performance and eliminate split-brain data handling. (Arabic-Indic digits ٠١٢٣٤٥٦٧٨٩ are officially banned).
-- **Display Format**: Use standard JavaScript formatting (`Intl.NumberFormat('en-US')` or simple `toLocaleString()`). Thousands separator is `,` (comma). Decimal separator is `.` (dot). Show 2 decimal places for currency amounts.
+The following specifications are verified against the active source implementations in `VentaPOS_NextGen/frontend/src/pages/reports/*.jsx`. All Arabic headers, keys, subfilters, and KPIs are exact.
 
 ---
 
-## 7. Table UX Rules (Mandatory Patterns)
+### 5.1 لوحة التحكم / الملخص (`DashboardReport.jsx`)
+Features a 2-card financial breakdown with drill-down links to detailed reports.
 
-### 7.1 Column Sorting (Guideline)
-- Data tables SHOULD support clickable column headers for ascending/descending sort.
-- Use Tabler arrow icons to indicate sort direction.
-- Not mandatory for very small tables (e.g., branches list with < 5 rows).
+#### Card 1: تفاصيل المكسب (P&L Breakdown)
+- **إجمالي المبيعات** (`kpis.total_revenue`) $\rightarrow$ Click navigates to `/reports/receipts`
+- **تكلفة البضاعة (سعر الشراء) (-)** (`kpis.total_cogs`) $\rightarrow$ Click navigates to `/reports/profit-and-loss`
+- **إجمالي المندبة (-)** (`kpis.total_sales_commissions`) $\rightarrow$ Click navigates to `/reports/profit-and-loss`
+- **إجمالي عمولة التحصيل (-)** (`kpis.total_collection_commissions`) $\rightarrow$ Click navigates to `/reports/profit-and-loss`
+- **إجمالي المصروفات (-)** (`cashSummary.operating_expenses`) $\rightarrow$ Click navigates to `/reports/expenses`
+- **صافي المكسب** (`kpis.estimated_net_profit`)
 
-### 7.2 Accordion-Based Add/Edit Forms (Rule)
-- All "Add New" and "Edit" forms for dimensions (Inventory, Salespersons, Suppliers, Expenses) MUST use collapsible Bootstrap Accordions, NOT modals or static cards.
-- This maximizes vertical table space and creates consistent muscle memory across the app.
-
-### 7.3 Inline Live-Search Filtering (Rule)
-- Every primary data table MUST have a search input docked directly above it.
-- Search filters the loaded data instantly without refreshing the page (client-side filter).
-
-### 7.4 ID Columns
-- Receipts and Purchase Invoices already have branch-scoped sequential numbers (`receipt_number`, `invoice_number`). Display those.
-- For all other entities (Inventory, Salespersons, Suppliers, Expenses): use the raw database PK if an ID column is needed, or omit the ID column entirely and let the user search by name.
-
-### 7.5 Sticky Headers & Scroll Architecture
-- All data tables MUST follow the Unified Table Scroll Architecture defined in `frontend/TABLE_UX_GUIDELINES.md`.
-
----
-
-## 8. Frontend Payload Sanitization (Rule)
-- **Comma Stripping**: Before sending ANY numeric value to the API, the frontend MUST strip thousands-separator commas (`.replace(/,/g, '')`).
-- Django REST Framework throws `400 Bad Request` if it receives `"1,500"` for a `DecimalField`. This rule prevents API crashes from formatted money inputs.
-- Apply this sanitization in the API layer (e.g., in `api.js` interceptors or at the form submission level), not in individual input handlers.
+#### Card 2: تفاصيل السيولة (Cash Drawer Breakdown)
+- **(+) مبيعات كاش** (`cashSummary.cash_sales_inflow`)
+- **(+) المقدمات** (`cashSummary.down_payment_inflow`)
+- **(+) التحصيل** (`cashSummary.collection_inflow`)
+- **(=) إجمالي الوارد** (`cashSummary.total_cash_inflow`)
+- **(-) إجمالي المشتريات** (`cashSummary.total_purchases`) $\rightarrow$ Click navigates to `/search-purchases`
+- **(-) إجمالي المرتبات** (`cashSummary.auto_salaries`) $\rightarrow$ Click navigates to `/reports/salesperson`
+- **(-) إجمالي المصروفات** (`cashSummary.operating_expenses`) $\rightarrow$ Click navigates to `/reports/expenses`
+- **(=) إجمالي الصادر** (`totalOutgoing`)
+- **صافي السيولة** (`cashSummary.net_cash_in_hand`)
 
 ---
 
-## 9. CRUD Standard Rules
+### 5.2 تحصيل الأقساط (`InstallmentsReport.jsx`)
 
-### 9.1 Create (Add New)
-- **Validation**: All forms MUST have client-side validation for required fields before API submission.
-- **Feedback**: Success MUST show a Toast/Snackbar (not an intrusive modal alert).
-- **Reset**: The form MUST clear its fields and refocus the first input after a successful creation to allow rapid sequential entry.
+#### Columns (7 Columns)
+1. **رقم الفاتورة** (`receipt_num`): Sequential receipt ID with drilldown link to POS edit.
+2. **المنطقة** (`area`): Customer geographic zone.
+3. **اسم العميل** (`customer_name`): Customer full name.
+4. **رقم الموبايل** (`phone`): Customer phone number.
+5. **مبلغ القسط** (`amount`): Monthly installment amount due.
+6. **المندوب** (`salesperson_name`): Assigned salesperson name.
+7. **تاريخ البيع** (`sale_date`): Original sale date in `YYYY/MM` format.
 
-### 9.2 Search (Read/Filter)
-- **Debounce**: Search inputs MUST have a debounce (e.g., 300ms) to prevent spamming the API on every keystroke.
-- **Feedback**: Results MUST show a loading spinner while fetching.
-- **Empty State**: Empty results MUST display a clear "No results found" (لا توجد نتائج) message.
+#### Subfilters
+- **المندوب**: Autocomplete searchable dropdown.
+- **من تاريخ بيع**: Dual numeric inputs (`month`, `year`).
+- **إلى تاريخ بيع**: Dual numeric inputs (`month`, `year`).
+- **اسم العميل**: Text input.
+- **رقم الموبايل**: Numeric text input.
+- **المنطقة**: Text input.
 
-### 9.3 Edit (Update)
-- **Simple Fields**: If the field is a simple text field (e.g., Supplier name), use **Inline Editing** by double-clicking the field directly in the table.
-- **Complex Relations**: If the entity is related to other models (like products or installment systems), clicking "Edit" MUST navigate to a dedicated Edit page or populate an Edit Accordion.
-
-### 9.4 Delete
-- **Confirmation**: Clicking "Delete" MUST trigger a confirmation dialog (e.g., SweetAlert or a custom Tabler modal) asking "Are you sure?" (هل أنت متأكد؟).
-- **Soft Delete**: Deletions are ALWAYS Soft Deletes (updating `is_deleted=True` on the backend). Never use hard deletes.
+#### Summary KPIs (3 Cards)
+- **تاريخ الدفع**: Active payment month/year.
+- **عدد الأقساط**: Total installment count for selected month.
+- **إجمالي التحصيل**: Total sum of installment cash due.
 
 ---
 
-## 10. Reporting System UX Rules
+### 5.3 المصروفات (`ExpensesReport.jsx`)
 
-- **Unified <ReportTable> Component**: All reports MUST strictly use the unified <ReportTable> component for rendering data. Do not build custom raw HTML tables for reports.
-- **Context-Driven Dates**: Reports MUST consume year, month, and ranchId directly from ReportsContext. Do not create local state for primary date filters (no date pickers).
-- **Summary Cards (KPIs)**: All report totals, aggregations, and key metrics MUST be passed to the summaryCards prop of <ReportTable> to be displayed as KPI cards above the table. Do not implement footer rows (<tfoot>) for totals.
-- **Sorting**: The <ReportTable> handles client-side multi-column sorting natively via the sortableColumns prop. Do not build custom click-to-sort logic on table headers.
-- **Secondary Filters**: Any additional filters specific to a report (e.g., Salesperson dropdown, search by name, sale type) MUST be passed to the enderFilters render prop of <ReportTable>.
+#### Columns (4 Columns)
+1. **رقم المصروف** (`id`): Sequential expense identifier.
+2. **البيان** (`description`): Expense descriptive text.
+3. **المبلغ** (`amount`): Monetary expenditure value.
+4. **التاريخ** (`date`): Business period in `YYYY/MM` format.
+
+#### Subfilters
+- **البيان**: Live debounced text search.
+- **من مبلغ**: Minimum amount numeric filter.
+- **إلى مبلغ**: Maximum amount numeric filter.
+
+#### Summary KPIs (2 Cards)
+- **عدد المصروفات**: Total count of expense entries.
+- **إجمالي المصروفات**: Cumulative monetary sum.
+
+---
+
+### 5.4 الأرباح والخسائر - إجماليات (`ProfitAndLossReport.jsx`)
+
+#### Columns (7 Columns)
+1. **الصنف** (`name`): Product trade name.
+2. **الكمية المباعة** (`qty`): Total units sold.
+3. **إجمالي الإيراد** (`total_rev`): Gross revenue generated.
+4. **إجمالي التكلفة** (`total_cost`): Cumulative cost of goods sold.
+5. **إجمالي المندبة** (`total_sales_comm`): Cumulative sales commission.
+6. **إجمالي عمولة التحصيل** (`total_coll_comm`): Cumulative collection commission (shows "كاش" for cash sales).
+7. **إجمالي المكسب** (`total_profit`): Net gross profit.
+
+#### Subfilters
+- **الصنف**: Product autocomplete dropdown.
+- **نوع البيع**: Select (`الكل`, `كاش فقط`, `قسط فقط`).
+- **المندوب**: Salesperson autocomplete dropdown.
+
+#### Summary KPIs (6 Cards)
+- **المبيعات**: Gross revenue sum.
+- **التكلفة (-)**: Cumulative COGS.
+- **المندبة (-)**: Cumulative sales commissions.
+- **عمولة التحصيل (-)**: Cumulative collection commissions.
+- **المصروفات (-)**: Operating branch expenses for the month.
+- **صافي الربح**: Final net profit after all deductions.
+
+---
+
+### 5.5 الأرباح والخسائر - متوسطات القطعة (`AveragesReport.jsx`)
+
+#### Columns (7 Columns)
+1. **الصنف** (`name`): Product trade name.
+2. **الكمية** (`qty`): Total units sold.
+3. **متوسط سعر البيع** (`avg_sell`): Average revenue per single unit.
+4. **تكلفة الوحدة** (`cost_per_unit`): Purchase cost per unit.
+5. **متوسط المندبة** (`sales_comm_per_unit`): Sales commission per unit.
+6. **متوسط عمولة التحصيل** (`coll_comm_per_unit`): Collection commission per unit.
+7. **متوسط المكسب للقطعة** (`avg_profit`): Average net profit per single unit.
+
+#### Subfilters
+- **الصنف**: Product autocomplete dropdown.
+- **نوع البيع**: Select (`الكل`, `كاش فقط`, `قسط فقط`).
+- **المندوب**: Salesperson autocomplete dropdown.
+
+#### Summary KPIs
+- **None**: Strictly 0 summary cards by design.
+
+---
+
+### 5.6 حركة المخزون (`InventoryMovementReport.jsx`)
+
+#### Columns (10 Columns)
+1. **الصنف** (`product_name`): Product trade name.
+2. **رصيد أول** (`opening_stock`): Stock balance at beginning of month.
+3. **المشتريات (+)** (`purchases`): Inbound supplier purchases.
+4. **مرتجع مبيعات (+)** (`sales_returns`): Customer returns added back to stock.
+5. **المبيعات (-)** (`sales`): Outbound customer sales.
+6. **مرتجع مشتريات (-)** (`purchase_returns`): Returns to suppliers deducted from stock.
+7. **العجز (-)** (`deficit`): Physical deficit adjustments.
+8. **رصيد آخر** (`final_stock`): Closing stock at end of month.
+9. **تكلفة الوحدة** (`unit_cost`): Purchase price per unit.
+10. **إجمالي القيمة** (`total_value`): Closing inventory valuation (`final_stock * unit_cost`).
+
+#### Subfilters
+- **الصنف**: Product autocomplete dropdown.
+- **المندوب**: Salesperson autocomplete dropdown.
+
+#### Summary KPIs (8 Cards)
+- **رصيد أول**: Total opening units across branch.
+- **المشتريات (+)**: Total inbound purchase units.
+- **مرتجع مبيعات (+)**: Total sales return units.
+- **المبيعات (-)**: Total sold units.
+- **مرتجع مشتريات (-)**: Total supplier return units.
+- **العجز (-)**: Total deficit units.
+- **رصيد آخر**: Total closing inventory units.
+- **إجمالي القيمة**: Grand total inventory monetary value.
+
+---
+
+### 5.7 أداء المناديب (`SalespersonPerformanceReport.jsx`)
+
+#### Grouped Header Hierarchy
+```
+┌─────────────────┬──────────────┬───────────────────────────────────────────┬──────────────┬─────────────────────────────────────────┐
+│                 │              │                أداء المبيعات              │  تحصيل MM/YY │               تفاصيل المرتب             │
+│   اسم المندوب   │ عدد الفواتير ├──────┬──────┬──────────┬──────────────────┤              ├──────────┬──────────────┬───────────────┤
+│                 │              │ كاش  │ قسط  │ المقدمات │ إجمالي المبيعات  │              │  المندبة │ عمولة تحصيل  │ المرتب المستحق│
+└─────────────────┴──────────────┴──────┴──────┴──────────┴──────────────────┴──────────────┴──────────┴──────────────┴───────────────┘
+```
+
+#### Subfilters
+- **المندوب**: Autocomplete searchable dropdown.
+
+#### Summary KPIs (7 Cards)
+1. **إجمالي الفواتير**: Total receipts generated by sales force.
+2. **مبيعات كاش**: Total volume of cash sales.
+3. **مبيعات قسط**: Total volume of installment sales.
+4. **إجمالي المقدمات**: Total down payment cash collected.
+5. **إجمالي المبيعات**: Grand total sales volume.
+6. **إجمالي التحصيل**: Total installment cash collected.
+7. **إجمالي المرتبات المستحقة**: Total salaries earned by all salespersons.
+
+---
+
+### 5.8 فواتير المبيعات (`ReceiptsReport.jsx`)
+
+#### Columns (7 Columns)
+1. **رقم الفاتورة** (`receipt_number`): Sequential receipt ID with drilldown link to `/pos?edit={id}`.
+2. **المندوب** (`salesperson`): Salesperson name.
+3. **العميل** (`customer_name`): Customer full name.
+4. **رقم الموبايل** (`phone`): Customer phone number.
+5. **المنطقة** (`area`): Geographic zone.
+6. **المقدم** (`down_payment`): Down payment amount (or `-` for cash sales).
+7. **الإجمالي** (`total_amount`): Grand total invoice value.
+
+#### Subfilters
+- **النوع**: Select (`الكل`, `كاش فقط`, `قسط فقط`, `بمقدم فقط`).
+- **المندوب**: Autocomplete dropdown.
+- **من فاتورة**: Starting receipt number.
+- **إلى**: Ending receipt number.
+- **الموبايل**: Customer phone search.
+- **العميل**: Customer name search.
+- **المنطقة**: Area text filter.
+
+#### Summary KPIs (5 Cards)
+1. **التاريخ**: Active month/year in `YYYY/MM` format.
+2. **عدد الفواتير**: Total invoice count matching filters.
+3. **إجمالي الكاش**: Total revenue from cash sales.
+4. **إجمالي المقدمات**: Total cash collected from installment down payments.
+5. **إجمالي المبيعات**: Grand total sales revenue.

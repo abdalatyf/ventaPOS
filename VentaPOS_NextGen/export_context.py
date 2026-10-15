@@ -29,30 +29,19 @@ def get_fence(content: str) -> str:
 def collect_files(root: Path):
     target_files = []
 
-    # 1. Core Rules & Docs
+    # 1. Core Rules & Docs (Unified SSoT)
     explicit_docs = [
-        root / ".agents" / "AGENTS.md",
+        root / "GEMINI.md",
         root / ".agents" / "CODEBASE_MAP.md",
-        root / "VentaPOS_NextGen" / "TODO.md",
+        root / ".agents" / "PROMPT_TEMPLATES.md",
+        root / ".agents" / "REJECTED_APPROACHES.md",
+        root / "VentaPOS_NextGen" / "requirements.md",
         root / "VentaPOS_NextGen" / "UI_UX_RULES.md",
-        root / "VentaPOS_NextGen" / "REPORTS_AGREEMENT.md",
-        root / "VentaPOS_NextGen" / "frontend" / "TABLE_UX_GUIDELINES.md",
+        root / "VentaPOS_NextGen" / "TODO.md",
     ]
     for p in explicit_docs:
         if p.is_file():
             target_files.append(p)
-
-    conductor_dir = root / "VentaPOS_NextGen" / "conductor"
-    if conductor_dir.is_dir():
-        for p in sorted(conductor_dir.rglob("*.md")):
-            if p.is_file():
-                target_files.append(p)
-
-    docs_arch_dir = root / "VentaPOS_NextGen" / "docs" / "architecture"
-    if docs_arch_dir.is_dir():
-        for p in sorted(docs_arch_dir.rglob("*.md")):
-            if p.is_file():
-                target_files.append(p)
 
     # 2. Desktop Packaging
     desktop_files = [

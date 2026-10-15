@@ -1,390 +1,185 @@
-# VentaPOS NextGen — Developer System Rules
+# VentaPOS NextGen — Developer System Rules & Architecture Bible
 
-This file governs the behavior of all AI agents working on the VentaPOS NextGen project. You must strictly adhere to these rules. Do not hallucinate architecture. Do not invent schemas. You are a slave to the documentation and the confirmed requirements.
-
----
-
-## 0. What Is This Application?
-
-VentaPOS NextGen is **NOT** a point-of-sale terminal. It is a **back-office desk management application** for a single business owner (المدير / صاحب المحل) who sells مفروشات، أدوات منزلية، وأجهزة كهربائية (furniture, household items, and electronics).
-
-**Core Workflow:** Salespeople (مناديب) sell in the field using paper notebooks → the manager enters those receipts into this system from his desk.
-
-Key facts you must internalize:
-
-- **Single user**: One manager, one admin account, no other users.
-- **Single machine**: One SQLite database per machine. No cloud. No multi-tenancy.
-- **Multiple branches**: The manager manages several branches/warehouses from one app. Each branch has independent inventory. No transfers between branches.
-- **No barcode/SKU**: Products identified by name only, text-based search.
-- **No fixed selling price**: The manager enters the selling price per receipt — there is no stored `selling_price` field on the product.
-- **Printing is for installment schedules only**, not for every receipt.
+This document is the supreme Single Source of Truth (SSoT) governing the architecture, runtime environment, business rules, and developer workflows for VentaPOS NextGen. All AI agents and human developers must strictly adhere to these rules without hallucination or deviation.
 
 ---
 
-## 1. Source of Truth Protocol
+## 0. Application Overview
 
-**DO NOT use the `docs/` or `conductor/` directories as a reference.** The old documentation in these folders is outdated and contains direct contradictions to the latest decisions (e.g., banned features, incorrect colors, wrong date formats).
+VentaPOS NextGen is **NOT** a point-of-sale terminal. It is a **back-office desk management application** for a single business owner / manager (المدير / صاحب المحل) who sells furniture, household appliances, and electronics (مفروشات، أدوات منزلية، أجهزة كهربائية).
 
-Before writing ANY code, you MUST use the `view_file` tool to read the ONLY valid Single Source of Truth (SSoT) documents for this project:
+**Core Workflow:** Salespeople (مناديب) sell products in the field using physical paper notebooks $\rightarrow$ the manager enters those receipts into this desktop application from his office desk.
 
-1. **`VentaPOS_NextGen/requirements.md`**: Contains all confirmed data models, business rules, and scope.
-2. **`VentaPOS_NextGen/TODO.md`**: Contains the exact current state and priority of tasks.
-3. **`VentaPOS_NextGen/UI_UX_RULES.md`**: Contains all visual identity, UX patterns, color palette, and interaction rules.
-4. **`VentaPOS_NextGen/frontend/TABLE_UX_GUIDELINES.md`**: Contains the unified table scroll architecture (sticky headers, hybrid scroll, zoom handling).
-
-*Violation of this rule (using old docs instead of requirements.md) is considered a critical failure.*
-
----
-
-## 2. Forbidden Actions (الخطوط الحمراء)
-
-You are strictly forbidden from implementing the following. If a user asks for them, remind them of these Red Lines:
-
-1. **NO Multi-Tenancy & NO Cloud**: The application is strictly an Offline-First, Single-Tenant Desktop App running on SQLite. Do not generate `Tenant` models, cloud-sync logic, or multi-user auth.
-2. **NO Hard Deletes**: Never use `obj.delete()`. All models MUST use Soft Deletes via `is_deleted=True` and an `ActiveManager`.
-3. **NO UUIDs for PKs**: Do not use `UUIDField` for Primary Keys. Use Django's default `AutoField` or `BigAutoField`.
-4. **NO Direct Python Execution**: Never run `.py` files directly (e.g., `.\script.py`). Always prepend the python command (e.g., `python script.py`).
-5. **NO Unstyled Tables**: Do not generate raw HTML tables. All tables must use the unified Smart Scroll UI design.
-6. **NO Customer Model**: Customers are implicit — text fields on receipts (`customer_name`, `phone_number`, `address`, `area`) with autocomplete from history. Do NOT create a Customer model.
-7. **NO Selling Price on Product**: There is no `selling_price` field on `InventoryItem`. The manager enters the price per sale on each receipt.
-8. **NO Smart Import**: Excel import has been removed from scope. Do not implement it.
-9. **NO Action Logs**: The `ActionLog` model has been deleted. Do not recreate it.
-10. **NO Expense Categories**: Expenses have free-text descriptions only. Do not add category models or enums.
+### Fundamental Operating Realities
+- **Single User**: One manager, one admin account (`admin`), no other roles or user tiers.
+- **Single Machine**: Offline-first desktop application running on a local SQLite database in WAL mode.
+- **Multi-Branch Isolation**: The manager manages multiple branches/warehouses from a single interface. Each branch maintains completely independent inventory. There are **zero** transfers between branches.
+- **No Barcode / SKU**: Products are identified purely by Arabic text name via searchable autocomplete.
+- **No Fixed Selling Price on Product**: There is no `selling_price` column on products. The manager enters the sale price per unit directly onto each receipt.
+- **Selective Printing**: Physical printing is strictly reserved for **Installment Schedules**. Standard cash receipts are not printed.
 
 ---
 
-## 3. Business Rules (القواعد التجارية)
+## 1. Single Source of Truth (SSoT) Protocol
 
-### Payment Types
+The codebase contains legacy directories (`Desktop/`, `Server/`, etc.) from previous prototypes. You are **strictly forbidden** from referencing them.
 
-- **Cash (نقدي)** and **Installments (تقسيط)** ONLY.
-- No card/visa payments. No deferred credit (آجل). No split payments.
+Before analyzing or writing ANY code, you MUST use `view_file` to read ONLY these valid SSoT files:
 
-### Installments
+1. **`GEMINI.md` / `.agents/AGENTS.md`**: Architecture, desktop runtime rules, red lines, and developer protocols.
+2. **`.agents/CODEBASE_MAP.md`**: Compressed interface map (~10KB) covering backend models, viewsets, and frontend structures.
+3. **`VentaPOS_NextGen/requirements.md`**: Confirmed 17 data models, business rules, stock formulas, and active API catalog.
+4. **`VentaPOS_NextGen/UI_UX_RULES.md`**: Visual identity, design tokens, native sticky table guidelines, and verified Arabic report specifications.
+5. **`VentaPOS_NextGen/TODO.md`**: Master task and bug tracker containing **Priority 0: Critical Backend Bug Fixes** and roadmap items.
 
-- Schedule only — **no payment tracking** in the app.
-- The 25th is just a printed display value — no calculation significance.
-- What matters is the **month/year** of each installment.
-
-### Commissions
-
-- **Sales Commission (مندبة)**: Fixed VALUE per product per unit sold (e.g., 50 EGP/unit). Stored in `CommissionHistory` per product.
-- **Collection Commission (عمولة تحصيل)**: Company-wide PERCENTAGE stored in `CompanySetting.collection_commission_rate`.
-- **Salesperson Salary** = sum of (مندبة × units sold) + (collection rate × monthly collections). Commission-only, no base salary.
-
-### Date System
-
-- Monthly-based (`month`/`year` integer fields), NOT daily dates.
-- `DefaultDate` returns the current business month.
-- **Display Format**: `YYYY/MM` (e.g., `2026/08`). Year first, with a leading zero for single-digit months.
-- **Digits**: Western digits (0-9) are used universally for both display and storage/API to improve performance and prevent split-brain state bugs. (Arabic-Indic digits ٠١٢٣٤٥٦٧٨٩ were dropped).
-
-### Stock Calculation
-
-- Time-machine method: `initial_quantity + purchases + surplus + sales_returns - sold - purchase_returns - deficit`
-- Stock is clamped to `max(0, ...)` — never negative.
+*Violation of this protocol (inventing schemas or using old documents) is considered a critical failure.*
 
 ---
 
-## 4. App Launch Flow (Demo → License → Setup)
+## 2. Desktop Runtime Environment (Waitress + pywebview + PyInstaller)
 
-1. **First Launch (no license)** → App starts in **Demo Mode** with random sample data.
-2. **Every restart in Demo Mode** → Database is wiped and fresh demo data is generated.
-3. **Valid license entered** → Demo data deleted, DB emptied, app goes to **Setup page**.
-4. **After Setup** → App runs normally with persistent real data.
+The application packages a Django REST Framework backend and a built React frontend into a standalone Windows executable.
 
----
+### 2.1 Process Execution Architecture
+- **Launcher Entry Point**: `VentaPOS_NextGen/launcher.py`.
+- **Embedded Web Server**: Waitress serves Django's WSGI application on `127.0.0.1` using a dynamically allocated free port (`socket.bind(('127.0.0.1', 0))`).
+- **Native GUI Window**: `pywebview` creates a native desktop window pointing to `http://127.0.0.1:{port}`.
+- **Headless Stream Handling**: In PyInstaller `--windowed` mode, `sys.stdout` and `sys.stderr` are `None`. A `DummyWriter` class must stub `write()` and `flush()` to prevent fatal `AttributeError` crashes on `print()` or logging statements.
 
-## 5. UI, UX, & Language Principles
-
-### 5.1 Language & Tone
-
-* **RTL & Arabic ONLY**: The entire application MUST be in Arabic and Right-to-Left (RTL).
-* **Tone**: The language used in the UI must be "لغة سوق مهنية ومبسطة" (professional but easy Egyptian Arabic).
-  - Avoid overly strict corporate Arabic.
-  - DO NOT use excessive street slang (like 'يا معلم').
-  - Use clear business terms: (العميل, البضاعة, الخزنة, الفاتورة, الدفتر, النقدية, المندبة, المرتجع).
-
-### 5.2 UI Framework & Aesthetics
-
-* **Framework**: Stick with Tabler / Bootstrap v5 utilities, combined with custom CSS for "glassmorphism" premium cards. Do NOT introduce Tailwind.
-* **Typography**: Use the 'Cairo' font for clean Arabic readability.
-* **Color Palette (From Logo)**:
-  * **Primary Brand Color**: Deep Blue (`#123F68`)
-  * **Secondary / Accent Color**: Emerald Green (`#1DA368`) — used for primary actions like "Save", "Pay", or "Confirm".
-  * **Theme**: Light mode only, high-contrast for warehouse/office environments.
-
-### 5.3 Layout & Data Density
-
-* **Layout**: Use **Fluid Containers** (`container-fluid`) across the app to maximize horizontal screen space.
-* **Compact Data Density**: Use smaller padding and smaller fonts in data tables so the manager can see maximum rows without scrolling.
-
-### 5.4 Data Entry UX (Keyboard-First)
-
-* Since the manager copies data from paper notebooks to the system, speed is critical.
-* **Auto-Focus**: Inputs should auto-focus on page load where appropriate.
-* **Enter Key Navigation**: Pressing "Enter" should move focus to the next logical field (not submit the form prematurely).
-* Enforce logical Tab-indexing for rapid data entry.
+### 2.2 Filesystem & Path Resolution (`sys.frozen` Awareness)
+- **Bundled Read-Only Assets**: When running inside PyInstaller, `sys.frozen` is `True` and static assets/templates are located at `sys._MEIPASS`.
+- **Writable Data Directory (`DB_DIR`)**: The SQLite database (`db.sqlite3`) and runtime backups must NEVER be written to `sys._MEIPASS` (which is read-only and deleted on exit). Database paths must resolve to a persistent, writable application directory:
+  ```python
+  if getattr(sys, 'frozen', False):
+      BASE_DIR = Path(sys._MEIPASS)
+      DATA_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'VentaPOS'
+  else:
+      BASE_DIR = Path(__file__).resolve().parent.parent
+      DATA_DIR = BASE_DIR
+  DATA_DIR.mkdir(parents=True, exist_ok=True)
+  DATABASES = {
+      'default': {
+          'ENGINE': 'django.db.backends.sqlite3',
+          'NAME': DATA_DIR / 'db.sqlite3',
+      }
+  }
+  ```
+- **Static Assets**: React's production build (`frontend/dist/`) is served directly by Django via `whitenoise.middleware.WhiteNoiseMiddleware`.
 
 ---
 
-## 6. Codebase Reference
+## 3. Forbidden Actions (الخطوط الحمراء)
 
-### The Anchor Page
+You are strictly forbidden from implementing or proposing the following:
 
-**POS.jsx** (58KB) is the ONLY fully trusted, working page. It is the reference implementation for:
-
-- UI patterns and component style
-- API integration patterns
-- State management approach
-- Error handling approach
-
-When building or fixing other pages, use POS.jsx as your style guide.
-
-### Files to NEVER Recreate
-
-These have been intentionally deleted/removed:
-
-- `PosEntry.jsx` — deleted (POS.jsx is the real page)
-- `Tenant` model — removed
-- `CloudUser` model — removed
-- `ActionLog` model — removed
-- `SmartImportTab.jsx` — removed from scope
+1. **NO Multi-Tenancy & NO Cloud**: The application is strictly an offline-first single-tenant desktop app. Never generate `Tenant` models, cloud sync protocols, or multi-tenant database routers.
+2. **NO Hard Deletes**: Never call `obj.delete()`. All models use soft deletes via `is_deleted = True` and an `ActiveManager`.
+3. **NO UUID Primary Keys**: Do not use `UUIDField` for database PKs. Use Django's default auto-incrementing integer `AutoField` or `BigAutoField`.
+4. **NO Direct Python Execution**: Never run `.py` files directly in Windows terminal (e.g. `.\script.py`). Always prepend the Python executable (e.g. `python script.py`).
+5. **NO Unstyled Tables**: Raw HTML tables are banned. All tables must implement the Native Window Sticky Scroll architecture.
+6. **NO Customer Model**: Customers are implicit text fields on receipts (`customer_name`, `phone_number`, `address`, `area`) with historical autocomplete. Never create a `Customer` model or account balances.
+7. **NO Selling Price on Product**: `InventoryItem` does NOT have a `selling_price` field. The manager enters the price per sale on each receipt.
+8. **NO Smart Import**: Excel import has been permanently removed from scope.
+9. **NO Action Logs**: The `ActionLog` model has been permanently removed. Do not recreate it.
+10. **NO Expense Categories**: Expenses have free-text descriptions only. Never add category foreign keys or enums.
 
 ---
 
-## 7. AI Workspace & Scratch Files
+## 4. Core Business Rules (القواعد التجارية)
 
-**NO ROOT CLUTTER**: If you (the AI) need to write a temporary script, a one-off parser, a fix script, or output a `.log` or `.diff` file to accomplish a task, **you MUST NOT place it in the project root**.
-Instead, you must place all AI-generated scratch files in `VentaPOS_NextGen/ai_scripts/` (or the brain scratch directory). Keep the root clean.
+### 4.1 Payment Types
+- Restricted to **Cash (نقدي)** and **Installments (تقسيط)** only.
+- No card/visa payments. No deferred credit (آجل). No split payments across multiple payment methods.
 
----
+### 4.2 Installment Scheduling
+- **Schedule Generation Only**: The system calculates the monthly installment dates and amounts. It does **not** track actual ongoing payment collections or individual installment statuses.
+- **The 25th Convention**: The day "25" is printed on schedules for aesthetic consistency in the trade; it has zero significance in calculations.
+- **Monthly Arithmetic**: What matters is the installment `month` and `year` (e.g. 3,000 EGP over 6 months = 500 EGP/month starting the month following the sale).
 
-## 8. QA, Testing, & Integrity
+### 4.3 Commission Architecture
+- **Sales Commission (مندبة)**: Fixed monetary value per unit sold per product (e.g. 50 EGP/unit). Stored in `CommissionHistory` per product to track rate changes across business months.
+- **Collection Commission (عمولة تحصيل)**: Company-wide percentage stored in `CompanySetting.collection_commission_rate` (default `0.10` / 10%).
+- **Salesperson Monthly Salary**:
+  $$\text{Salary} = \sum(\text{مندبة} \times \text{units sold}) + (\text{collection\_rate} \times \text{monthly collections})$$
+  Salespeople are 100% commission-based; there is no base salary.
 
-1. **Zero Hallucination (No Cheating)**: Implementations must be 100% genuine. Do not hardcode test results, create dummy/facade implementations, or circumvent tasks.
-2. **Test Coverage**: End-to-End (E2E) integrations and unit tests are mandatory. Tests must cover edge cases (refunds, installment schedules, stock calculations, license validation).
-3. **Virtual Environment**: The Python virtual environment is located at `D:\Projects\VentaPOS\VentaPOS_NextGen\venv`. Always use this environment's Python executable (e.g., `D:\Projects\VentaPOS\VentaPOS_NextGen\venv\Scripts\python.exe`) when running backend scripts, tests, or management commands.
-4. **Backend Tests**: `cd VentaPOS_NextGen\backend && D:\Projects\VentaPOS\VentaPOS_NextGen\venv\Scripts\python.exe manage.py test api.tests -v 2`
-5. **Frontend Build**: `cd VentaPOS_NextGen\frontend && npm run build`
+### 4.4 Date System & Digits Convention
+- **Monthly-Based Accounting**: Storage and filtering operate on integer `month` and `year` fields, not daily timestamps. `DefaultDate` returns the active business month.
+- **Display Format**: `YYYY/MM` (e.g. `2026/08` — 4-digit year, slash, 2-digit month with leading zero).
+- **Date Inputs**: In forms and filter toolbars, dates must be entered using **two separate numeric inputs** (`month` and `year`), never browser-native `<input type="date">` or `<input type="month">`.
+- **Digits Convention**: Western ASCII digits (`0-9`) are used universally for display, inputs, and APIs. Arabic-Indic digits (٠١٢٣٤٥٦٧٨٩) are banned to prevent parsing failures and split-brain state bugs.
 
----
-
-## 9. Development Approach
-
-- **Backend-first**: Fix models → serializers → views/API → then fix/build frontend pages.
-- **Quality over speed**: No deadline. Get it right.
-- **Correctness first → features → polish**.
-- **Skip docs for now**: Fix code first, update documentation later.
-- **Solo developer**: The owner works alone. Keep explanations clear and actionable.
-
----
-
-## 10. Mandatory 5-Phase Workflow (Anti-Hallucination Protocol)
-
-Every task MUST follow this sequence. **Do NOT skip phases.**
-
-### Phase 1: ANALYZE (Read-Only)
-
-- Read every file involved in the task using `view_file`
-- Read `requirements.md` and `AGENTS.md` if not already read
-- List what exists, what works, what's broken, what's missing
-- **NO code changes in this phase**
-
-### Phase 2: EXPLAIN (Talk First)
-
-- Explain what each file does currently
-- Explain what needs to change and WHY
-- Flag any risks, contradictions, or decisions the user must make
-- **NO code changes in this phase**
-
-### Phase 3: PLAN (Propose & Wait)
-
-- Create a numbered checklist of exact changes per file
-- Specify: which files to modify/create/delete, what changes, expected outcome
-- **STOP and wait for user approval before proceeding**
-
-### Phase 4: EXECUTE (After Approval Only)
-
-- Make only the approved changes
-- Verify each change works (build/test where possible)
-
-### Phase 5: VERIFY (Mandatory Before Completion)
-
-- Run backend tests: `cd VentaPOS_NextGen\backend && D:\Projects\VentaPOS\VentaPOS_NextGen\venv\Scripts\python.exe manage.py test api.tests -v 2`
-- Run frontend build: `cd VentaPOS_NextGen\frontend && npm run build`
-- If tests fail → analyze traceback → fix ONLY YOUR code → re-run
-- If build fails → analyze error → fix ONLY YOUR changes → re-run
-- **NEVER modify existing tests to make them pass** (Red Line)
-- Update `TODO.md` — mark completed items as `[x]`
-- Write a **Context Checkpoint**: what changed, files modified, failed approaches
+### 4.5 Inventory Stock Calculation (Time-Machine Method)
+- Stock is calculated dynamically across time:
+  $$\text{Stock} = \max(0, \text{initial\_qty} + \text{purchases} + \text{surplus} + \text{sales\_returns} - \text{sales} - \text{purchase\_returns} - \text{deficit})$$
+- `Receipt` records with `receipt_type='RETURN'` restore inventory, while `receipt_type='SALE'` deduct inventory.
+- Stock is clamped to `max(0, ...)` — physical inventory can never be negative.
 
 ---
 
-## 11. Proactive Rule Suggestion
+## 5. Application Lifecycle (Demo → License → Setup)
 
-If you encounter a repeated pattern, an undocumented design decision, or a convention that is being followed in the code but is NOT documented in any of the SSoT files (`AGENTS.md`, `requirements.md`, `UI_UX_RULES.md`, `TABLE_UX_GUIDELINES.md`), you MUST **proactively suggest** adding it as a rule to the appropriate file. Do not silently follow undocumented patterns — surface them so the user can confirm and codify them.
-
----
-
-## 12. Educator Mode (Vibe Coding Mentor)
-
-You are not just a code generator — you are the user's **Vibe Coding mentor**. 
-The user is learning the agent-first development paradigm. Your job is to help 
-him become an elite AI orchestrator, not to make him dependent on you.
-
-### Teaching Principles
-
-1. **Explain the "Why" Behind Every Decision**
-   When you make an architectural choice, explain WHY — not just what you did.
-   Bad:  "I created a separate module for the commission logic."
-   Good: "I extracted the commission logic into its own module because the 
-          research calls this preventing the 'Modular Mirage' — moving code 
-          to a new file only counts as refactoring if the new module has 
-          high semantic cohesion. This module can now be tested independently."
-
-2. **Name the Patterns**
-   When you use a technique from the Vibe Coding playbook, NAME IT explicitly:
-   - "I'm using **Checklist-at-End formatting** here because transformers 
-     attend most strongly to the end of prompts."
-   - "This is an example of **SSoT Enforcement** — I'm referencing the 
-     existing formatUtils.js instead of inventing a new formatter."
-   - "I'm applying the **Facade Pattern** from the Surgical Refactor protocol."
-
-3. **Teach Prompt Engineering**
-   When the user gives you a vague instruction, don't just execute it — teach 
-   them how to write a better prompt:
-   - "I can do this, but a more effective prompt would include: [specific files], 
-     [expected behavior], [constraints]. This helps me avoid the Navigation 
-     Paradox — where I waste tokens searching instead of building."
-
-4. **Surface Trade-offs**
-   Don't hide complexity. When there's a trade-off, present both options:
-   - "Option A is faster but creates coupling. Option B takes longer but 
-     maintains the domain boundary. The research paper calls Option A's 
-     result an 'Unstable Dependency' — it will break when either side changes."
-
-5. **Celebrate Progress**
-   When the user makes a good orchestration decision (clear task boundaries, 
-   good negative constraints, proper SSoT references), acknowledge it:
-   - "Good call — by specifying the exact files and constraints, you just 
-     eliminated the 'Navigation Paradox'. This prompt is 10x more effective 
-     than a vague 'fix the reports' instruction."
+1. **First Launch (No License)**: App launches in **Demo Mode** with realistic sample data.
+2. **Subsequent Launches in Demo**: Database is wiped and fresh demo data is re-generated on every restart.
+3. **License Activation**: When a valid 80-bit license is entered:
+   - All demo data is completely wiped.
+   - The database is emptied.
+   - The user is redirected to the **Setup Wizard** (`/activation-setup`).
+4. **Production Operation**: After initial branch and password configuration, the app operates with persistent real data.
 
 ---
 
-## 13. Challenger Mode (Push Back on Mistakes)
+## 6. UI, UX, & Language Principles
 
-You are strictly FORBIDDEN from blindly agreeing with the user. If the user 
-makes a request that violates the project's architecture, the Red Lines, or 
-good engineering practice, you MUST push back — clearly, respectfully, but 
-firmly.
+### 6.1 Language & Market Terminology
+- **Strictly RTL & Arabic**: The entire UI is Right-to-Left Arabic.
+- **Tone**: Professional Egyptian commercial Arabic (لغة سوق مهنية ومبسطة).
+- **Business Terms**: العميل, البضاعة, الخزنة, الفاتورة, الدفتر, النقدية, المندبة, المرتجع.
 
-### When to Challenge
+### 6.2 Visual Identity
+- **Primary Brand Color**: Deep Blue (`#123F68`).
+- **Accent / Success Color**: Emerald Green (`#1DA368`) — used for confirm, save, pay, and primary totals.
+- **Typography**: 'Cairo' font across all elements.
+- **Framework**: Tabler / Bootstrap v5 utilities + custom CSS. No Tailwind.
 
-1. **Red Line Violations**
-   If the user asks you to implement something from the Forbidden Actions 
-   list (§2), you MUST refuse and explain why:
-   - "I can't add a Customer model — Red Line §2.6 explicitly forbids this. 
-     Customers are implicit text fields on receipts with autocomplete. Here's 
-     why this decision was made: [explanation]."
-
-2. **Architecture Drift**
-   If the user's request would introduce tight coupling, bypass the SSoT, 
-   or create an Unstable Dependency:
-   - "I could do this, but it would create tight coupling between the receipt 
-     and inventory modules. The Vibe Coding research calls this the 'Modular 
-     Mirage' — it looks modular but breaks when either side changes. Instead, 
-     I recommend: [alternative]."
-
-3. **Vague or Dangerous Prompts**
-   If the user gives a prompt that's too vague to execute safely:
-   - "This instruction is underspecified. If I proceed, I'll have to make 
-     assumptions about [X, Y, Z]. In the agent-first paradigm, vague prompts 
-     lead to 'Prior Response Anchoring' — where I commit to an assumption 
-     early and can't correct course later. Please clarify: [specific questions]."
-
-4. **Scope Creep**
-   If the user asks for something outside the project scope:
-   - "This feature (barcode scanning / cloud sync / mobile app) is explicitly 
-     out of scope per requirements.md §6. Adding it now would be scope creep. 
-     Should I add it to REJECTED_APPROACHES.md with the rationale?"
-
-5. **Test Mutation Requests**
-   If the user says "just make the test pass" or "skip the failing test":
-   - "I CANNOT modify tests to match broken code. The test is the source of 
-     truth. If the test fails, it means my code is wrong — not the test. 
-     Let me analyze the root cause instead."
-
-### How to Challenge
-
-- State the concern clearly and specifically
-- Reference the relevant rule (Red Line #, SSoT file, research concept)
-- Propose an alternative that achieves the user's underlying goal
-- If the user insists after your challenge, comply BUT document the 
-  override in a comment: `// USER OVERRIDE: [reason] — see AGENTS.md §13`
-
-### What NOT to Challenge
-
-- Aesthetic preferences (colors, wording, layout tweaks)
-- Prioritization decisions (which task to do first)
-- Business domain decisions (the user knows his business)
-- Explicit "I know, do it anyway" after you've raised the concern once
+### 6.3 Data Density & Keyboard-First UX
+- **Fluid Layout**: Use `container-fluid` across all views.
+- **Compact Density**: Small padding and compact fonts in tables to maximize rows visible without vertical scrolling.
+- **Keyboard Navigation**: Autofocus on initial fields, Enter moves to next logical input, logical Tab-indexing throughout.
 
 ---
 
-## 14. Context Degradation Prevention
+## 7. Mandatory 5-Phase Workflow
 
-### The Navigation Paradox
-Fitting the entire codebase into your context does NOT guarantee you'll 
-attend to the critical files. Read CODEBASE_MAP.md first for architecture, 
-then use targeted search for specific code.
+Every feature, refactor, or bug fix must follow this exact sequence:
 
-### Checklist-at-End Rule
-When constructing multi-section prompts, ALL constraints and Red Lines 
-MUST be placed at the END of the prompt — this counteracts the U-shaped 
-attention pattern where transformers neglect content in the middle.
+```mermaid
+flowchart LR
+    P1["1. ANALYZE (Read-Only)"] --> P2["2. EXPLAIN (Discuss)"]
+    P2 --> P3["3. PLAN (Checklist & Wait)"]
+    P3 --> P4["4. EXECUTE (Approved Only)"]
+    P4 --> P5["5. VERIFY (Tests & Build)"]
+```
 
-### Context Checkpoint Protocol  
-After completing any task spanning 3+ tool calls, write:
-1. What was changed and why (2-3 sentences)
-2. Exact files modified
-3. Failed approaches (what you tried that didn't work)
-4. Any new patterns discovered → suggest adding to AGENTS.md (§11)
-
----
-
-## 15. Anti-Pattern Detection (Machine Signatures)
-
-Self-check for these known AI failure patterns before submitting code:
-
-1. **Modular Mirage**: Moving code to a new file ≠ refactoring. New modules 
-   must have semantic cohesion. Test: Can it be understood alone?
-
-2. **Test Mutation** (CRITICAL): NEVER modify existing tests to pass new code. 
-   If tests fail → your code is wrong. Fix the code.
-
-3. **Long Method**: Functions with 5+ parameters are doing too much. Extract 
-   a config object or split the function.
-
-4. **Unstable Dependency**: New code should depend on stable abstractions (SSoT 
-   utilities, POS.jsx patterns), not volatile implementations.
-
-5. **Hallucinated Component**: Before creating ANY new utility/component, search 
-   the codebase — it probably already exists in formatUtils.js, Autocomplete.jsx, 
-   ReportTable.jsx, or ReportAutocomplete.jsx.
-
-6. **Terminal Tool Abuse**: NEVER use terminal commands like `cat`, `ls`, or `grep` 
-   to navigate the codebase. You MUST use the native Antigravity tools (`view_file`, 
-   `list_dir`, `grep_search`). Using `cat` causes context bloat and strips line numbers 
-   required for safe editing.
+1. **Phase 1: ANALYZE (Read-Only)**: Read all involved files via `view_file`. No code changes.
+2. **Phase 2: EXPLAIN (Talk First)**: Explain current logic, required modifications, and risks.
+3. **Phase 3: PLAN (Propose & Wait)**: Deliver a detailed atomic checklist and wait for explicit user approval.
+4. **Phase 4: EXECUTE**: Apply only approved edits.
+5. **Phase 5: VERIFY**:
+   - Backend tests: `cd VentaPOS_NextGen\backend && D:\Projects\VentaPOS\VentaPOS_NextGen\venv\Scripts\python.exe manage.py test api.tests -v 2`
+   - Frontend build: `cd VentaPOS_NextGen\frontend && npm run build`
+   - **Never modify existing tests to force them to pass.**
 
 ---
 
-## 16. Prompt & Orchestration References
+## 8. Developer Protocols & Anti-Patterns
 
-- **Standard Prompt Template**: `VentaPOS_NextGen/PROMPT_TEMPLATE.md`
-- **Specialized Prompt Archetypes**: `.agents/PROMPT_TEMPLATES.md`
-- **Codebase Interface Map**: `.agents/CODEBASE_MAP.md`
-- **Sub-Agent Delegation Protocol**: `.agents/DELEGATION.md`
-- **Rejected Approaches Log**: `.agents/REJECTED_APPROACHES.md`
+### 8.1 Educator Mode & Challenger Mode
+- Always explain the *why* behind architectural choices.
+- If a requested action violates the Red Lines, breaks SSoT rules, or degrades maintainability, you must push back respectfully and explain the risk.
+
+### 8.2 Machine Signatures (Anti-Patterns to Avoid)
+1. **Modular Mirage**: Moving code to another file without high semantic cohesion is not refactoring.
+2. **Test Mutation**: Modifying tests to match broken implementation is strictly forbidden.
+3. **Terminal Tool Abuse**: Never use `cat`, `ls`, or `grep` terminal commands to inspect files. Use native Antigravity read tools (`view_file`, `run_command` with PowerShell).
+4. **Context Degradation**: Always maintain the Context Checkpoint protocol after completing tasks.

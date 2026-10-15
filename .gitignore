@@ -27,8 +27,9 @@ ai_scripts/
 /*.diff
 VENTAPOS_CONTEXT.md
 
-# --- Ensure .gitignore is tracked ---
+# --- Ensure .gitignore & GEMINI.md are tracked ---
 !.gitignore
+!GEMINI.md
 
 # --- Python / Django ---
 __pycache__/

@@ -1,217 +1,140 @@
-# VentaPOS NextGen - Requirements Specification
+# VentaPOS NextGen — Requirements & Data Specifications
 
-## 1. What is this App?
+> **Scope**: VentaPOS NextGen Core Domain Specification  
+> **Target Audience**: Back-Office Desk Management for Business Owner (المدير / صاحب المحل)  
+> **Platform**: Django REST Framework + React 19 + PyWebView Standalone Windows Desktop  
 
-VentaPOS NextGen is a **Back-Office Desk Management Application** designed specifically for the business owner or manager (المدير/صاحب المحل). It is **not** a traditional point-of-sale terminal used by cashiers.
+---
 
-*   **Business Type:** Furniture, household items, and electronics (مفروشات، أدوات منزلية، أجهزة كهربائية).
-*   **Workflow:** Salespeople (مناديب) sell products in the field using physical paper notebooks. The manager later enters these receipts into the VentaPOS system.
-*   **User Scope:** Single user (one manager/admin). No other user roles.
-*   **Deployment:** One app per machine, managing multiple branches from a single interface.
-*   **Inventory:** Each branch has completely independent inventory. There are no stock transfers between branches.
-*   **Platform:** Desktop application using a Python backend (Django) wrapped in PyWebView. It is tested via a web browser during development.
-*   **Localization:** The entire UI is in Arabic (RTL).
-*   **Tone:** Professional but simple Egyptian Arabic (لغة سوق مهنية ومبسطة).
+## 1. System Overview & Domain Boundary
 
-## 2. Technical Architecture
+VentaPOS NextGen is a specialized commercial desktop management system tailored for Egyptian retail merchants in furniture, household goods, and domestic electronics (مفروشات، أدوات منزلية، أجهزة كهربائية).
 
-*   **Database:** SQLite configured in WAL (Write-Ahead Logging) mode.
-*   **Backend:** Django 5.x + Django REST Framework (DRF).
-*   **Frontend:** React 19 + Vite.
-*   **Desktop Wrapper:** PyWebView.
-*   **Primary Keys:** Standard auto-incrementing integers (`AutoField`/`BigAutoField`). **No UUIDs** used for primary keys.
-*   **Authentication:** DRF `TokenAuthentication`, designed for a single admin user.
-*   **Soft Delete:** Implemented via an `is_deleted` boolean field and a custom `ActiveManager` on all models.
-*   **Financial Fields:** `DecimalField(12,2)` for all monetary values.
-*   **Quantities:** `PositiveIntegerField` (integers only, no fractions).
-*   **Date System:** The system uses a Monthly-based approach (`month`/`year` integer fields) rather than exact daily dates. A `DefaultDate` mechanism returns the current business month.
-    *   **Display Format:** `MM/YYYY` (e.g., `8/2026`). Month comes first. No leading zero on the month.
-    *   **Digit Convention:** Western digits (0-9) are used universally for both display and storage/API to improve performance and prevent split-brain state bugs. (Arabic-Indic digits ٠١٢٣٤٥٦٧٨٩ were dropped).
-*   **Multi-tenancy/Cloud:** Completely removed. No multi-tenancy, no cloud syncing, and no `Tenant` model.
+### 1.1 Commercial Reality
+- Sales personnel (مناديب) execute sales in the field and collect down payments, recording transactions in physical handwritten notebooks.
+- The business manager enters these invoices into VentaPOS from his desk.
+- The application manages multiple warehouse and showroom branches from a single unified desktop window. Each branch operates with completely isolated inventory.
+- No barcodes or SKUs exist. Goods are identified by their commercial name.
+- Selling prices are negotiated per transaction and entered manually on the receipt.
 
-## 3. Data Models
+---
 
-The system is built on 17 core models defined in `models.py`.
+## 2. Active SQLite Data Models (17 Models)
 
-| Model Name | Arabic Name | Key Fields / Methods |
-| :--- | :--- | :--- |
-| **Branch** | المخزن/الفرع | `name`, `is_deleted`, `created_at` |
-| **Salesperson** | المندوب | `name`, `branch` (FK), `device_token`, `is_device_active`, `is_deleted` |
-| **InventoryItem** | البضاعة/الصنف | `name`, `branch` (FK), `initial_quantity`, `initial_purchase_price`, `initial_commission_amount`, `initial_month`, `initial_year`<br>*Methods:* `get_stock_at_date()`, `get_safe_available_qty()`, `get_commission_at_date()`, `get_price_at_date()` |
-| **CommissionHistory** | سجل العمولات | `item` (FK), `commission_amount`, `activation_month`, `activation_year`. Tracks sales commission changes. |
-| **InventoryAdjustment** | جرد وتسويات | `item` (FK), `adjustment_type` (DEFICIT/SURPLUS), `quantity`, `reason`, `month`, `year` |
-| **Supplier** | الموردين | `name` |
-| **PurchaseInvoice** | فاتورة الشراء/المرتجع | `branch` (FK), `supplier` (FK), `invoice_number`, `invoice_type` (PURCHASE/RETURN), `invoice_month`, `invoice_year` |
-| **PurchaseInvoiceItem**| | `invoice` (FK), `inventory_item` (FK), `quantity`, `purchase_price` |
-| **Receipt** | الفاتورة | `branch`, `salesperson`, `receipt_number`, `client_uuid`, `receipt_hash`, `customer_name`, `phone_number`, `address`, `area`, `total_amount`, `down_payment`, `installment_system`, `sale_year`, `sale_month`, `is_cash_sale`, `receipt_type` (SALE/RETURN), `parent_receipt`, `products_text`, `source`, `sync_action`, `is_confirmed` |
-| **SaleItem** | | `receipt` (FK), `inventory_item` (FK), `quantity`, `unit_price` |
-| **InstallmentPayment** | القسط | `receipt` (FK), `payment_date`, `amount` |
-| **Expense** | المصاريف | `branch` (FK), `amount`, `description`, `expense_year`, `expense_month` |
-| **CompanySetting** | إعدادات الشركة | **Singleton**. `name`, `description`, `phone1`, `phone2`, `footer_text`, `is_cloud_viewer`, `collection_commission_rate`, `zoom_level` |
-| **ClientLicense** | الترخيص | `product_id`, `start_date`, `expiry_date`, `invoices_balance`, `is_active`, `machine_id`, `company_code`, `license_code_hash`, online fields |
-| **UsedLicense** | الأكواد المستخدمة | `code_hash` (unique) |
-| **LicenseHistory** | أرشيف التراخيص | `machine_id`, `product_name`, `operation_type`, `dates`, `added_balance`, `status` |
-| **PendingExternalReceipt**| | `branch` (FK), `batch_id`, `source`, `payload` (JSON), `is_processed` |
+All models are defined in `VentaPOS_NextGen/backend/api/models.py`. Standard integer primary keys (`AutoField`/`BigAutoField`) are used. All domain entities utilize soft-deletion via `is_deleted = models.BooleanField(default=False)` and an `ActiveManager`.
 
-> [!NOTE]
-> `collection_commission_rate` is located on the `CompanySetting` model because it is a company-wide percentage, not per-branch.
+| # | Model | Arabic Name | Purpose & Key Fields |
+|---|-------|-------------|----------------------|
+| 1 | **`Branch`** | الفرع / المخزن | Branch location. Fields: `name`, `is_deleted`, `created_at`. Related: `inventory_items`, `salespersons`, `receipts`. |
+| 2 | **`Salesperson`** | المندوب | Field salesperson. Fields: `name`, `branch` (FK), `device_token` (UUID), `is_device_active`, `is_deleted`. |
+| 3 | **`InventoryItem`** | الصنف / البضاعة | Branch-scoped product. Fields: `name`, `branch` (FK), `initial_quantity`, `initial_purchase_price`, `initial_commission_amount`, `initial_month`, `initial_year`. Methods: `get_stock_at_date(m, y)`, `get_safe_available_qty()`, `get_commission_at_date(m, y)`, `get_price_at_date(m, y)`. |
+| 4 | **`CommissionHistory`** | سجل عمولات المناديب | Historical sales commission changes. Fields: `item` (FK), `commission_amount`, `activation_month`, `activation_year`. |
+| 5 | **`InventoryAdjustment`** | التسويات والجرد | Physical inventory adjustments. Fields: `item` (FK), `adjustment_type` (`DEFICIT` / `SURPLUS`), `quantity`, `reason`, `month`, `year`. |
+| 6 | **`Supplier`** | المورد | Wholesale goods supplier. Fields: `name`, `is_deleted`. |
+| 7 | **`PurchaseInvoice`** | فاتورة مشتريات / مرتجع | Inbound supplier shipment or return. Fields: `branch` (FK), `supplier` (FK), `invoice_number`, `invoice_type` (`PURCHASE` / `RETURN`), `invoice_month`, `invoice_year`. |
+| 8 | **`PurchaseInvoiceItem`** | بنود فاتورة الشراء | Line item on purchase invoice. Fields: `invoice` (FK), `inventory_item` (FK), `quantity`, `purchase_price`. |
+| 9 | **`Receipt`** | فاتورة المبيعات / المرتجع | Customer sale or return. Fields: `branch` (FK), `salesperson` (FK), `receipt_number`, `client_uuid`, `receipt_hash`, `customer_name`, `phone_number`, `address`, `area`, `total_amount`, `down_payment`, `installment_system`, `sale_year`, `sale_month`, `is_cash_sale`, `receipt_type` (`SALE` / `RETURN`), `parent_receipt` (FK self), `products_text`, `is_confirmed`. |
+| 10 | **`SaleItem`** | بنود الفاتورة | Line item on sale or return receipt. Fields: `receipt` (FK), `inventory_item` (FK), `quantity`, `unit_price`. |
+| 11 | **`InstallmentPayment`** | قسط الفاتورة | Scheduled installment installment. Fields: `receipt` (FK), `payment_date` (`YYYY-MM-25`), `amount`. |
+| 12 | **`Expense`** | المصروفات | Operating expenses. Fields: `branch` (FK), `description`, `amount`, `expense_month`, `expense_year`. |
+| 13 | **`CompanySetting`** | إعدادات الشركة | Singleton configuration. Fields: `name`, `description`, `phone1`, `phone2`, `footer_text`, `collection_commission_rate` (Decimal, default `0.10`), `zoom_level`. |
+| 14 | **`ClientLicense`** | الترخيص المحلي | Active cryptographic machine license. Fields: `product_id`, `start_date`, `expiry_date`, `invoices_balance`, `is_active`, `machine_id`, `company_code`, `license_code_hash`. |
+| 15 | **`UsedLicense`** | التراخيص المستخدمة | SHA-256 hash preventing license code reuse. Fields: `code_hash` (unique). |
+| 16 | **`LicenseHistory`** | أرشيف العمليات | Audit trail of license operations. Fields: `machine_id`, `product_name`, `operation_type`, `dates`, `added_balance`, `status`. |
+| 17 | **`PendingExternalReceipt`** | فواتير المزامنة المؤقتة | Staging table for offline batch USB receipts. Fields: `branch` (FK), `batch_id`, `source`, `payload` (JSON), `is_processed`. |
 
-## 4. Business Rules
+---
 
-### 4.1 Products & Inventory
-*   **Branch-Scoped:** Products belong to a specific branch. The same product name can exist in different branches with separate stock levels.
-*   **Identification:** No barcodes or SKUs are used. Products are identified purely by their name via text-based search.
-*   **Pricing:** There is no fixed selling price on products. The manager enters the price manually per sale.
-*   **Stock Calculation (Time-Machine Method):** Stock is calculated dynamically:
-    `Stock = initial_quantity + purchases + surplus + sales_returns - sold - purchase_returns - deficit`
-*   **Stock Limits:** Stock can never go negative. It is clamped to `max(0, calculated_stock)`.
-*   **Sales Commission (مندبة):** A fixed monetary value per product (e.g., 50 EGP per unit sold). Changes over time are tracked in `CommissionHistory`.
-*   **Collection Commission (عمولة تحصيل):** A company-wide percentage stored in `CompanySetting.collection_commission_rate`.
+## 3. Mathematical & Business Logic Specifications
 
-### 4.2 Sales (Receipts)
-*   **Entry Process:** The manager manually enters receipts copied from the salespeople's paper notebooks.
-*   **Data Captured:** Customer information (stored as raw text), items (with quantities and prices), and the payment type.
-*   **Payment Types:** Restricted to **Cash (نقدي)** and **Installments (تقسيط)** only. No credit cards or deferred payments.
-*   **Receipt Numbering:** Auto-assigned sequentially per branch.
-*   **Security:**
-    *   `receipt_hash` (HMAC) is used for tamper protection.
-    *   `client_uuid` is used to prevent double-submission from the frontend.
-*   **Denormalization:** `products_text` stores a summary of the receipt's items for quick display without joins.
+### 3.1 Inventory Stock (Time-Machine Calculation)
+Physical stock is not stored as a static mutable number. It is dynamically computed at any given monthly checkpoint $(m, y)$ using the time-machine formula:
 
-### 4.3 Installments (تقسيط)
-*   **Scheduling Only:** The system generates an installment schedule but does **not** track actual payments or remaining balances over time.
-*   **Printing Date:** The day "25" is often just printed on the schedule; it has no mathematical significance for calculations.
-*   **Calculation Focus:** Calculations are based purely on the month and year.
-    *   *Example:* 3000 EGP over 6 installments = 500 EGP/month, starting the following month.
+$$\text{Stock}(m, y) = \max\Big(0,\ \text{InitialQty} + \text{Purchases} + \text{Surplus} + \text{SalesReturns} - \text{Sales} - \text{PurchaseReturns} - \text{Deficit}\Big)$$
 
-### 4.4 Returns (مرتجع)
-*   Implemented via `ReturnReceipt.jsx`.
-*   A return creates a new receipt record with `receipt_type='RETURN'` and references the original sale via `parent_receipt` FK.
-*   Processing a return adds the items' quantities back into the branch's inventory.
+Where all cumulative terms are evaluated for business dates $\le (m, y)$:
+- **$\text{InitialQty}$**: `initial_quantity` if $(m, y) \ge (\text{initial\_month}, \text{initial\_year})$, else $0$.
+- **$\text{Purchases}$**: Sum of `PurchaseInvoiceItem.quantity` where `invoice.invoice_type = 'PURCHASE'`.
+- **$\text{Surplus}$**: Sum of `InventoryAdjustment.quantity` where `adjustment_type = 'SURPLUS'`.
+- **$\text{SalesReturns}$**: Sum of `SaleItem.quantity` where `receipt.receipt_type = 'RETURN'`.
+- **$\text{Sales}$**: Sum of `SaleItem.quantity` where `receipt.receipt_type = 'SALE'`.
+- **$\text{PurchaseReturns}$**: Sum of `PurchaseInvoiceItem.quantity` where `invoice.invoice_type = 'RETURN'`.
+- **$\text{Deficit}$**: Sum of `InventoryAdjustment.quantity` where `adjustment_type = 'DEFICIT'`.
 
-### 4.5 Purchases / Procurement (المشتريات)
-*   **Scope:** In scope for the initial launch.
-*   **Functionality:** Manager records purchase invoices received from suppliers.
-*   **Inventory Impact:** Purchases add stock to inventory. Purchase returns reduce stock.
-*   **Components:** `PurchaseEntry.jsx` and `SearchPurchases.jsx` exist and require review.
+> [!IMPORTANT]
+> A sales return (`receipt_type = 'RETURN'`) **restores** inventory stock to the branch. It must NEVER be added to sales deductions.
 
-### 4.6 Customers
-*   **Implicit Structure:** There is no dedicated `Customer` model or account balances.
-*   **Data Storage:** Customer details (`customer_name`, `phone_number`, `address`, `area`) are simply text fields saved directly on the `Receipt`.
-*   **UX:** The frontend provides autocomplete suggestions based on historical receipt data to speed up entry.
+### 3.2 Safe Available Quantity (`get_safe_available_qty`)
+When back-dating an invoice or adjustment to $(m_{\text{target}}, y_{\text{target}})$, the system verifies that deducting stock in the past will not cause any intermediate month up to the current business month $(m_{\text{current}}, y_{\text{current}})$ to drop below zero:
 
-### 4.7 Salespeople (المناديب)
-*   **Compensation:** They work on a commission-only basis (no base salary).
-*   **Salary Calculation:**
-    `Salary = (Sales Commission [مندبة] × Units Sold) + (Collection Commission Rate × Collections)`
-*   This performance is tracked and displayed in reports.
+$$\text{SafeAvailableQty} = \min_{t \in [(m_{\text{target}}, y_{\text{target}}),\ (m_{\text{current}}, y_{\text{current}})]} \text{Stock}(t)$$
 
-### 4.8 Expenses (المصاريف)
-*   **Structure:** Simple free-text description, amount, branch, and month/year.
-*   **Categories:** No formal expense categories exist.
-*   **Scope:** Branch-scoped.
+### 3.3 Salesperson Monthly Compensation
+Salespeople work strictly on a commission basis:
+$$\text{Salary} = \sum_{\text{sold units}} \big(\text{مندبة}(p, m, y) \times \text{units}\big) + \Big(\text{CompanySetting.collection\_commission\_rate} \times \text{Monthly Collections}\Big)$$
+- **$\text{مندبة}$ (Sales Commission)**: Fixed value per unit defined in `CommissionHistory` for product $p$ active at month $(m, y)$.
+- **$\text{عمولة التحصيل}$ (Collection Commission)**: Evaluated dynamically using `CompanySetting.collection_commission_rate` (default $10\%$) multiplied by actual installment cash collected in that calendar month.
 
-### 4.9 Printing
-*   **Scope:** Printing is supported **only for Installment Schedules**. Standard cash receipts are not printed.
-*   **Mechanism:** Uses backend calls to `os.startfile()` or SumatraPDF for silent printing.
+### 3.4 Installment Schedule Rules
+- **Monthly Progression**: Given receipt total $T$, down payment $D$, and installment count $N$:
+  $$\text{Monthly Installment} = \frac{T - D}{N}$$
+- Installment 1 begins in $(m_{\text{sale}} + 1, y_{\text{sale}})$.
+- **The 25th Display Rule**: Printed installment schedules format dates with day "25" (e.g. `2026-09-25`) to match commercial practice. Internal storage and filtering depend solely on `month` and `year`.
 
-## 5. Features In Scope
+---
 
-### 5.1 Core Features
-1.  **Login & Auth:** Single admin, token-based authentication.
-2.  **Branch Selection:** Switch between branches.
-3.  **POS / Sales Entry:** (`POS.jsx`) - The primary, solid foundation of the app. Working well.
-4.  **Inventory Management:** Manage items, initial stock, and adjustments.
-5.  **Product Ledger:** View the history/time-machine of a product's stock.
-6.  **Purchases/Procurement:** Record inbound stock from suppliers.
-7.  **Returns (مرتجع):** Process customer returns.
-8.  **Search Receipts:** Find historical receipts.
-9.  **Search Purchases:** Find historical purchase invoices.
-10. **Expenses:** Record monthly branch expenses.
-11. **Branches Management:** Add/edit branches.
-12. **Salespersons Management:** Add/edit sales personnel.
-13. **Settings:** Manage company info and admin password.
+## 4. Application Lifecycle & Licensing
 
-### 5.2 Reports (8 Total)
-1.  Dashboard Report
-2.  CashDrawer Report
-3.  Expenses Report
-4.  Installments Report
-5.  Inventory Movement Report
-6.  Profit & Loss Report
-7.  Receipts Report
-8.  Salesperson Performance Report (Must show sales commission + collection commission).
+```mermaid
+stateDiagram-v2
+    [*] --> DemoMode : Launch (No License)
+    DemoMode --> DemoMode : Restart (Wipe & Regenerate Sample Data)
+    DemoMode --> SetupWizard : Valid License Entered (Wipe Demo Data)
+    SetupWizard --> ProductionMode : Admin & Branch Configured
+    ProductionMode --> ProductionMode : Regular Operation
+    ProductionMode --> LockedState : License Expired / Balance Depleted
+    LockedState --> ProductionMode : New License Activated
+```
 
-### 5.3 Tools
-1.  **Sync Tools:** Offline USB/file synchronization (infrastructure for future use).
-2.  **Backup & Restore:** Critical must-have feature for data safety.
+1. **Demo Mode**: First run without license starts in Demo Mode. Demonstrates all 8 reports and POS functionality using temporary mock data.
+2. **License Activation**: Accepts an 80-bit encrypted cryptographic code bound to machine hardware hash. Once activated, demo data is wiped, creating an empty database for production setup.
+3. **Password Recovery**: Utilizes a specialized Recovery Code license (`product_id = 15`) to reset the administrative password without cloud intervention.
 
-### 5.4 Licensing & Security
-1.  80-bit cryptographic licensing.
-2.  Machine ID hardware binding.
-3.  Receipt HMAC hashing.
-4.  Recovery code implemented as a special license type.
+---
 
-### 5.5 Demo Mode Lifecycle
-1.  **First Launch:** No license found -> Enters Demo Mode. Generates random sample data.
-2.  **Subsequent Demo Starts:** Database is wiped and fresh demo data is generated on every restart.
-3.  **Activation:** Once a valid license is entered, demo data is wiped, database is empty, and user is directed to the Setup page.
-4.  **Production:** After Setup, the app runs normally with real, persistent data.
+## 5. Active API Endpoint Catalog (`/api/v1/`)
 
-## 6. Out of Scope / Removed
+### Authentication & Setup
+- `POST /api/v1/auth/login/`: Admin token authentication.
+- `GET /api/v1/auth/has-password/`: Checks if initial admin password has been established.
+- `POST /api/v1/auth/recover-password/`: Recovers admin credentials using special recovery code.
+- `POST /api/v1/auth/demo/`: Triggers demo mode initialization.
 
-*   **Smart Import (Excel):** Removed. Handled by external tools.
-*   **Mobile App:** Deferred.
-*   **Cloud Sync Server:** Deferred.
-*   **Action Logs:** Deleted entirely.
-*   **Tenant / CloudUser Models:** Removed entirely.
-*   **Legacy Data Migration:** Not needed.
-*   **Legacy Code Matching:** NextGen is completely independent; no need to match old code exactly.
-*   **Multi-user Roles:** Not planned.
-*   **Customer Accounts/Balances:** Not planned.
-*   **Barcode/SKU Scanning:** Not planned.
-*   **Card/Visa Payments:** Not planned.
-*   **Expense Categories:** Not planned.
+### Dimensions & Setup Data
+- `/api/v1/branches/`: CRUD for branch locations (`ActiveManager`).
+- `/api/v1/salespersons/`: CRUD for sales personnel.
+- `/api/v1/suppliers/`: CRUD for wholesale suppliers.
+- `/api/v1/company-settings/`: Singleton company profile & collection commission rate.
 
-## 7. Approach & Priorities
+### Inventory & Stock
+- `/api/v1/inventory-items/`: Product catalog with live computed stock.
+  - `GET /inventory-items/{id}/stock/?month={m}&year={y}`: Computed stock at specific date.
+  - `GET /inventory-items/{id}/ledger/`: Complete transaction time-machine timeline.
+  - `GET /inventory-items/pos_search/?term={term}`: Fast autocomplete search.
+- `/api/v1/inventory-adjustments/`: Deficit/surplus stock adjustments with safe quantity validation.
 
-*   **Backend First:** Fix Models -> Views -> API -> Frontend.
-*   **Quality over Speed:** No strict deadline. Correctness comes first, followed by feature completeness, then polish.
-*   **Resource:** Solo developer project.
-*   **Documentation:** Skip writing external docs for now. Fix the code first, update documentation later.
-*   **Architecture Anchor:** `POS.jsx` is the core foundation. Everything else builds around it.
-*   **Cleanup:** `PosEntry.jsx` is deprecated and should be deleted.
+### Procurement & Sales
+- `/api/v1/purchase-invoices/`: Supplier purchases and purchase returns.
+- `/api/v1/receipts/`: Cash and installment sales receipts with HMAC integrity verification.
+  - `GET /receipts/?branch_id={b}&month={m}&year={y}`: Paginated receipts with dataset aggregate totals.
+  - `GET /receipts/customer_suggestions/?term={t}&field={f}`: Historical customer autocomplete.
+  - `POST /receipts/{id}/print/`: Generates PDF schedule and triggers SumatraPDF silent print.
 
-## 8. File Status Summary
-
-### 8.1 Frontend Pages
-| File | Status | Action Required |
-| :--- | :--- | :--- |
-| `POS.jsx` (58KB) | ✅ SOLID | Working end-to-end. Do not break. |
-| `PosEntry.jsx` (34KB) | ❌ DEPRECATED | Delete. |
-| `Inventory.jsx` | Needs Review | Needs review/rebuild. |
-| `ProductLedger.jsx` | Needs Review | Currently uses mock data. |
-| `PurchaseEntry.jsx` | Needs Review | |
-| `SearchPurchases.jsx` | Needs Review | |
-| `ReturnReceipt.jsx` | Needs Review | |
-| `SearchReceipts.jsx` | Partially Working | Has issues, needs fixing. |
-| `Expenses.jsx` | Needs Review | |
-| `Dashboard.jsx` | Needs Review | |
-| `BranchSelection.jsx` | Needs Review | |
-| `Login.jsx` | Needs Implementation | Skipped during initial dev. |
-| `Setup.jsx` | Needs Review | |
-| `ActivationSetup.jsx` | Needs Review | |
-| Settings pages | Unknown State | Needs full review. |
-| Report pages (8) | Mostly Complete | 7 have real code, 1 (CashDrawer) might be a stub. |
-| Tool pages | Needs Review | |
-
-### 8.2 Backend Files
-| File | Status | Action Required |
-| :--- | :--- | :--- |
-| `models.py` | ✅ CLEAN | 17 models, clean state. Stock `max(0)` logic present. |
-| `views.py` (103KB) | Needs Review | Review all endpoints for alignment with new models. |
-| `serializers.py` (31KB)| Needs Review | |
-| `urls.py` (5KB) | Needs Review | |
-| `middleware.py` | Needs Review | |
-| `tools_views.py` | Needs Review | |
-| `utils/` | Needs Review | Check security and licensing logic. |
+### Analytics & Reports
+- `GET /api/v1/reports/dashboard/?branch_id={b}&month={m}&year={y}`: P&L breakdown and Cash Drawer breakdown.
+- `GET /api/v1/reports/salesperson-performance/`: Grouped sales performance, collections, and salaries.
+- `GET /api/v1/reports/inventory-movement/`: 10-column stock ledger and valuation summary.
+- `GET /api/v1/reports/profit-and-loss/`: Revenue, COGS, commissions, and net profit per item.
+- `GET /api/v1/reports/averages/`: Per-unit averages across products (0 KPI cards).
+- `GET /api/v1/reports/installments/`: Monthly installment collections schedule and phone directory.
+- `GET /api/v1/expenses/`: Operating branch expenditures.
