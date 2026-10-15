@@ -25,6 +25,7 @@ ai_scripts/
 /*.txt
 /*.patch
 /*.diff
+VENTAPOS_CONTEXT.md
 
 # --- Ensure .gitignore is tracked ---
 !.gitignore
