@@ -1,0 +1,205 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
+/* The rtl version is imported in main.jsx */
+
+:root {
+  --brand-primary: #123F68;
+  /* Override tabler primary color if needed */
+  --tblr-primary: #123F68;
+  --tblr-success: #1DA368;
+  --tblr-font-sans-serif: 'Cairo', sans-serif;
+  
+  /* Table Scroll UX Architecture */
+  --tblr-navbar-min-height: 50px;
+  --navbar-height: 56px; 
+  --toolbar-height: 56px; 
+}
+
+body {
+  font-family: 'Cairo', sans-serif;
+  margin: 0;
+  height: auto !important; /* Override Tabler's height:100% — moves scroll from body to viewport so window.scrollBy() works */
+  overflow-y: visible !important; /* MUST be visible, otherwise position: sticky on children won't stick to the window */
+  background-color: #f4f6f8; /* default tabler background */
+}
+
+/* Report Tables Scroll & Sticky Header */
+.report-table-container {
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+}
+.report-table-container thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  box-shadow: inset 0 -1px 0 var(--tblr-border-color);
+}
+.report-table-container thead.table-dark th {
+  background-color: #1e293b;
+  color: #fff;
+}
+.report-table-container thead.table-light th {
+  background-color: #f8fafc;
+}
+
+/* 1. Global Page Wrapper */
+.native-page-scroll {
+  height: auto !important;
+  min-height: calc(100vh / var(--app-zoom, 1));
+  overflow: visible !important;
+}
+
+/* 2. Sticky Toolbar (The row above the table) */
+.sticky-toolbar {
+  position: sticky;
+  top: var(--navbar-height);
+  z-index: 1020;
+  background-color: #f8f9fa;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+/* 3. Sticky Table Header */
+.table-sticky-header th {
+  position: sticky !important;
+  top: calc(var(--navbar-height) + var(--toolbar-height)) !important;
+  z-index: 1010;
+  background-color: #f8f9fa !important;
+  box-shadow: inset 0 -1px 0 var(--tblr-border-color);
+}
+
+/* Override for Hybrid Scroll containers where the table scrolls internally */
+.hybrid-scroll-container .table-sticky-header th {
+  top: 0 !important;
+}
+
+/* Allow natural height to prevent CSS zoom overflow bugs */
+html {
+  margin: 0;
+  background-color: #f8f9fa;
+  overflow-y: auto !important;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh / var(--app-zoom, 1));
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  min-height: 0;
+}
+
+.page-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Premium KPI Cards */
+.premium-card {
+  background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(245,247,250,0.95) 100%);
+  border: 1px solid rgba(255,255,255,0.4);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.premium-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(15, 82, 186, 0.15);
+}
+
+.premium-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--tblr-primary) 0%, #3b82f6 100%);
+  color: white;
+  box-shadow: 0 4px 10px rgba(15, 82, 186, 0.3);
+}
+
+/* Tab Navigation inside Page Header */
+.dashboard-tabs .nav-link {
+  font-weight: 600;
+  color: #475569;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 16px;
+  transition: all 0.2s;
+}
+
+.dashboard-tabs .nav-link:hover {
+  border-bottom-color: #cbd5e1;
+  color: #1e293b;
+}
+
+.dashboard-tabs .nav-link.active {
+  color: var(--tblr-primary);
+  border-bottom: 2px solid var(--tblr-primary);
+  background: transparent;
+}
+
+/* Custom Button Overrides for Brand Colors */
+.btn-primary {
+  background-color: var(--brand-primary) !important;
+  border-color: var(--brand-primary) !important;
+  color: #fff !important;
+}
+.btn-primary:hover {
+  background-color: #0d2d4a !important;
+  border-color: #0d2d4a !important;
+}
+
+.btn-success {
+  background-color: var(--tblr-success) !important;
+  border-color: var(--tblr-success) !important;
+  color: #fff !important;
+}
+.btn-success:hover {
+  background-color: #158052 !important;
+  border-color: #158052 !important;
+}
+
+.btn-outline-primary {
+  color: var(--brand-primary) !important;
+  border-color: var(--brand-primary) !important;
+}
+.btn-outline-primary:hover {
+  background-color: var(--brand-primary) !important;
+  color: #fff !important;
+}
+
+.btn-outline-success {
+  color: var(--tblr-success) !important;
+  border-color: var(--tblr-success) !important;
+}
+.btn-outline-success:hover {
+  background-color: var(--tblr-success) !important;
+  color: #fff !important;
+}
+
+/* Slim Navbars */
+.navbar .nav-link {
+  padding-top: 0.35rem !important;
+  padding-bottom: 0.35rem !important;
+}
+.navbar-brand-image {
+  height: 2.0rem !important;
+}
+
+/* Hide number arrows */
+.hide-arrows::-webkit-outer-spin-button,
+.hide-arrows::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.hide-arrows[type=number] {
+  -moz-appearance: textfield;
+}

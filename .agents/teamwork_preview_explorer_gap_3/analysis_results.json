@@ -1,0 +1,749 @@
+{
+  "frontend": [
+    {
+      "filename": "ActivationModal.jsx",
+      "rel_path": "components/ActivationModal.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "AppShell.jsx",
+      "rel_path": "components/AppShell.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "BranchesTab.jsx",
+      "rel_path": "components/BranchesTab.jsx",
+      "in_docs": false,
+      "in_todo": false
+    },
+    {
+      "filename": "CommissionModal.jsx",
+      "rel_path": "components/CommissionModal.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "DemoBanner.jsx",
+      "rel_path": "components/DemoBanner.jsx",
+      "in_docs": false,
+      "in_todo": false
+    },
+    {
+      "filename": "InventoryTab.jsx",
+      "rel_path": "components/InventoryTab.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "Navbar.jsx",
+      "rel_path": "components/Navbar.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "SalespersonsTab.jsx",
+      "rel_path": "components/SalespersonsTab.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "SuppliersTab.jsx",
+      "rel_path": "components/SuppliersTab.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "LicenseKeyInput.jsx",
+      "rel_path": "components/settings/LicenseKeyInput.jsx",
+      "in_docs": false,
+      "in_todo": false
+    },
+    {
+      "filename": "MachineIdDisplay.jsx",
+      "rel_path": "components/settings/MachineIdDisplay.jsx",
+      "in_docs": false,
+      "in_todo": false
+    },
+    {
+      "filename": "BranchSelection.jsx",
+      "rel_path": "pages/BranchSelection.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "Dashboard.jsx",
+      "rel_path": "pages/Dashboard.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "Expenses.jsx",
+      "rel_path": "pages/Expenses.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "Inventory.jsx",
+      "rel_path": "pages/Inventory.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "Login.jsx",
+      "rel_path": "pages/Login.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "POS.jsx",
+      "rel_path": "pages/POS.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "PosEntry.jsx",
+      "rel_path": "pages/PosEntry.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "ProductLedger.jsx",
+      "rel_path": "pages/ProductLedger.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "PurchaseEntry.jsx",
+      "rel_path": "pages/PurchaseEntry.jsx",
+      "in_docs": true,
+      "in_todo": true
+    },
+    {
+      "filename": "SearchPurchases.jsx",
+      "rel_path": "pages/SearchPurchases.jsx",
+      "in_docs": true,
+      "in_todo": true
+    },
+    {
+      "filename": "SearchReceipts.jsx",
+      "rel_path": "pages/SearchReceipts.jsx",
+      "in_docs": true,
+      "in_todo": true
+    },
+    {
+      "filename": "Setup.jsx",
+      "rel_path": "pages/Setup.jsx",
+      "in_docs": true,
+      "in_todo": true
+    },
+    {
+      "filename": "SystemInit.jsx",
+      "rel_path": "pages/SystemInit.jsx",
+      "in_docs": true,
+      "in_todo": true
+    },
+    {
+      "filename": "CashDrawerReport.jsx",
+      "rel_path": "pages/reports/CashDrawerReport.jsx",
+      "in_docs": false,
+      "in_todo": false
+    },
+    {
+      "filename": "DashboardReport.jsx",
+      "rel_path": "pages/reports/DashboardReport.jsx",
+      "in_docs": false,
+      "in_todo": false
+    },
+    {
+      "filename": "ExpensesReport.jsx",
+      "rel_path": "pages/reports/ExpensesReport.jsx",
+      "in_docs": false,
+      "in_todo": false
+    },
+    {
+      "filename": "InstallmentsReport.jsx",
+      "rel_path": "pages/reports/InstallmentsReport.jsx",
+      "in_docs": false,
+      "in_todo": false
+    },
+    {
+      "filename": "InventoryMovementReport.jsx",
+      "rel_path": "pages/reports/InventoryMovementReport.jsx",
+      "in_docs": false,
+      "in_todo": false
+    },
+    {
+      "filename": "ProfitAndLossReport.jsx",
+      "rel_path": "pages/reports/ProfitAndLossReport.jsx",
+      "in_docs": false,
+      "in_todo": false
+    },
+    {
+      "filename": "ReceiptsReport.jsx",
+      "rel_path": "pages/reports/ReceiptsReport.jsx",
+      "in_docs": false,
+      "in_todo": false
+    },
+    {
+      "filename": "ReportsIndex.jsx",
+      "rel_path": "pages/reports/ReportsIndex.jsx",
+      "in_docs": false,
+      "in_todo": false
+    },
+    {
+      "filename": "ReportsLayout.jsx",
+      "rel_path": "pages/reports/ReportsLayout.jsx",
+      "in_docs": false,
+      "in_todo": false
+    },
+    {
+      "filename": "SalespersonPerformanceReport.jsx",
+      "rel_path": "pages/reports/SalespersonPerformanceReport.jsx",
+      "in_docs": false,
+      "in_todo": false
+    },
+    {
+      "filename": "SettingsIndex.jsx",
+      "rel_path": "pages/settings/SettingsIndex.jsx",
+      "in_docs": false,
+      "in_todo": false
+    },
+    {
+      "filename": "CompanyTab.jsx",
+      "rel_path": "pages/settings/tabs/CompanyTab.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "SecurityTab.jsx",
+      "rel_path": "pages/settings/tabs/SecurityTab.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "SubscriptionTab.jsx",
+      "rel_path": "pages/settings/tabs/SubscriptionTab.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "BackupTab.jsx",
+      "rel_path": "pages/tools/BackupTab.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "LogsTab.jsx",
+      "rel_path": "pages/tools/LogsTab.jsx",
+      "in_docs": true,
+      "in_todo": true
+    },
+    {
+      "filename": "SmartImportTab.jsx",
+      "rel_path": "pages/tools/SmartImportTab.jsx",
+      "in_docs": true,
+      "in_todo": true
+    },
+    {
+      "filename": "SyncTab.jsx",
+      "rel_path": "pages/tools/SyncTab.jsx",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "filename": "ToolsDashboard.jsx",
+      "rel_path": "pages/tools/ToolsDashboard.jsx",
+      "in_docs": false,
+      "in_todo": false
+    }
+  ],
+  "backend": [
+    {
+      "type": "ViewSet",
+      "class_name": "CompanySettingViewSet",
+      "path": "/api/v1/company-settings/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "BranchViewSet",
+      "path": "/api/v1/branches/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "SalespersonViewSet",
+      "path": "/api/v1/salespersons/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "InventoryItemViewSet",
+      "path": "/api/v1/inventory-items/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [
+        {
+          "name": "safe_available_qty",
+          "path": "/api/v1/inventory-items/stock/",
+          "in_docs": true,
+          "in_todo": false
+        },
+        {
+          "name": "get_safe_available_qty",
+          "path": "/api/v1/inventory-items/get_safe_available_qty/",
+          "in_docs": false,
+          "in_todo": false
+        },
+        {
+          "name": "pos_search",
+          "path": "/api/v1/inventory-items/pos_search/",
+          "in_docs": false,
+          "in_todo": false
+        },
+        {
+          "name": "ledger",
+          "path": "/api/v1/inventory-items/ledger/",
+          "in_docs": true,
+          "in_todo": false
+        }
+      ],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "CommissionHistoryViewSet",
+      "path": "/api/v1/commission-histories/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "InventoryAdjustmentViewSet",
+      "path": "/api/v1/inventory-adjustments/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "SupplierViewSet",
+      "path": "/api/v1/suppliers/",
+      "in_docs": true,
+      "in_todo": true,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "PurchaseInvoiceViewSet",
+      "path": "/api/v1/purchase-invoices/",
+      "in_docs": true,
+      "in_todo": true,
+      "actions": [
+        {
+          "name": "desktop_print",
+          "path": "/api/v1/purchase-invoices/desktop_print/",
+          "in_docs": true,
+          "in_todo": false
+        }
+      ],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "PurchaseInvoiceItemViewSet",
+      "path": "/api/v1/purchase-invoice-items/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "ExpenseViewSet",
+      "path": "/api/v1/expenses/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "ReceiptViewSet",
+      "path": "/api/v1/receipts/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [
+        {
+          "name": "bulk_delete",
+          "path": "/api/v1/receipts/bulk_delete/",
+          "in_docs": true,
+          "in_todo": false
+        },
+        {
+          "name": "printers",
+          "path": "/api/v1/receipts/printers/",
+          "in_docs": false,
+          "in_todo": false
+        },
+        {
+          "name": "desktop_print",
+          "path": "/api/v1/receipts/desktop_print/",
+          "in_docs": true,
+          "in_todo": false
+        }
+      ],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "SaleItemViewSet",
+      "path": "/api/v1/sale-items/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "InstallmentPaymentViewSet",
+      "path": "/api/v1/installment-payments/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "PendingExternalReceiptViewSet",
+      "path": "/api/v1/pending-external-receipts/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "ClientLicenseViewSet",
+      "path": "/api/v1/client-licenses/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "UsedLicenseViewSet",
+      "path": "/api/v1/used-licenses/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "LicenseHistoryViewSet",
+      "path": "/api/v1/license-history/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "ViewSet",
+      "class_name": "ActionLogViewSet",
+      "path": "/api/v1/action-logs/",
+      "in_docs": true,
+      "in_todo": true,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "SystemInitializationView",
+      "path": "/api/v1/init/",
+      "in_docs": true,
+      "in_todo": true,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "CustomAuthToken",
+      "path": "/api/v1/auth/local/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "DemoAuthToken",
+      "path": "/api/v1/auth/demo/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "PasswordRecoveryView",
+      "path": "/api/v1/auth/recover/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "ChangePasswordView",
+      "path": "/api/v1/auth/change-password/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "LicenseStatusView",
+      "path": "/api/v1/license/status/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "LicenseActivateView",
+      "path": "/api/v1/license/activate/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "CustomerSuggestionsView",
+      "path": "/api/v1/customer-suggestions/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "ProductSuggestionsView",
+      "path": "/api/v1/product-suggestions/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "DefaultDateView",
+      "path": "/api/v1/default-date/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "DashboardReportView",
+      "path": "/api/v1/reports/dashboard/summary/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "DashboardReportView",
+      "path": "/api/v1/reports/dashboard/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "SalespersonPerformanceReportView",
+      "path": "/api/v1/reports/salespersons/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "SalespersonPerformanceReportView",
+      "path": "/api/v1/reports/salesperson-performance/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "InventoryMovementReportView",
+      "path": "/api/v1/reports/inventory-movement/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "ProfitAndLossReportView",
+      "path": "/api/v1/reports/sales-pl/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "ProfitAndLossReportView",
+      "path": "/api/v1/reports/profit-and-loss/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "CashDrawerReportView",
+      "path": "/api/v1/reports/cash-drawer-details/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "CashDrawerReportView",
+      "path": "/api/v1/reports/cash-drawer/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "InstallmentsReportView",
+      "path": "/api/v1/reports/installments/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "BackupDownloadView",
+      "path": "/api/v1/tools/backup/download/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "BackupUploadView",
+      "path": "/api/v1/tools/backup/upload/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "OfflineExportItemsView",
+      "path": "/api/v1/tools/sync/export-items/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "OfflineImportReceiptsView",
+      "path": "/api/v1/tools/sync/import-receipts/",
+      "in_docs": true,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "ApprovePendingReceiptView",
+      "path": "/api/v1/tools/sync/approve-pending/<int:pk>/",
+      "in_docs": false,
+      "in_todo": false,
+      "actions": [],
+      "registered": true
+    },
+    {
+      "type": "APIView",
+      "class_name": "SmartImportWizardView",
+      "path": "/api/v1/tools/smart-import/",
+      "in_docs": true,
+      "in_todo": true,
+      "actions": [],
+      "registered": true
+    }
+  ],
+  "unmapped": [
+    {
+      "class_name": "TenantViewSet",
+      "parent": "SoftDeleteModelViewSet",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "class_name": "CloudUserViewSet",
+      "parent": "TenantFromRequestMixin, SoftDeleteModelViewSet",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "class_name": "ViewerAuthView",
+      "parent": "views.APIView",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "class_name": "SyncPushView",
+      "parent": "views.APIView",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "class_name": "SyncPullView",
+      "parent": "views.APIView",
+      "in_docs": true,
+      "in_todo": false
+    },
+    {
+      "class_name": "ConfirmReceiptsView",
+      "parent": "views.APIView",
+      "in_docs": true,
+      "in_todo": false
+    }
+  ]
+}

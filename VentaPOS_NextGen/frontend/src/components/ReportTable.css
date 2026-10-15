@@ -1,0 +1,43 @@
+.report-table-container {
+  overflow-y: auto;
+  overflow-x: auto;
+  border: 1px solid var(--tblr-border-color, #dee2e6);
+}
+
+.report-table-container.hide-vertical-scroll::-webkit-scrollbar {
+  width: 0px; 
+  height: 8px; 
+}
+.report-table-container.hide-vertical-scroll::-webkit-scrollbar-track { 
+  background: #f1f1f1; 
+}
+.report-table-container.hide-vertical-scroll::-webkit-scrollbar-thumb { 
+  background: #c1c1c1; 
+  border-radius: 4px; 
+}
+.report-table-container.hide-vertical-scroll::-webkit-scrollbar-thumb:hover { 
+  background: #a8a8a8; 
+}
+.report-table-container.hide-vertical-scroll { 
+  scrollbar-width: thin; 
+}
+
+.report-table-container table {
+  margin-bottom: 0;
+}
+
+.report-sticky-header th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 1010;
+  background-color: #f8f9fa !important;
+  box-shadow: inset 0 -1px 0 var(--tblr-border-color, #dee2e6);
+}
+
+.report-sticky-header.level-2 th {
+  top: 40px !important;
+}
+
+.report-summary-card {
+  border-color: #adb5bd !important;
+}

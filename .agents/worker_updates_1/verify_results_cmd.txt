@@ -1,0 +1,115 @@
+Executing Documentation Gap Verification...
+
+Verifying Frontend Components...
+  [OK] Component 'Login' is documented.
+  [OK] Component 'Dashboard' is documented.
+  [OK] Component 'POS' is documented.
+  [OK] Component 'Setup' is documented.
+  [OK] Component 'AppShell' is documented.
+  [OK] Component 'ActivationModal' is documented.
+  [OK] Component 'DemoBanner' is listed in TODO.
+  [OK] Component 'SystemInit' is documented.
+  [OK] Component 'BranchSelection' is documented.
+  [OK] Component 'PurchaseEntry' is documented.
+  [OK] Component 'SearchPurchases' is documented.
+  [OK] Component 'Expenses' is documented.
+  [OK] Component 'SearchReceipts' is documented.
+  [OK] Component 'Inventory' is documented.
+  [OK] Component 'ProductLedger' is documented.
+  [OK] Component 'DashboardReport' is listed in TODO.
+  [OK] Component 'SalespersonPerformanceReport' is listed in TODO.
+  [OK] Component 'InventoryMovementReport' is listed in TODO.
+  [OK] Component 'ProfitAndLossReport' is listed in TODO.
+  [OK] Component 'CashDrawerReport' is listed in TODO.
+  [OK] Component 'ReportsIndex' is listed in TODO.
+  [OK] Component 'InstallmentsReport' is listed in TODO.
+  [OK] Component 'ToolsDashboard' is listed in TODO.
+  [OK] Component 'ReportsLayout' is listed in TODO.
+  [OK] Component 'ReceiptsReport' is listed in TODO.
+  [OK] Component 'ExpensesReport' is listed in TODO.
+  [OK] Component 'SettingsIndex' is listed in TODO.
+
+Verifying Frontend Routes...
+  [OK] Route '/init' is documented.
+  [OK] Route '/login' is documented.
+  [OK] Route '/select-branch' is listed in TODO.
+  [OK] Route 'dashboard' is documented.
+  [OK] Route 'pos' is documented.
+  [OK] Route 'setup' is documented.
+  [OK] Route 'receipts' is documented.
+  [OK] Route 'inventory' is documented.
+  [OK] Route 'product-ledger/:id' is listed in TODO.
+  [OK] Route 'search-purchases' is listed in TODO.
+  [OK] Route 'purchases/new' is listed in TODO.
+  [OK] Route 'purchases/edit/:id' is listed in TODO.
+  [OK] Route 'expenses' is documented.
+  [OK] Route 'reports' is documented.
+  [OK] Route 'dashboard' is documented.
+  [OK] Route 'receipts' is documented.
+  [OK] Route 'expenses' is documented.
+  [OK] Route 'salesperson' is documented.
+  [OK] Route 'inventory' is documented.
+  [OK] Route 'profit-and-loss' is documented.
+  [OK] Route 'cash-drawer' is documented.
+  [OK] Route 'installments' is documented.
+  [OK] Route 'tools/*' is documented.
+  [OK] Route 'settings' is documented.
+
+Verifying Backend Viewsets & Custom Actions...
+  [OK] Viewset 'CompanySettingViewSet' (company-settings) is documented.
+  [OK] Viewset 'BranchViewSet' (branches) is documented.
+  [OK] Viewset 'SalespersonViewSet' (salespersons) is documented.
+  [OK] Viewset 'InventoryItemViewSet' (inventory-items) is documented.
+    [OK] Action 'safe_available_qty' (/api/v1/inventory-items/stock/) is documented.
+    [OK] Action 'get_safe_available_qty' (/api/v1/inventory-items/get_safe_available_qty/) is listed in TODO.
+    [OK] Action 'pos_search' (/api/v1/inventory-items/pos_search/) is listed in TODO.
+    [OK] Action 'ledger' (/api/v1/inventory-items/ledger/) is documented.
+  [OK] Viewset 'CommissionHistoryViewSet' (commission-histories) is documented.
+  [OK] Viewset 'InventoryAdjustmentViewSet' (inventory-adjustments) is documented.
+  [OK] Viewset 'SupplierViewSet' (suppliers) is documented.
+  [OK] Viewset 'PurchaseInvoiceViewSet' (purchase-invoices) is documented.
+    [OK] Action 'desktop_print' (/api/v1/purchase-invoices/desktop_print/) is documented.
+  [OK] Viewset 'PurchaseInvoiceItemViewSet' (purchase-invoice-items) is documented.
+  [OK] Viewset 'ExpenseViewSet' (expenses) is documented.
+  [OK] Viewset 'ReceiptViewSet' (receipts) is documented.
+    [OK] Action 'bulk_delete' (/api/v1/receipts/bulk_delete/) is documented.
+    [OK] Action 'printers' (/api/v1/receipts/printers/) is listed in TODO.
+    [OK] Action 'desktop_print' (/api/v1/receipts/desktop_print/) is documented.
+  [OK] Viewset 'SaleItemViewSet' (sale-items) is documented.
+  [OK] Viewset 'InstallmentPaymentViewSet' (installment-payments) is documented.
+  [OK] Viewset 'PendingExternalReceiptViewSet' (pending-external-receipts) is documented.
+  [OK] Viewset 'ClientLicenseViewSet' (client-licenses) is documented.
+  [OK] Viewset 'UsedLicenseViewSet' (used-licenses) is documented.
+  [OK] Viewset 'LicenseHistoryViewSet' (license-history) is documented.
+  [OK] Viewset 'ActionLogViewSet' (action-logs) is documented.
+
+Verifying Backend Path Views...
+  [OK] Path View 'SystemInitializationView' (init/) is documented.
+  [OK] Path View 'CustomAuthToken' (auth/local/) is documented.
+  [OK] Path View 'DemoAuthToken' (auth/demo/) is documented.
+  [OK] Path View 'PasswordRecoveryView' (auth/recover/) is documented.
+  [OK] Path View 'ChangePasswordView' (auth/change-password/) is documented.
+  [OK] Path View 'LicenseStatusView' (license/status/) is documented.
+  [OK] Path View 'LicenseActivateView' (license/activate/) is documented.
+  [OK] Path View 'CustomerSuggestionsView' (customer-suggestions/) is documented.
+  [OK] Path View 'ProductSuggestionsView' (product-suggestions/) is documented.
+  [OK] Path View 'DefaultDateView' (default-date/) is documented.
+  [OK] Path View 'DashboardReportView' (reports/dashboard/summary/) is documented.
+  [OK] Path View 'DashboardReportView' (reports/dashboard/) is documented.
+  [OK] Path View 'SalespersonPerformanceReportView' (reports/salespersons/) is documented.
+  [OK] Path View 'SalespersonPerformanceReportView' (reports/salesperson-performance/) is documented.
+  [OK] Path View 'InventoryMovementReportView' (reports/inventory-movement/) is documented.
+  [OK] Path View 'ProfitAndLossReportView' (reports/sales-pl/) is documented.
+  [OK] Path View 'ProfitAndLossReportView' (reports/profit-and-loss/) is documented.
+  [OK] Path View 'CashDrawerReportView' (reports/cash-drawer-details/) is documented.
+  [OK] Path View 'CashDrawerReportView' (reports/cash-drawer/) is documented.
+  [OK] Path View 'InstallmentsReportView' (reports/installments/) is documented.
+  [OK] Path View 'BackupDownloadView' (tools/backup/download/) is documented.
+  [OK] Path View 'BackupUploadView' (tools/backup/upload/) is documented.
+  [OK] Path View 'OfflineExportItemsView' (tools/sync/export-items/) is documented.
+  [OK] Path View 'OfflineImportReceiptsView' (tools/sync/import-receipts/) is documented.
+  [OK] Path View 'ApprovePendingReceiptView' (tools/sync/approve-pending/<int:pk>/) is listed in TODO.
+  [OK] Path View 'SmartImportWizardView' (tools/smart-import/) is documented.
+
+-------------------------------------------
+Verification PASSED. 100% of active routes, components, and endpoints are documented or listed in TODO.

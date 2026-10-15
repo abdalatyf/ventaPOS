@@ -1,0 +1,96 @@
+# =====================================================================
+# VentaPOS Root .gitignore
+# Scope: Only VentaPOS_NextGen/, .agents/, and .gitignore are tracked
+# =====================================================================
+
+# --- Ignore Root Subsystems & Legacy Folders ---
+/Desktop/
+/Server/
+/Mobile/
+/django_hybrid_poc/
+/LicenseManager/
+/export_clean/
+/Agents/
+/old_docs/
+/Promo/
+/scratch/
+/ai_scripts/
+ai_scripts/
+
+# --- Ignore Root-Level Loose & Scratch Files ---
+/*.py
+/*.json
+/*.md
+/*.log
+/*.txt
+/*.patch
+/*.diff
+
+# --- Ensure .gitignore is tracked ---
+!.gitignore
+
+# --- Python / Django ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+.venv/
+venv/
+venv312/
+ENV/
+env.bak/
+venv.bak/
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Windows Python uncontained venvs & binaries
+Include/
+Lib/
+Scripts/
+bin/
+*.dll
+media/
+
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+
+# --- React / Node ---
+node_modules/
+.vite/
+test-results/
+playwright-report/
+frontend/dist/
+frontend/build/
+dist/
+build/
+react_build/
+staticfiles/
+.npm
+
+# --- PyInstaller / Desktop Artifacts ---
+build/
+dist/
+*.exe
+*.spec.bak
+*.dmg
+*.app
+*.manifest
+
+# --- IDE & OS ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
