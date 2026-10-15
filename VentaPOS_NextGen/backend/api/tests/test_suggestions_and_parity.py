@@ -85,7 +85,7 @@ class AutocompleteAndParityTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.data
         self.assertEqual(len(data), 1)
-        self.assertEqual(data[0]["value"], "٠١٢٩٩٩")
+        self.assertEqual(data[0]["value"], "012999")
 
     def test_product_suggestions_stock_validation(self):
         # Create an inventory item

@@ -132,10 +132,20 @@ class InventoryAdjustmentSerializer(serializers.ModelSerializer):
         model = InventoryAdjustment
         fields = [
             "id", "item", "adjustment_type",
-            "quantity", "reason", "adjustment_month", "adjustment_year",
+            "quantity", "reason", "month", "year",
             "is_deleted", "created_at",
         ]
         read_only_fields = ["id", "is_deleted", "created_at"]
+
+    def to_internal_value(self, data):
+        data_copy = data.copy() if hasattr(data, "copy") else dict(data)
+        if "adjustment_month" in data_copy and "month" not in data_copy:
+            data_copy["month"] = data_copy["adjustment_month"]
+        if "adjustment_year" in data_copy and "year" not in data_copy:
+            data_copy["year"] = data_copy["adjustment_year"]
+        if "inventory_item" in data_copy and "item" not in data_copy:
+            data_copy["item"] = data_copy["inventory_item"]
+        return super().to_internal_value(data_copy)
 
     def validate(self, data):
         if data.get("adjustment_type") == "DEFICIT":
@@ -143,9 +153,9 @@ class InventoryAdjustmentSerializer(serializers.ModelSerializer):
             from rest_framework.exceptions import ValidationError
             default_year, default_month = get_default_date()
             
-            target_year = data.get("adjustment_year", self.instance.adjustment_year if self.instance else None)
-            target_month = data.get("adjustment_month", self.instance.adjustment_month if self.instance else None)
-            item = data.get("inventory_item", self.instance.inventory_item if self.instance else None)
+            target_year = data.get("year", self.instance.year if self.instance else None)
+            target_month = data.get("month", self.instance.month if self.instance else None)
+            item = data.get("item", self.instance.item if self.instance else None)
             qty = data.get("quantity", self.instance.quantity if self.instance else None)
             
             if item and target_month and target_year and qty:

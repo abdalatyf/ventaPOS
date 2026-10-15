@@ -104,8 +104,19 @@ from .utils.security_utils import (
 
 
 # ===========================================================================
-# Date Range Helpers
+# Commission & Date Range Helpers
 # ===========================================================================
+
+def get_collection_commission_rate():
+    from api.models import CompanySetting
+    setting = CompanySetting.objects.first()
+    if setting and setting.collection_commission_rate is not None:
+        try:
+            val = float(setting.collection_commission_rate)
+            return (val / 100.0) if val > 1.0 else val
+        except (ValueError, TypeError):
+            pass
+    return 0.10
 
 
 
@@ -232,7 +243,7 @@ class PasswordRecoveryView(views.APIView):
         machine_id = get_machine_id()
         result = LicenseValidator.validate(recovery_code, machine_id)
         
-        if not result.get("valid") or result.get("product_id") != 15:
+        if not result.get("valid") or not (result.get("product_id") in (15, 16) or result.get("is_recovery")):
             return Response({"error": "كود الاسترداد غير صحيح أو غير مخصص لهذا الجهاز."}, status=400)
             
         code_hash = hashlib.sha256(recovery_code.encode()).hexdigest()
@@ -475,7 +486,7 @@ class InventoryItemViewSet(SoftDeleteModelViewSet):
                 ),
             })
 
-        for adj in InventoryAdjustment.objects.filter(inventory_item=item, is_deleted=False):
+        for adj in InventoryAdjustment.objects.filter(item=item, is_deleted=False):
             timeline.append({
                 "type": f"ADJUSTMENT_{adj.adjustment_type}",
                 "year": adj.year,
@@ -550,8 +561,9 @@ class InventoryItemViewSet(SoftDeleteModelViewSet):
                 else:
                     receipt_total = float(m.get("receipt_total", 0))
                     receipt_dp = float(m.get("receipt_down_payment", 0))
+                    coll_rate = get_collection_commission_rate()
                     coll_comm = (
-                        revenue * (receipt_total - receipt_dp) // (100 * receipt_total)
+                        (revenue * (receipt_total - receipt_dp) * coll_rate) / receipt_total
                         if receipt_total > 0
                         else 0.0
                     )
@@ -574,8 +586,9 @@ class InventoryItemViewSet(SoftDeleteModelViewSet):
                 else:
                     receipt_total = float(m.get("receipt_total", 0))
                     receipt_dp = float(m.get("receipt_down_payment", 0))
+                    coll_rate = get_collection_commission_rate()
                     coll_comm = (
-                        revenue * (receipt_total - receipt_dp) // (100 * receipt_total)
+                        (revenue * (receipt_total - receipt_dp) * coll_rate) / receipt_total
                         if receipt_total > 0
                         else 0.0
                     )
@@ -1361,14 +1374,16 @@ class LicenseActivateView(views.APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
             
-        if result.get("product_id") == 15:
+        if result.get("product_id") in (15, 16) or result.get("is_recovery"):
             return Response(
                 {"error": "هذا كود استرداد وليس كود تفعيل. الرجاء استخدامه في شاشة استعادة كلمة المرور."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        start_date = date(result["year"], result["month"], 1)
-        expiry_date = date(result["year"] + 1, result["month"], 1)
+        start_year = result.get("start_year") or result.get("year")
+        start_month = result.get("start_month") or result.get("month")
+        start_date = date(start_year, start_month, 1)
+        expiry_date = date(start_year + 1, start_month, 1)
         invoices_balance = result.get("invoices_balance", 5000)
         is_active = True
 
@@ -1627,7 +1642,7 @@ class CustomerSuggestionsView(views.APIView):
 
         results = []
         for item in suggestions_list[:15]:
-            results.append({"value": to_arabic_numerals(item["value"])})
+            results.append({"value": item["value"]})
 
         return Response(results)
 
@@ -1808,7 +1823,8 @@ class DashboardReportView(views.APIView):
         )
         credit_rev_sum = credit_receipts.aggregate(s=Sum('total_amount'))['s'] or 0
         credit_down_payment_sum = credit_receipts.aggregate(s=Sum('down_payment'))['s'] or 0
-        reserve_deduction = float(credit_rev_sum - credit_down_payment_sum) * 0.10
+        coll_rate = get_collection_commission_rate()
+        reserve_deduction = float(credit_rev_sum - credit_down_payment_sum) * coll_rate
 
         # 5. Operating Expenses
         operating_expenses = Expense.objects.filter(
@@ -1846,7 +1862,7 @@ class DashboardReportView(views.APIView):
                 is_deleted=False,
                 receipt__is_deleted=False
             ).aggregate(s=Sum('amount'))['s'] or 0
-            sp_comm_coll = float(sp_collected) * 0.10
+            sp_comm_coll = float(sp_collected) * coll_rate
 
             total_sales_commissions += sp_comm_sales
             total_collection_commissions += sp_comm_coll
@@ -2041,7 +2057,7 @@ class SalespersonPerformanceReportView(views.APIView):
                 comm_unit = get_cached_comm(item.inventory_item, item.receipt.sale_month, item.receipt.sale_year)
                 comm_sales += float(qty) * float(comm_unit)
                 
-            comm_coll = float(collected) * 0.10
+            comm_coll = float(collected) * get_collection_commission_rate()
             due_salary = float(comm_sales) + float(comm_coll)
             
             grand_total_cash += cash_sales
@@ -2179,7 +2195,8 @@ class InventoryMovementReportView(views.APIView):
             )
             if salesperson_id:
                 sales_qs = sales_qs.filter(receipt__salesperson_id=salesperson_id)
-            sales = sales_qs.aggregate(s=Sum('quantity'))['s'] or 0
+            sales = sales_qs.filter(receipt__receipt_type='SALE').aggregate(s=Sum('quantity'))['s'] or 0
+            sales_returns = sales_qs.filter(receipt__receipt_type='RETURN').aggregate(s=Sum('quantity'))['s'] or 0
             
             surplus = InventoryAdjustment.objects.filter(
                 item=item,
@@ -2208,6 +2225,8 @@ class InventoryMovementReportView(views.APIView):
                 "opening_stock": opening_stock,
                 "purchases": purchases,
                 "returns": returns,
+                "purchase_returns": returns,
+                "sales_returns": sales_returns,
                 "sales": sales,
                 "surplus": surplus,
                 "deficit": deficit,
@@ -2357,7 +2376,7 @@ class ProfitAndLossReportView(views.APIView):
                 if receipt.total_amount > 0:
                     item_rev = float(sale_item.quantity * sale_item.unit_price)
                     payment_diff = float(receipt.total_amount - receipt.down_payment)
-                    item_coll_comm = (item_rev * payment_diff * 0.10) / float(receipt.total_amount)
+                    item_coll_comm = (item_rev * payment_diff * get_collection_commission_rate()) / float(receipt.total_amount)
                     total_coll_comm += item_coll_comm
             
             coll_comm_per_unit = total_coll_comm / qty if qty > 0 else 0

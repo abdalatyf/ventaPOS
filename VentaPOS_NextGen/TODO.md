@@ -8,19 +8,19 @@
 
 ## Priority 0: Critical Backend Bug Fixes
 
-- [ ] **Fix `InventoryItem.get_stock_at_date()` in `models.py`**:
+- [x] **Fix `InventoryItem.get_stock_at_date()` in `models.py`**:
   - Filter `receipt__receipt_type='SALE'` for `total_sold`.
   - Add `total_sales_returns` (where `receipt__receipt_type='RETURN'`) to the additive side of stock calculation.
   - Formula: $\text{Stock} = \max(0, \text{initial\_qty} + \text{purchases} + \text{surplus} + \text{sales\_returns} - \text{sales} - \text{purchase\_returns} - \text{deficit})$.
-- [ ] **Fix `InventoryAdjustmentSerializer` in `serializers.py`**:
+- [x] **Fix `InventoryAdjustmentSerializer` in `serializers.py`**:
   - Fix field names in `Meta.fields` and `validate()` to use `month`, `year`, and `item` (matching `models.py`), replacing outdated names `adjustment_month`, `adjustment_year`, and `inventory_item`.
-- [ ] **Fix `get_safe_available_qty()` Signature Mismatch**:
+- [x] **Fix `get_safe_available_qty()` Signature Mismatch**:
   - Update `InventoryItem.get_safe_available_qty()` in `models.py` to accept `return_bottleneck=False` and optionally return `(min_stock, bottleneck_month, bottleneck_year)`, resolving the `TypeError` currently triggered by `views.py` `safe_available_qty`.
-- [ ] **Replace Hardcoded `0.10` Collection Commission in `views.py`**:
+- [x] **Replace Hardcoded `0.10` Collection Commission in `views.py`**:
   - Replace static `0.10` multiplier in `DashboardReportView` (L1811, L1849), `SalespersonPerformanceReportView` (L2044), `ProfitAndLossReportView` (L2360), and `ledger` with dynamic `CompanySetting.collection_commission_rate`.
-- [ ] **Enforce Universal Western Digits in `CustomerSuggestionsView`**:
+- [x] **Enforce Universal Western Digits in `CustomerSuggestionsView`**:
   - Remove `to_arabic_numerals()` formatting on line 1630 of `views.py`, adhering to the project-wide ASCII `0-9` rule.
-- [ ] **Align Recovery Code `product_id` across Licensing Handlers**:
+- [x] **Align Recovery Code `product_id` across Licensing Handlers**:
   - Verify and synchronize Recovery Code product ID (value `15` vs `16`) across `LicenseValidator.validate()`, `PasswordRecoveryView`, and `LicenseActivateView`.
 
 ---

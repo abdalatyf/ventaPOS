@@ -146,11 +146,18 @@ class InventoryItem(models.Model):
             Q(invoice__invoice_year=year, invoice__invoice_month__lte=month)
         ).aggregate(total=Sum('quantity'))['total'] or 0
 
-        total_sold = self.saleitem_set.filter(
+        sales_qs = self.saleitem_set.filter(
             is_deleted=False, receipt__is_deleted=False
         ).filter(
             Q(receipt__sale_year__lt=year) |
             Q(receipt__sale_year=year, receipt__sale_month__lte=month)
+        )
+        total_sold = sales_qs.filter(
+            receipt__receipt_type='SALE'
+        ).aggregate(total=Sum('quantity'))['total'] or 0
+
+        total_sales_returns = sales_qs.filter(
+            receipt__receipt_type='RETURN'
         ).aggregate(total=Sum('quantity'))['total'] or 0
 
         adjustments = self.adjustments.filter(
@@ -162,7 +169,7 @@ class InventoryItem(models.Model):
         total_surplus = adjustments.filter(adjustment_type='SURPLUS').aggregate(total=Sum('quantity'))['total'] or 0
 
         final_stock = (
-            self.initial_quantity + total_purchased + total_surplus
+            self.initial_quantity + total_purchased + total_surplus + total_sales_returns
         ) - (total_sold + total_returned + total_deficit)
         return max(0, final_stock)
 
@@ -191,27 +198,39 @@ class InventoryItem(models.Model):
             return latest_purchase.purchase_price
         return self.initial_purchase_price
 
-    def get_safe_available_qty(self, target_month, target_year, default_month, default_year):
+    def get_safe_available_qty(self, target_month, target_year, default_month, default_year, return_bottleneck=False):
         """
         Calculates the maximum quantity that can be safely sold at (target_month, target_year)
         without causing any future month's stock up to (default_month, default_year) to become negative.
+        If return_bottleneck is True, returns (safe_qty, bottleneck_month, bottleneck_year).
+        Otherwise returns safe_qty as integer.
         """
         if (target_year, target_month) >= (default_year, default_month):
-            return self.get_stock_at_date(target_month, target_year)
+            stock = self.get_stock_at_date(target_month, target_year)
+            if return_bottleneck:
+                return stock, target_month, target_year
+            return stock
         
         min_stock = None
+        b_month = target_month
+        b_year = target_year
         curr_year, curr_month = target_year, target_month
         while (curr_year, curr_month) <= (default_year, default_month):
             stock = self.get_stock_at_date(curr_month, curr_year)
             if min_stock is None or stock < min_stock:
                 min_stock = stock
+                b_month = curr_month
+                b_year = curr_year
             
             curr_month += 1
             if curr_month > 12:
                 curr_month = 1
                 curr_year += 1
                 
-        return min_stock if min_stock is not None else 0
+        safe_qty = min_stock if min_stock is not None else 0
+        if return_bottleneck:
+            return safe_qty, b_month, b_year
+        return safe_qty
 
 
 # ===========================================================================
@@ -550,7 +569,7 @@ class CompanySetting(models.Model):
     footer_text = models.CharField(max_length=250, default="تطبق الشروط والأحكام")
     is_cloud_viewer = models.BooleanField(default=False)
     collection_commission_rate = models.DecimalField(
-        max_digits=5, decimal_places=2, default=0.00,
+        max_digits=5, decimal_places=2, default=0.10,
         verbose_name="نسبة عمولة التحصيل"
     )
     zoom_level = models.DecimalField(

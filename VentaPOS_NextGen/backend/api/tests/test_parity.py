@@ -910,7 +910,7 @@ class PosEntryParityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(len(data), 1)
-        self.assertEqual(data[0]["value"], "٠١٠١٢٣٤٥٦٧")
+        self.assertEqual(data[0]["value"], "0101234567")
 
     def test_retro_stock_validation_error(self):
         item = _make_item(self.branch, name="صنف شحيح", initial_qty=5, initial_month=1, initial_year=2026)

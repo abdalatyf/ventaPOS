@@ -75,12 +75,16 @@ class LicenseValidator:
             year = cls.BASE_YEAR + (extracted_date_code // 12)
             month = (extracted_date_code % 12) + 1
             real_product_id = extracted_prod + 1
+            is_recovery = (extracted_prod in (14, 15) or real_product_id in (15, 16))
 
             return {
                 "valid": True,
                 "product_id": real_product_id,
+                "is_recovery": is_recovery,
                 "start_month": month,
-                "start_year": year
+                "start_year": year,
+                "month": month,
+                "year": year
             }
 
         except Exception:
