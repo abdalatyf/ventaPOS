@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { IconTrash, IconPlus, IconLoader, IconEdit, IconCheck, IconX, IconSortAscending, IconSortDescending, IconSearch } from '@tabler/icons-react';
 import toast from 'react-hot-toast';
 import api from '../api';
+import useSmartScroll from '../hooks/useSmartScroll';
 import { useStandardTableSlots } from './common/StandardTablePageLayout';
 
 export default function SuppliersTab() {
+  const { setTableRef } = useSmartScroll();
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -191,7 +193,7 @@ export default function SuppliersTab() {
 
       {/* الجدول */}
       <div className="card shadow-sm border-secondary-subtle">
-        <div className="table-responsive" style={{ overflow: 'visible' }}>
+        <div ref={setTableRef} className="table-responsive report-table-container">
           <table className="table table-vcenter table-bordered table-hover text-nowrap table-sticky-header mb-0">
             <thead className="bg-light">
               <tr>

@@ -51,32 +51,42 @@ body {
   overflow: visible;
 }
 
-/* Ensure table container does not trap sticky header */
-.standard-page-table-area .table-responsive,
+/* 2-Scroll Table Container (Window Scroll -> Internal Table Y & X Scroll) */
 .report-table-container {
-  overflow: visible !important;
-  max-height: none !important;
+  overflow-x: auto !important;
+  overflow-y: auto;
+  max-height: calc((100vh / var(--app-zoom, 1)) - 76px);
 }
 
-/* 2. Window-Level Sticky Table Header (Sticks directly beneath 56px Navbar) */
-.table-sticky-header th,
-.report-sticky-header th,
-.report-sticky-header tr:first-child th {
+/* Inside .report-table-container, sticky table headers stick at top: 0 of the container */
+.report-table-container .table-sticky-header th,
+.report-table-container .report-sticky-header th,
+.report-table-container .report-sticky-header tr:first-child th,
+.report-table-container thead th {
   position: sticky !important;
-  top: var(--navbar-height, 56px) !important;
+  top: 0 !important;
   z-index: 1010;
   background-color: #f8f9fa !important;
   box-shadow: inset 0 -1px 0 var(--tblr-border-color, #dee2e6);
 }
 
-/* Two-Level Header Sticky Support (e.g., SalespersonPerformanceReport) */
-.report-sticky-header tr.level-2 th,
-tr.report-sticky-header.level-2 th {
+/* Two-Level Header Sticky Support inside .report-table-container (SalespersonPerformanceReport) */
+.report-table-container .report-sticky-header tr.level-2 th,
+.report-table-container tr.report-sticky-header.level-2 th {
   position: sticky !important;
-  top: calc(var(--navbar-height, 56px) + 37px) !important;
+  top: var(--header-row-1-height, 37px) !important;
   z-index: 1009;
   background-color: #f8f9fa !important;
   box-shadow: inset 0 -2px 0 var(--tblr-border-color, #dee2e6);
+}
+
+/* Standalone window-level sticky tables outside .report-table-container (e.g., ProductLedger) */
+:not(.report-table-container) > .table-sticky-header th {
+  position: sticky !important;
+  top: var(--navbar-height, 56px) !important;
+  z-index: 1010;
+  background-color: #f8f9fa !important;
+  box-shadow: inset 0 -1px 0 var(--tblr-border-color, #dee2e6);
 }
 
 

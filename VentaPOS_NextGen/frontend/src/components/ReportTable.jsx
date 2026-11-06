@@ -392,7 +392,7 @@ export default function ReportTable({
         tabIndex={0}
         onKeyDown={handleKeyDown}
         className="table-responsive hide-vertical-scroll report-table-container flex-grow-1 rounded-bottom focus-ring-none" 
-        style={{ outline: 'none', overflow: 'visible' }}
+        style={{ outline: 'none' }}
       >
         <table className="table table-bordered table-vcenter table-hover mb-0 text-nowrap table-sticky-header">
           {children ? (

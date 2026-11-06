@@ -74,6 +74,9 @@ describe('POS & Standardized Table Pages Mount Tests', () => {
         expect(container.querySelector('.standard-top-row-2')).not.toBeNull();
         expect(container.querySelector('.standard-page-table-area')).not.toBeNull();
         expect(container.querySelector('.table-sticky-header, .report-sticky-header')).not.toBeNull();
+        const tableContainer = container.querySelector('.report-table-container');
+        expect(tableContainer).not.toBeNull();
+        expect(tableContainer.style.overflow).not.toBe('visible');
       }, { timeout: 3000 });
       unmount();
     }

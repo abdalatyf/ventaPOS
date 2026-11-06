@@ -4,6 +4,7 @@ import api from '../api';
 import { IconTrash, IconPlus, IconLoader, IconFilter, IconReceipt, IconSortAscending, IconSortDescending, IconSearch, IconEdit } from '@tabler/icons-react';
 import toast from 'react-hot-toast';
 import Swal from 'sweetalert2';
+import useSmartScroll from '../hooks/useSmartScroll';
 import { useDefaultDate } from '../hooks/useDefaultDate';
 import StandardTablePageLayout from '../components/common/StandardTablePageLayout';
 
@@ -15,6 +16,7 @@ const fmtNum = (val) => {
 const CATEGORY_PRESETS = ['مصروفات عامة', 'إيجار', 'كهرباء ومياه', 'نقل ومشال', 'صيانة', 'نثريات'];
 
 export default function Expenses() {
+  const { setTableRef } = useSmartScroll();
   const branchId = localStorage.getItem('branchId');
   const { defaultMonth, defaultYear, loading: defaultLoading } = useDefaultDate(branchId);
   const [searchParams] = useSearchParams();
@@ -340,7 +342,7 @@ export default function Expenses() {
 
       {/* ── Table Card ── */}
       <div className="card shadow-sm border-secondary-subtle">
-        <div className="table-responsive" style={{ overflow: 'visible' }}>
+        <div ref={setTableRef} className="table-responsive report-table-container">
           <table className="table table-vcenter table-hover card-table table-bordered m-0 table-sticky-header text-nowrap tabular-nums" style={{ borderCollapse: 'collapse' }}>
             <thead>
               <tr>

@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom';
 import { IconTrash, IconPlus, IconEdit, IconLoader, IconSortAscending, IconSortDescending, IconFileText, IconSearch } from '@tabler/icons-react';
 import toast from 'react-hot-toast';
 import api from '../api';
+import useSmartScroll from '../hooks/useSmartScroll';
 import { fmt, parseNumber } from '../utils/formatUtils';
 import { useStandardTableSlots } from './common/StandardTablePageLayout';
 
 export default function InventoryTab() {
+  const { setTableRef } = useSmartScroll();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -343,7 +345,7 @@ export default function InventoryTab() {
 
       {/* الجدول */}
       <div className="card shadow-sm border-secondary-subtle">
-        <div className="table-responsive" style={{ overflow: 'visible' }}>
+        <div ref={setTableRef} className="table-responsive report-table-container">
           <table className="table table-vcenter table-bordered table-hover text-nowrap table-sticky-header mb-0">
             <thead className="bg-light">
               <tr>

@@ -1,4 +1,5 @@
 import React from 'react';
+import useSmartScroll from '../../hooks/useSmartScroll';
 import { IconReceipt } from '@tabler/icons-react';
 import PurchaseInvoiceRow from './PurchaseInvoiceRow';
 
@@ -15,9 +16,11 @@ export default function PurchaseTable({
   lastRowElementRef,
   loadingMore
 }) {
+  const { setTableRef } = useSmartScroll();
+
   return (
     <div className="card shadow-sm border-secondary-subtle rounded bg-white mb-3">
-      <div className="table-responsive flex-grow-1" style={{ overflow: 'visible' }}>
+      <div ref={setTableRef} className="table-responsive report-table-container flex-grow-1">
         <table className="table table-sm table-bordered table-vcenter table-hover table-sticky-header text-nowrap tabular-nums mb-0">
           <thead className="bg-light">
             <tr>

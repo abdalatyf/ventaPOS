@@ -27,7 +27,7 @@ export default function ReceiptsTable({
 }) {
   return (
     <div className="card shadow-sm border-secondary-subtle mb-3 flex-grow-1">
-      <div ref={setTableRef} className="table-responsive flex-grow-1" style={{ overflow: 'visible' }}>
+      <div ref={setTableRef} className="table-responsive report-table-container flex-grow-1">
         <table className="table table-sm table-bordered table-vcenter table-hover table-sticky-header text-nowrap tabular-nums mb-0">
           <thead className="bg-light">
             <tr>
