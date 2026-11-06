@@ -1,32 +1,36 @@
 @echo off
+chcp 65001 >nul
 title VentaPOS License Manager Launcher
 cd /d "%~dp0"
 
 echo ========================================================
-echo  VentaPOS License Manager Launcher
+echo  VentaPOS License Manager Launcher [Live Console Mode]
 echo ========================================================
 echo Current directory: %CD%
 
-if exist "dist\VentaPOS_LicenseManager\VentaPOS_LicenseManager.exe" (
-    echo Starting compiled VentaPOS License Manager...
-    "dist\VentaPOS_LicenseManager\VentaPOS_LicenseManager.exe"
-    goto :end
-)
+set PYTHONUNBUFFERED=1
+set PYTHONIOENCODING=utf-8
 
 if exist "..\VentaPOS_NextGen\venv\Scripts\python.exe" (
     echo Starting VentaPOS License Manager using VentaPOS_NextGen venv...
-    "..\VentaPOS_NextGen\venv\Scripts\python.exe" launcher.py
+    "..\VentaPOS_NextGen\venv\Scripts\python.exe" -u launcher.py
     goto :end
 )
 
 if exist "venv\Scripts\python.exe" (
     echo Starting VentaPOS License Manager using local venv...
-    "venv\Scripts\python.exe" launcher.py
+    "venv\Scripts\python.exe" -u launcher.py
     goto :end
 )
 
-echo [ERROR] Could not find compiled executable (dist\VentaPOS_LicenseManager\VentaPOS_LicenseManager.exe)
-echo         or virtual environment Python (venv\Scripts\python.exe).
+if exist "dist\VentaPOS_LicenseManager\VentaPOS_LicenseManager.exe" (
+    echo Warning: Virtual environment not found. Starting compiled executable...
+    "dist\VentaPOS_LicenseManager\VentaPOS_LicenseManager.exe"
+    goto :end
+)
+
+echo [ERROR] Could not find virtual environment Python (..\VentaPOS_NextGen\venv\Scripts\python.exe or venv\Scripts\python.exe)
+echo         or compiled executable (dist\VentaPOS_LicenseManager\VentaPOS_LicenseManager.exe).
 
 :end
 echo.

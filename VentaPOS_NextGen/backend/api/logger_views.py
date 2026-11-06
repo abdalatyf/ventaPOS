@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -7,6 +8,22 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from django.conf import settings
+
+def safe_console_print(msg):
+    try:
+        print(msg, flush=True)
+    except UnicodeEncodeError:
+        try:
+            if hasattr(sys.stdout, 'buffer') and sys.stdout.buffer:
+                sys.stdout.buffer.write((msg + '\n').encode('utf-8', errors='replace'))
+                sys.stdout.buffer.flush()
+            else:
+                encoded = msg.encode('ascii', errors='replace').decode('ascii')
+                print(encoded, flush=True)
+        except Exception:
+            pass
+    except Exception:
+        pass
 
 def get_frontend_logger():
     logger = logging.getLogger('frontend_console')
@@ -46,10 +63,25 @@ class FrontendLogView(APIView):
         try:
             logger = get_frontend_logger()
             for log_entry in logs:
+                if not isinstance(log_entry, dict):
+                    continue
                 level = str(log_entry.get('level', 'INFO')).upper()
-                message = log_entry.get('message', '')
+                message = str(log_entry.get('message', ''))
+                details = log_entry.get('details', '')
+                url = log_entry.get('url', '')
                 timestamp = log_entry.get('timestamp', datetime.now().isoformat())
-                logger.info(f"[{timestamp}] [{level}] {message}")
+
+                # Format for file logger
+                details_file = f" | {details}" if details else ""
+                url_file = f" [{url}]" if url else ""
+                logger.info(f"[{timestamp}] [{level}]{url_file} {message}{details_file}")
+
+                # Stream live to stdout/cmd console
+                details_cli = f" | {details}" if details else ""
+                url_cli = f" [{url}]" if url else ""
+                safe_console_print(f"[FRONTEND][{level}]{url_cli} {message}{details_cli}")
+
             return Response({"status": "success"})
         except Exception as e:
+            safe_console_print(f"[FRONTEND][LOGGER_ERROR] Failed to process logs: {e}")
             return Response({"status": "error", "message": str(e)}, status=500)

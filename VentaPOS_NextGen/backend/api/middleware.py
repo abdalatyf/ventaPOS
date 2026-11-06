@@ -1,7 +1,67 @@
+import sys
+import time
 from django.utils import timezone
 from django.http import JsonResponse
 from api.models import ClientLicense, Receipt
 from api.utils.security_utils import generate_record_signature, get_machine_id
+
+def safe_console_print(msg):
+    try:
+        print(msg, flush=True)
+    except UnicodeEncodeError:
+        try:
+            if hasattr(sys.stdout, 'buffer') and sys.stdout.buffer:
+                sys.stdout.buffer.write((msg + '\n').encode('utf-8', errors='replace'))
+                sys.stdout.buffer.flush()
+            else:
+                encoded = msg.encode('ascii', errors='replace').decode('ascii')
+                print(encoded, flush=True)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+class ConsoleRequestLoggingMiddleware:
+    """
+    Measures request duration and streams live [BACKEND] HTTP request/response
+    and error logs directly to the cmd console window.
+    """
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # Exclude frontend log uploads to prevent duplicate/recursive logging
+        if request.path.startswith('/api/v1/frontend-logs/'):
+            return self.get_response(request)
+
+        start_time = time.time()
+        try:
+            response = self.get_response(request)
+        except Exception as exc:
+            duration_ms = int((time.time() - start_time) * 1000)
+            safe_console_print(f"[BACKEND][ERROR] {request.method} {request.get_full_path()} -> EXCEPTION: {exc} ({duration_ms}ms)")
+            raise
+
+        duration_ms = int((time.time() - start_time) * 1000)
+        status = response.status_code
+
+        if status >= 400:
+            err_detail = ""
+            try:
+                if hasattr(response, 'data') and response.data:
+                    err_detail = f" | {response.data}"
+                elif hasattr(response, 'content') and response.content:
+                    raw = response.content.decode('utf-8', errors='ignore').strip()
+                    if raw:
+                        err_detail = f" | {raw[:200]}"
+            except Exception:
+                pass
+            safe_console_print(f"[BACKEND][ERROR] {request.method} {request.get_full_path()} -> {status} ({duration_ms}ms){err_detail}")
+        else:
+            safe_console_print(f"[BACKEND] {request.method} {request.get_full_path()} -> {status} ({duration_ms}ms)")
+
+        return response
+
 
 WHITELIST_PREFIXES = [
     '/admin/',

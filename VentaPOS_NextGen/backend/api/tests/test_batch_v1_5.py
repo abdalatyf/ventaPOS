@@ -159,3 +159,34 @@ class BatchV15SPACatchAllExclusionsTests(TestCase):
         # A standard SPA client route like /dimensions should match TemplateView and return 200
         res_spa = self.django_client.get('/dimensions')
         self.assertEqual(res_spa.status_code, 200)
+
+
+class BatchV15FrontendLogsAndMiddlewareTests(TestCase):
+    def setUp(self):
+        self.django_client = Client()
+
+    def test_frontend_logs_endpoint_list(self):
+        payload = {
+            "logs": [
+                {"level": "INFO", "message": "User navigated to /pos", "url": "/pos"},
+                {"level": "WARN", "message": "Slow network response", "details": "500ms", "url": "/pos"},
+            ]
+        }
+        res = self.django_client.post('/api/v1/frontend-logs/', payload, content_type='application/json')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json().get("status"), "success")
+
+    def test_frontend_logs_endpoint_single_object(self):
+        payload = {
+            "level": "ERROR",
+            "message": "Uncaught Error: Test error",
+            "details": "Error at main.jsx:10",
+            "url": "/receipts"
+        }
+        res = self.django_client.post('/api/v1/frontend-logs/', payload, content_type='application/json')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json().get("status"), "success")
+
+    def test_frontend_logs_endpoint_empty_payload(self):
+        res = self.django_client.post('/api/v1/frontend-logs/', {}, content_type='application/json')
+        self.assertEqual(res.status_code, 400)
