@@ -380,17 +380,13 @@ export default function ReceiptsReport() {
         columns={columns}
         data={receipts}
         loading={loading && receipts.length === 0}
+        loadingMore={loadingMore}
         summaryCards={summaryCards}
         renderFilters={renderFilters}
         renderRow={renderRow}
         emptyMessage="لا توجد فواتير لهذه المعايير"
         emptyIcon={IconReceipt}
       />
-      {loadingMore && (
-        <div className="text-center py-3">
-          <div className="spinner-border spinner-border-sm text-primary" role="status"></div>
-        </div>
-      )}
     </div>
   );
 }

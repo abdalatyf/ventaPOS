@@ -188,86 +188,6 @@ export default function Expenses() {
       title="المصروفات اليومية والشهرية"
       icon={IconReceipt}
       row1={
-        <div className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
-          {/* Month */}
-          <div style={{ width: '90px' }} className="flex-shrink-0">
-            <div className="input-group input-group-sm">
-              <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">الشهر</span>
-              <input 
-                type="number" 
-                className="form-control text-center fw-bold border-secondary-subtle px-1" 
-                value={expenseMonth} 
-                onChange={(e) => setExpenseMonth(e.target.value)} 
-                min="1" 
-                max="12" 
-              />
-            </div>
-          </div>
-
-          {/* Year */}
-          <div style={{ width: '90px' }} className="flex-shrink-0">
-            <div className="input-group input-group-sm">
-              <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">السنة</span>
-              <input 
-                type="number" 
-                className="form-control text-center fw-bold border-secondary-subtle px-1" 
-                value={expenseYear} 
-                onChange={(e) => setExpenseYear(e.target.value)} 
-                min="2020" 
-                max="2050" 
-              />
-            </div>
-          </div>
-
-          {/* Filter button */}
-          <button className="btn btn-primary btn-sm px-2 fw-bold border-secondary-subtle flex-shrink-0 d-flex align-items-center gap-1" onClick={fetchExpenses} disabled={loading}>
-            <IconFilter size={14} />
-            <span>تصفية</span>
-          </button>
-
-          {/* Category Filter */}
-          <div style={{ width: '130px' }} className="flex-shrink-0">
-            <select
-              className="form-select form-select-sm border-secondary-subtle fw-bold"
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-            >
-              <option value="">كل التصنيفات</option>
-              {CATEGORY_PRESETS.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Live Search */}
-          <div className="flex-grow-1" style={{ minWidth: '150px' }}>
-            <div className="input-icon">
-              <span className="input-icon-addon"><IconSearch size={14}/></span>
-              <input 
-                type="text" 
-                className="form-control form-control-sm border-secondary-subtle fw-bold" 
-                placeholder="بحث في المصروفات..." 
-                value={searchQuery} 
-                onChange={(e) => setSearchQuery(e.target.value)} 
-              />
-            </div>
-          </div>
-
-          {/* Count Badge */}
-          <span className="badge bg-secondary text-white rounded-pill px-2 py-1 tabular-nums flex-shrink-0">
-            {filteredAndSortedExpenses.length} مصروف
-          </span>
-
-          {/* Total badge */}
-          <div className="ms-auto flex-shrink-0 d-flex align-items-center">
-            <div className="text-dark fw-bold fs-4 border px-3 py-1 bg-white rounded shadow-sm d-flex align-items-center gap-2" style={{ borderColor: '#adb5bd' }}>
-              <span>إجمالي المصروفات:</span>
-              <span className="text-danger fw-bolder fs-4 tabular-nums">{fmtNum(totalExpenses)}</span>
-            </div>
-          </div>
-        </div>
-      }
-      row2={
         <form onSubmit={handleAddExpense} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
           {/* Description */}
           <div className="flex-grow-1" style={{ minWidth: '180px' }}>
@@ -341,7 +261,90 @@ export default function Expenses() {
       {error && <div className="alert alert-danger mb-2 py-1">{error}</div>}
 
       {/* ── Table Card ── */}
-      <div className="card shadow-sm border-secondary-subtle">
+      <div className="card shadow-sm border-secondary-subtle mb-0">
+        {/* Row 1 of Table Card: Sticky Toolbar directly above <thead> */}
+        <div className="sticky-toolbar border-bottom px-3 d-flex align-items-center justify-content-between gap-2 d-print-none">
+          <div className="d-flex align-items-center gap-2 flex-grow-1" style={{ minWidth: 0, overflow: 'visible' }}>
+            {/* Month */}
+            <div style={{ width: '85px' }} className="flex-shrink-0">
+              <div className="input-group input-group-sm">
+                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">الشهر</span>
+                <input 
+                  type="number" 
+                  className="form-control text-center fw-bold border-secondary-subtle px-1" 
+                  value={expenseMonth} 
+                  onChange={(e) => setExpenseMonth(e.target.value)} 
+                  min="1" 
+                  max="12" 
+                />
+              </div>
+            </div>
+
+            {/* Year */}
+            <div style={{ width: '85px' }} className="flex-shrink-0">
+              <div className="input-group input-group-sm">
+                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">السنة</span>
+                <input 
+                  type="number" 
+                  className="form-control text-center fw-bold border-secondary-subtle px-1" 
+                  value={expenseYear} 
+                  onChange={(e) => setExpenseYear(e.target.value)} 
+                  min="2020" 
+                  max="2050" 
+                />
+              </div>
+            </div>
+
+            {/* Filter button */}
+            <button className="btn btn-primary btn-sm px-2 fw-bold border-secondary-subtle flex-shrink-0 d-flex align-items-center gap-1" onClick={fetchExpenses} disabled={loading}>
+              <IconFilter size={14} />
+              <span>تصفية</span>
+            </button>
+
+            {/* Category Filter */}
+            <div style={{ width: '130px' }} className="flex-shrink-0">
+              <select
+                className="form-select form-select-sm border-secondary-subtle fw-bold"
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+              >
+                <option value="">كل التصنيفات</option>
+                {CATEGORY_PRESETS.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Live Search */}
+            <div className="flex-grow-1" style={{ minWidth: '150px' }}>
+              <div className="input-icon">
+                <span className="input-icon-addon"><IconSearch size={14}/></span>
+                <input 
+                  type="text" 
+                  className="form-control form-control-sm border-secondary-subtle fw-bold" 
+                  placeholder="بحث في المصروفات..." 
+                  value={searchQuery} 
+                  onChange={(e) => setSearchQuery(e.target.value)} 
+                />
+              </div>
+            </div>
+
+            {/* Count Badge */}
+            <span className="badge bg-secondary text-white rounded-pill px-2 py-1 tabular-nums flex-shrink-0">
+              {filteredAndSortedExpenses.length} مصروف
+            </span>
+          </div>
+
+          {/* Total badge */}
+          <div className="ms-auto flex-shrink-0 d-flex align-items-center">
+            <div className="text-dark fw-bold fs-4 border px-3 py-1 bg-white rounded shadow-sm d-flex align-items-center gap-2" style={{ borderColor: '#adb5bd' }}>
+              <span>إجمالي المصروفات:</span>
+              <span className="text-danger fw-bolder fs-4 tabular-nums">{fmtNum(totalExpenses)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 2 of Table Card: Table Container */}
         <div ref={setTableRef} className="table-responsive report-table-container">
           <table className="table table-vcenter table-hover card-table table-bordered m-0 table-sticky-header text-nowrap tabular-nums" style={{ borderCollapse: 'collapse' }}>
             <thead>

@@ -158,31 +158,6 @@ export default function SuppliersTab() {
           {filteredAndSortedSuppliers.length} مورد
         </span>
       </div>
-    ),
-    row2: (
-      <form onSubmit={handleAdd} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
-        <div className="flex-grow-1" style={{ minWidth: '200px' }}>
-          <input 
-            ref={nameInputRef} 
-            type="text" 
-            className="form-control form-control-sm border-secondary-subtle fw-bold" 
-            value={newSupplierName} 
-            onChange={(e) => setNewSupplierName(e.target.value)} 
-            placeholder="اسم المورد / المصنع الجديد... *" 
-            required 
-            autoFocus 
-            disabled={submitting || loading} 
-          />
-        </div>
-        <button 
-          type="submit" 
-          className="btn btn-sm btn-primary fw-bold px-3 py-1 flex-shrink-0 d-flex align-items-center gap-1 border-secondary-subtle" 
-          disabled={submitting || loading}
-        >
-          {submitting ? <IconLoader className="icon-spin" size={14} /> : <IconPlus size={14} />}
-          <span>إضافة مورد</span>
-        </button>
-      </form>
     )
   });
 
@@ -192,7 +167,35 @@ export default function SuppliersTab() {
       {error && <div className="alert alert-danger mb-2 py-1">{error}</div>}
 
       {/* الجدول */}
-      <div className="card shadow-sm border-secondary-subtle">
+      <div className="card shadow-sm border-secondary-subtle mb-0">
+        {/* Row 1 of Table Card: Sticky Toolbar directly above <thead> */}
+        <div className="sticky-toolbar border-bottom px-3 d-flex align-items-center justify-content-between gap-2 d-print-none">
+          <form onSubmit={handleAdd} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
+            <div className="flex-grow-1" style={{ minWidth: '200px' }}>
+              <input 
+                ref={nameInputRef} 
+                type="text" 
+                className="form-control form-control-sm border-secondary-subtle fw-bold" 
+                value={newSupplierName} 
+                onChange={(e) => setNewSupplierName(e.target.value)} 
+                placeholder="اسم المورد / المصنع الجديد... *" 
+                required 
+                autoFocus 
+                disabled={submitting || loading} 
+              />
+            </div>
+            <button 
+              type="submit" 
+              className="btn btn-sm btn-primary fw-bold px-3 py-1 flex-shrink-0 d-flex align-items-center gap-1 border-secondary-subtle" 
+              disabled={submitting || loading}
+            >
+              {submitting ? <IconLoader className="icon-spin" size={14} /> : <IconPlus size={14} />}
+              <span>إضافة مورد</span>
+            </button>
+          </form>
+        </div>
+
+        {/* Row 2 of Table Card: Table Container */}
         <div ref={setTableRef} className="table-responsive report-table-container">
           <table className="table table-vcenter table-bordered table-hover text-nowrap table-sticky-header mb-0">
             <thead className="bg-light">

@@ -6,13 +6,20 @@ export function ReceiptsFilterRow1({
   filters,
   handleFilterChange,
   handleSelectChange,
+  salespersonName,
+  setSalespersonName,
+  setFilters,
+  fetchReceipts,
+  fetchSalespersonSuggestions,
+  handleResetFilters,
+  loading,
 }) {
   return (
     <div className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Month */}
-      <div style={{ width: '90px' }} className="flex-shrink-0">
+      <div style={{ width: '80px' }} className="flex-shrink-0">
         <div className="input-group input-group-sm">
-          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">الشهر</span>
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">شهر</span>
           <input 
             type="number" 
             className="form-control fw-bold border-secondary-subtle px-1 text-center" 
@@ -27,9 +34,9 @@ export function ReceiptsFilterRow1({
       </div>
 
       {/* Year */}
-      <div style={{ width: '90px' }} className="flex-shrink-0">
+      <div style={{ width: '85px' }} className="flex-shrink-0">
         <div className="input-group input-group-sm">
-          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">السنة</span>
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">سنة</span>
           <input 
             type="number" 
             className="form-control fw-bold border-secondary-subtle px-1 text-center" 
@@ -42,7 +49,7 @@ export function ReceiptsFilterRow1({
       </div>
 
       {/* Receipt From */}
-      <div style={{ width: '85px' }} className="flex-shrink-0">
+      <div style={{ width: '75px' }} className="flex-shrink-0">
         <div className="input-group input-group-sm">
           <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">من</span>
           <input 
@@ -57,7 +64,7 @@ export function ReceiptsFilterRow1({
       </div>
 
       {/* Receipt To */}
-      <div style={{ width: '85px' }} className="flex-shrink-0">
+      <div style={{ width: '75px' }} className="flex-shrink-0">
         <div className="input-group input-group-sm">
           <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">إلى</span>
           <input 
@@ -72,7 +79,7 @@ export function ReceiptsFilterRow1({
       </div>
 
       {/* Sale Type */}
-      <div style={{ width: '105px' }} className="flex-shrink-0">
+      <div style={{ width: '95px' }} className="flex-shrink-0">
         <div className="input-group input-group-sm">
           <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">النوع</span>
           <select 
@@ -89,9 +96,9 @@ export function ReceiptsFilterRow1({
       </div>
 
       {/* Customer Name */}
-      <div className="flex-grow-1" style={{ minWidth: '130px' }}>
+      <div className="flex-grow-1" style={{ minWidth: '110px' }}>
         <div className="input-group input-group-sm">
-          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">العميل</span>
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">العميل</span>
           <input 
             type="text" 
             className="form-control fw-bold border-secondary-subtle" 
@@ -104,7 +111,7 @@ export function ReceiptsFilterRow1({
       </div>
 
       {/* Phone */}
-      <div style={{ width: '120px' }} className="flex-shrink-0">
+      <div style={{ width: '110px' }} className="flex-shrink-0">
         <div className="input-group input-group-sm">
           <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">الهاتف</span>
           <input 
@@ -120,14 +127,14 @@ export function ReceiptsFilterRow1({
       </div>
 
       {/* Area */}
-      <div className="flex-grow-1" style={{ minWidth: '100px' }}>
+      <div className="flex-grow-1" style={{ minWidth: '85px' }}>
         <div className="input-group input-group-sm">
-          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">المنطقة</span>
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">المنطقة</span>
           <input 
             type="text" 
             className="form-control fw-bold border-secondary-subtle" 
             name="area" 
-            placeholder="المنطقة / القرية"
+            placeholder="المنطقة"
             value={filters.area} 
             onChange={handleFilterChange} 
           />
@@ -135,19 +142,62 @@ export function ReceiptsFilterRow1({
       </div>
 
       {/* Address */}
-      <div className="flex-grow-1" style={{ minWidth: '100px' }}>
+      <div className="flex-grow-1" style={{ minWidth: '85px' }}>
         <div className="input-group input-group-sm">
-          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">العنوان</span>
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">العنوان</span>
           <input 
             type="text" 
             className="form-control fw-bold border-secondary-subtle" 
             name="address" 
-            placeholder="العنوان بالتفصيل"
+            placeholder="العنوان"
             value={filters.address} 
             onChange={handleFilterChange} 
           />
         </div>
       </div>
+
+      {/* Salesperson Autocomplete */}
+      <div style={{ width: '150px' }} className="flex-shrink-0">
+        <div className="input-group input-group-sm flex-nowrap">
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">المندوب</span>
+          <Autocomplete
+            value={salespersonName}
+            onChange={(val) => {
+              setSalespersonName(val);
+              if (!val) {
+                setFilters(prev => {
+                  const newFilters = { ...prev, salesperson_id: '' };
+                  fetchReceipts(newFilters);
+                  return newFilters;
+                });
+              }
+            }}
+            onSelect={(item) => {
+              setSalespersonName(item.name);
+              setFilters(prev => {
+                const newFilters = { ...prev, salesperson_id: item.id || item.local_id };
+                fetchReceipts(newFilters);
+                return newFilters;
+              });
+            }}
+            fetchSuggestions={fetchSalespersonSuggestions}
+            placeholder="جميع المناديب"
+            className="form-control fw-bold border-secondary-subtle px-1"
+          />
+        </div>
+      </div>
+
+      {/* Reset button */}
+      <button 
+        type="button" 
+        className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1 fw-bold px-2 py-1 flex-shrink-0 border-secondary-subtle" 
+        onClick={handleResetFilters} 
+        disabled={loading} 
+        title="إلغاء الفلاتر وإعادة الضبط"
+      >
+        <IconRefresh size={14} />
+        <span>إلغاء</span>
+      </button>
     </div>
   );
 }

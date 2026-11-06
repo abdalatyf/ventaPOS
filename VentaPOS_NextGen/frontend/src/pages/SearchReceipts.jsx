@@ -333,10 +333,6 @@ export default function SearchReceipts() {
           filters={filters}
           handleFilterChange={handleFilterChange}
           handleSelectChange={handleSelectChange}
-        />
-      }
-      row2={
-        <ReceiptsFilterRow2
           salespersonName={salespersonName}
           setSalespersonName={setSalespersonName}
           setFilters={setFilters}
@@ -344,12 +340,6 @@ export default function SearchReceipts() {
           fetchSalespersonSuggestions={fetchSalespersonSuggestions}
           handleResetFilters={handleResetFilters}
           loading={loading}
-          totalInvoicesCount={totalInvoicesCount}
-          totalAmountSum={totalAmountSum}
-          selectedIds={selectedIds}
-          handlePrint={handlePrint}
-          handleBulkDelete={handleBulkDelete}
-          formatCurrency={formatCurrency}
         />
       }
       modals={

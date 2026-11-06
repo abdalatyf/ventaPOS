@@ -71,7 +71,7 @@ describe('POS & Standardized Table Pages Mount Tests', () => {
         expect(container.querySelector('.standard-page-header')).not.toBeNull();
         expect(container.querySelector('.standard-top-card')).not.toBeNull();
         expect(container.querySelector('.standard-top-row-1')).not.toBeNull();
-        expect(container.querySelector('.standard-top-row-2')).not.toBeNull();
+        expect(container.querySelector('.sticky-toolbar')).not.toBeNull();
         expect(container.querySelector('.standard-page-table-area')).not.toBeNull();
         expect(container.querySelector('.table-sticky-header, .report-sticky-header')).not.toBeNull();
         const tableContainer = container.querySelector('.report-table-container');

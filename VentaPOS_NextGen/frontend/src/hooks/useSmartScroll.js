@@ -21,22 +21,26 @@ export default function useSmartScroll() {
   const handleScroll = useCallback(() => {
     if (!tableContainerRef.current) return;
     
-    // Absolute distance to bottom to toggle the scrollbar
+    const navbar = document.querySelector('header.navbar');
+    const navbarBottom = navbar ? navbar.getBoundingClientRect().bottom : 56;
+    const card = tableContainerRef.current.closest('.card');
+    const toolbar = card?.querySelector('.sticky-toolbar') || document.querySelector('.sticky-toolbar');
+    const triggerEl = toolbar || tableContainerRef.current;
+    const triggerTop = triggerEl.getBoundingClientRect().top;
+
     const scrollHeight = document.documentElement.scrollHeight;
-    const clientHeight = window.innerHeight;
+    const clientHeight = document.documentElement.clientHeight || window.innerHeight;
     const scrollTop = window.scrollY || document.documentElement.scrollTop;
-    
     const currentZoom = parseFloat(document.body.style.zoom) || 1.0;
-    const tolerance = Math.max(8, 12 / currentZoom);
+    const tolerance = Math.max(6, 10 / currentZoom);
     const distanceToBottom = scrollHeight - clientHeight - scrollTop;
-    
-    if (distanceToBottom <= tolerance) {
-      // Window hit bottom: top of tableContainer is touching Navbar. Enable table internal Y scroll!
+
+    // Activate Scroll #2 (internal table scroll) when the table's sticky-toolbar touches the Navbar OR window hits bottom
+    if (triggerTop <= navbarBottom + 4 || distanceToBottom <= tolerance) {
       if (tableContainerRef.current.style.overflowY !== 'auto') {
         tableContainerRef.current.style.overflowY = 'auto';
       }
     } else {
-      // Window is not at bottom. Disable table internal Y scroll so window natively scrolls!
       if (tableContainerRef.current.style.overflowY !== 'hidden') {
         tableContainerRef.current.style.overflowY = 'hidden';
       }
@@ -51,11 +55,14 @@ export default function useSmartScroll() {
     // Always ensure horizontal scroll is enabled
     tableContainerRef.current.style.overflowX = 'auto';
 
-    // Measure toolbar if present (legacy or inside page)
-    const toolbar = document.querySelector('.sticky-toolbar');
+    const navbar = document.querySelector('header.navbar');
+    const navbarHeight = navbar ? navbar.offsetHeight : 56;
+    const card = tableContainerRef.current.closest('.card');
+    const toolbar = card?.querySelector('.sticky-toolbar') || document.querySelector('.sticky-toolbar');
     const toolbarHeight = toolbar ? toolbar.offsetHeight : 0;
     
-    const offset = 56 + toolbarHeight + 20;
+    // 8px pb-2 + 2px card borders = 10px exact bottom space
+    const offset = navbarHeight + toolbarHeight + 10;
     tableContainerRef.current.style.maxHeight = `calc((100vh / ${currentZoom}) - ${offset}px)`;
 
     // Measure row 1 of multi-level headers dynamically
@@ -77,7 +84,8 @@ export default function useSmartScroll() {
         adjustHeight();
       });
 
-      const toolbar = document.querySelector('.sticky-toolbar');
+      const card = node.closest('.card');
+      const toolbar = card?.querySelector('.sticky-toolbar') || document.querySelector('.sticky-toolbar');
       if (toolbar) resizeObserverRef.current.observe(toolbar);
       resizeObserverRef.current.observe(node);
 

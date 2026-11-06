@@ -78,7 +78,7 @@ export default function StandardTablePageLayout({
   toolbar = null,
   children,
   modals = null,
-  containerClassName = 'container-fluid px-3 pt-2 pb-4 native-page-scroll',
+  containerClassName = 'container-fluid px-3 pt-2 pb-2 native-page-scroll',
 }) {
   const [row1SlotEl, setRow1SlotEl] = useState(null);
   const [row2SlotEl, setRow2SlotEl] = useState(null);
@@ -94,7 +94,7 @@ export default function StandardTablePageLayout({
   return (
     <StandardTableLayoutContext.Provider value={contextValue}>
       <div className={containerClassName} dir="rtl">
-        {/* ── Fixed Height Top Section (Title + Row 1 + Row 2) ── */}
+        {/* ── Fixed Height Top Section (Title + Row 1 + Optional Row 2) ── */}
         <div className="standard-page-top-section d-print-none">
           {(title || headerActions) && (
             <div className="standard-page-header d-flex justify-content-between align-items-center border-bottom border-secondary-subtle">
@@ -119,10 +119,12 @@ export default function StandardTablePageLayout({
               {row1}
               <div ref={setRow1SlotEl} className="d-flex align-items-center gap-2 flex-grow-1" style={{ minWidth: 0, overflow: 'visible' }} />
             </div>
-            <div className="standard-top-row standard-top-row-2 d-flex align-items-center gap-2 px-3 border-top bg-light-subtle">
-              {!hasChildRow2 && (row2 || toolbar)}
-              <div ref={setRow2SlotEl} className={hasChildRow2 ? 'd-flex align-items-center gap-2 w-100' : 'd-none'} style={{ minWidth: 0, overflow: 'visible' }} />
-            </div>
+            {(hasChildRow2 || row2 || toolbar) && (
+              <div className="standard-top-row standard-top-row-2 d-flex align-items-center gap-2 px-3 border-top bg-light-subtle">
+                {!hasChildRow2 && (row2 || toolbar)}
+                <div ref={setRow2SlotEl} className={hasChildRow2 ? 'd-flex align-items-center gap-2 w-100' : 'd-none'} style={{ minWidth: 0, overflow: 'visible' }} />
+              </div>
+            )}
           </div>
         </div>
 

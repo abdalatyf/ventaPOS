@@ -111,15 +111,6 @@ export default function ReportsLayout() {
             </div>
           </div>
         }
-        row2={
-          <div className="d-flex align-items-center justify-content-between w-100 flex-nowrap" style={{ overflow: 'visible' }}>
-            <div className="d-flex align-items-center gap-2">
-              <span className="badge bg-primary text-white rounded-pill px-2 py-1 fs-5">
-                فترة التقرير: شهر {month} / {year}
-              </span>
-            </div>
-          </div>
-        }
       >
         <div className="p-0">
           <Outlet />

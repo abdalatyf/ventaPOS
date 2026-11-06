@@ -26,7 +26,56 @@ export default function ReceiptsTable({
   loadingMore
 }) {
   return (
-    <div className="card shadow-sm border-secondary-subtle mb-3 flex-grow-1">
+    <div className="card shadow-sm border-secondary-subtle mb-0 flex-grow-1">
+      {/* Row 1 of Table Card: Sticky Toolbar directly above <thead> */}
+      <div className="sticky-toolbar border-bottom px-3 d-flex align-items-center justify-content-between gap-2 d-print-none">
+        <div className="d-flex align-items-center gap-2">
+          <span className="badge bg-primary text-white rounded-pill px-2 py-1 fs-5">
+            نتائج البحث: {totalInvoicesCount || 0} فاتورة
+          </span>
+
+          {selectedIds.length > 0 && (
+            <div className="d-flex align-items-center gap-1 border-start border-secondary-subtle ps-2 ms-1">
+              <span className="badge bg-secondary-lt text-dark fw-bold px-2 py-1">
+                محدد {selectedIds.length}
+              </span>
+              <button 
+                type="button"
+                className="btn btn-outline-success btn-sm fw-bold py-1 px-2 border-secondary-subtle d-flex align-items-center gap-1" 
+                onClick={() => handlePrint && handlePrint(selectedIds, 'print')}
+              >
+                <IconPrinter size={14} />
+                <span>طباعة محددة</span>
+              </button>
+              <button 
+                type="button"
+                className="btn btn-outline-primary btn-sm fw-bold py-1 px-2 border-secondary-subtle d-flex align-items-center gap-1" 
+                onClick={() => handlePrint && handlePrint(selectedIds, 'view')}
+              >
+                <IconEye size={14} />
+                <span>معاينة محددة</span>
+              </button>
+              <button 
+                type="button"
+                className="btn btn-outline-danger btn-sm fw-bold py-1 px-2 border-secondary-subtle d-flex align-items-center gap-1" 
+                onClick={handleBulkDelete}
+              >
+                <IconTrash size={14} />
+                <span>حذف محددة</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="text-dark fw-bold fs-4 border px-3 py-1 bg-white rounded shadow-sm flex-shrink-0" style={{ borderColor: '#adb5bd' }}>
+          إجمالي فواتير البيع:{' '}
+          <span className="text-danger fw-bolder fs-4">
+            {formatCurrency ? formatCurrency(totalAmountSum || 0) : (totalAmountSum || 0)}
+          </span>
+        </div>
+      </div>
+
+      {/* Row 2 of Table Card: Table Container */}
       <div ref={setTableRef} className="table-responsive report-table-container flex-grow-1">
         <table className="table table-sm table-bordered table-vcenter table-hover table-sticky-header text-nowrap tabular-nums mb-0">
           <thead className="bg-light">
@@ -91,13 +140,15 @@ export default function ReceiptsTable({
                 );
               })
             )}
+            {loadingMore && (
+              <tr>
+                <td colSpan="13" className="text-center py-3">
+                  <div className="spinner-border spinner-border-sm text-primary"></div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
-        {loadingMore && (
-          <div className="text-center py-3">
-            <div className="spinner-border text-primary"></div>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -1,15 +1,19 @@
 import React from 'react';
 import useSmartScroll from '../../hooks/useSmartScroll';
-import { IconReceipt } from '@tabler/icons-react';
+import { IconReceipt, IconPrinter, IconTrash } from '@tabler/icons-react';
 import PurchaseInvoiceRow from './PurchaseInvoiceRow';
 
 export default function PurchaseTable({
   invoices,
   loading,
+  totalInvoicesCount,
+  totalAmountSum,
   selectedIds,
   globalAllIds,
   toggleSelect,
   toggleSelectAll,
+  handleOpenPrintModal,
+  handleBulkDelete,
   handleContextMenu,
   formatCurrency,
   getSupplierName,
@@ -19,7 +23,43 @@ export default function PurchaseTable({
   const { setTableRef } = useSmartScroll();
 
   return (
-    <div className="card shadow-sm border-secondary-subtle rounded bg-white mb-3">
+    <div className="card shadow-sm border-secondary-subtle rounded bg-white mb-0">
+      {/* Row 1 of Table Card: Sticky Toolbar directly above <thead> */}
+      <div className="sticky-toolbar border-bottom px-3 d-flex align-items-center justify-content-between gap-2 d-print-none">
+        <div className="d-flex align-items-center gap-2">
+          <span className="text-secondary fw-bold small">النتائج:</span>
+          <span className="badge bg-primary text-white rounded-pill px-2 py-1 tabular-nums">{totalInvoicesCount || 0} فاتورة</span>
+
+          {selectedIds.length > 0 && (
+            <div className="d-flex align-items-center gap-2 border-start border-secondary-subtle ps-2 ms-1">
+              <span className="fw-bold small me-1">تم تحديد {selectedIds.length}</span>
+              {handleOpenPrintModal && (
+                <button 
+                  className="btn btn-outline-primary btn-sm fw-bold py-1 px-2 border-secondary-subtle d-flex align-items-center gap-1" 
+                  onClick={() => handleOpenPrintModal(selectedIds)}
+                >
+                  <IconPrinter size={14} /> طباعة محددة
+                </button>
+              )}
+              <button 
+                className="btn btn-outline-danger btn-sm fw-bold py-1 px-2 border-secondary-subtle d-flex align-items-center gap-1" 
+                onClick={handleBulkDelete}
+              >
+                <IconTrash size={14} /> حذف محددة
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="d-flex align-items-center">
+          <div className="text-dark fw-bold fs-4 border px-3 py-1 bg-white rounded shadow-sm d-flex align-items-center gap-2" style={{ borderColor: '#adb5bd' }}>
+            <span>إجمالي فواتير الشراء:</span>
+            <span className="text-danger fw-bolder fs-4 tabular-nums">{formatCurrency(totalAmountSum || 0)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Row 2 of Table Card: Table Container */}
       <div ref={setTableRef} className="table-responsive report-table-container flex-grow-1">
         <table className="table table-sm table-bordered table-vcenter table-hover table-sticky-header text-nowrap tabular-nums mb-0">
           <thead className="bg-light">
@@ -74,13 +114,15 @@ export default function PurchaseTable({
                 );
               })
             )}
+            {loadingMore && (
+              <tr>
+                <td colSpan="8" className="text-center py-3">
+                  <div className="spinner-border spinner-border-sm text-primary"></div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
-        {loadingMore && (
-          <div className="text-center py-3">
-            <div className="spinner-border text-primary"></div>
-          </div>
-        )}
       </div>
     </div>
   );

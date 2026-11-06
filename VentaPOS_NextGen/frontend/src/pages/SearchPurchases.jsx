@@ -326,16 +326,6 @@ export default function SearchPurchases() {
           loading={loading}
         />
       }
-      row2={
-        <PurchaseFilterRow2
-          totalInvoicesCount={totalInvoicesCount}
-          selectedIds={selectedIds}
-          handleOpenPrintModal={handleOpenPrintModal}
-          handleBulkDelete={handleBulkDelete}
-          totalAmountSum={totalAmountSum}
-          formatCurrency={formatCurrency}
-        />
-      }
       modals={
         <>
           <PurchaseContextMenu 
@@ -359,10 +349,14 @@ export default function SearchPurchases() {
       <PurchaseTable
         invoices={invoices}
         loading={loading}
+        totalInvoicesCount={totalInvoicesCount}
+        totalAmountSum={totalAmountSum}
         selectedIds={selectedIds}
         globalAllIds={globalAllIds}
         toggleSelect={toggleSelect}
         toggleSelectAll={toggleSelectAll}
+        handleOpenPrintModal={handleOpenPrintModal}
+        handleBulkDelete={handleBulkDelete}
         handleContextMenu={handleContextMenu}
         formatCurrency={formatCurrency}
         getSupplierName={getSupplierName}

@@ -38,24 +38,37 @@ body {
 }
 
 .standard-top-card {
-  margin-bottom: 12px !important;
+  margin-bottom: 10px !important;
   overflow: visible !important;
   border-radius: 6px;
 }
 
 .standard-top-row {
+  height: 52px;
+  min-height: 52px;
+  max-height: 52px;
+  width: 100%;
+  overflow: visible;
+}
+
+/* First Row inside Table Card: Sticky Toolbar directly above <thead> */
+.sticky-toolbar {
+  position: sticky !important;
+  top: var(--navbar-height, 56px) !important;
   height: 48px;
   min-height: 48px;
   max-height: 48px;
-  width: 100%;
-  overflow: visible;
+  z-index: 1020;
+  background-color: #ffffff !important;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
 }
 
 /* 2-Scroll Table Container (Window Scroll -> Internal Table Y & X Scroll) */
 .report-table-container {
   overflow-x: auto !important;
   overflow-y: auto;
-  max-height: calc((100vh / var(--app-zoom, 1)) - 76px);
+  max-height: calc((100vh / var(--app-zoom, 1)) - 114px);
 }
 
 /* Inside .report-table-container, sticky table headers stick at top: 0 of the container */

@@ -135,6 +135,7 @@ export default function ReportTable({
   footerRow = null,
   onPrintReport = null,
   children = null,
+  loadingMore = false,
 }) {
   const { setTableRef } = useSmartScroll();
   const [sortRules, setSortRules] = useState(defaultSortRules);
@@ -325,75 +326,75 @@ export default function ReportTable({
     await api.post('/reports/desktop_print/', payload);
   };
 
-  // Inject row1Extra (filters) and row2 (summary pills + print + sort) into StandardTablePageLayout
+  // Inject row1Extra (filters) into StandardTablePageLayout
   const slotPortals = useStandardTableSlots({
     row1Extra: renderFilters ? (
       <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
         {typeof renderFilters === 'function' ? renderFilters() : renderFilters}
       </div>
     ) : null,
-    row2: (
-      <div className="d-flex align-items-center justify-content-between w-100 flex-nowrap" style={{ overflow: 'visible' }}>
-        {summaryCards && summaryCards.length > 0 ? (
-          <div className="d-flex align-items-center gap-2 flex-nowrap overflow-auto hide-vertical-scroll" style={{ minWidth: 0 }}>
-            {summaryCards.map((card, i) => {
-              const IconComp = card.icon;
-              return (
-                <div key={i} className="flex-shrink-0">
-                  <div className="text-dark fw-bold border px-3 py-1 bg-white rounded shadow-sm d-flex align-items-center gap-2 report-summary-card" style={{ borderColor: '#adb5bd' }}>
-                    {IconComp && <IconComp size={14} className={`text-${card.color || 'primary'}`} />}
-                    <span className="text-muted small">{card.label}:</span>
-                    <span className={`text-${card.color || 'primary'} fw-bolder fs-4 tabular-nums`}>{card.value}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="d-flex align-items-center gap-2">
-            <span className="badge bg-secondary text-white rounded-pill px-2 py-1 tabular-nums">
-              {processedData.length || (data ? data.length : 0)} سجل
-            </span>
-          </div>
-        )}
-
-        <div className="ms-auto d-flex gap-2 align-items-center flex-shrink-0">
-          {headerToolbarExtra}
-
-          <button
-            type="button"
-            className="btn btn-sm btn-outline-primary fw-bold px-3 py-1 d-flex align-items-center gap-1 border-secondary-subtle"
-            onClick={onPrintReport || (() => setPrintModalOpen(true))}
-            disabled={loading || (processedData.length === 0 && (!data || data.length === 0))}
-            title="طباعة التقرير"
-          >
-            <IconPrinter size={14} />
-            <span>طباعة</span>
-          </button>
-
-          {/* Multi-Rule Sort Dropdown */}
-          <SortDropdown 
-            sortableColumns={sortableColumns}
-            sortRules={sortRules}
-            setSortRules={setSortRules}
-          />
-        </div>
-      </div>
-    )
   });
 
   return (
     <>
       {slotPortals}
-      <div className="card shadow-sm border-secondary-subtle flex-grow-1 d-flex flex-column mb-3" style={{ minHeight: 0 }}>
-      {/* Table Container */}
-      <div 
-        ref={handleSetTableRef} 
-        tabIndex={0}
-        onKeyDown={handleKeyDown}
-        className="table-responsive hide-vertical-scroll report-table-container flex-grow-1 rounded-bottom focus-ring-none" 
-        style={{ outline: 'none' }}
-      >
+      <div className="card shadow-sm border-secondary-subtle flex-grow-1 d-flex flex-column mb-0" style={{ minHeight: 0 }}>
+        {/* Row 1 of Table Card: Sticky Toolbar directly above <thead> */}
+        <div className="sticky-toolbar border-bottom px-3 d-flex align-items-center justify-content-between gap-2 d-print-none">
+          {summaryCards && summaryCards.length > 0 ? (
+            <div className="d-flex align-items-center gap-2 flex-nowrap overflow-auto hide-vertical-scroll" style={{ minWidth: 0 }}>
+              {summaryCards.map((card, i) => {
+                const IconComp = card.icon;
+                return (
+                  <div key={i} className="flex-shrink-0">
+                    <div className="text-dark fw-bold border px-3 py-1 bg-white rounded shadow-sm d-flex align-items-center gap-2 report-summary-card" style={{ borderColor: '#adb5bd' }}>
+                      {IconComp && <IconComp size={14} className={`text-${card.color || 'primary'}`} />}
+                      <span className="text-muted small">{card.label}:</span>
+                      <span className={`text-${card.color || 'primary'} fw-bolder fs-4 tabular-nums`}>{card.value}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="d-flex align-items-center gap-2">
+              <span className="badge bg-secondary text-white rounded-pill px-2 py-1 tabular-nums">
+                {processedData.length || (data ? data.length : 0)} سجل
+              </span>
+            </div>
+          )}
+
+          <div className="ms-auto d-flex gap-2 align-items-center flex-shrink-0">
+            {headerToolbarExtra}
+
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-primary fw-bold px-3 py-1 d-flex align-items-center gap-1 border-secondary-subtle"
+              onClick={onPrintReport || (() => setPrintModalOpen(true))}
+              disabled={loading || (processedData.length === 0 && (!data || data.length === 0))}
+              title="طباعة التقرير"
+            >
+              <IconPrinter size={14} />
+              <span>طباعة</span>
+            </button>
+
+            {/* Multi-Rule Sort Dropdown */}
+            <SortDropdown 
+              sortableColumns={sortableColumns}
+              sortRules={sortRules}
+              setSortRules={setSortRules}
+            />
+          </div>
+        </div>
+
+        {/* Row 2 of Table Card: Table Container */}
+        <div 
+          ref={handleSetTableRef} 
+          tabIndex={0}
+          onKeyDown={handleKeyDown}
+          className="table-responsive hide-vertical-scroll report-table-container flex-grow-1 rounded-bottom focus-ring-none" 
+          style={{ outline: 'none' }}
+        >
         <table className="table table-bordered table-vcenter table-hover mb-0 text-nowrap table-sticky-header">
           {children ? (
             children
@@ -498,6 +499,13 @@ export default function ReportTable({
                     <td colSpan={checkboxSelection ? columns.length + 1 : (columns.length || 1)} className="text-center py-5">
                       {EmptyIcon && <EmptyIcon size={48} className="text-muted mb-2 opacity-50" />}
                       <h4 className="text-muted fw-bold">{emptyMessage}</h4>
+                    </td>
+                  </tr>
+                )}
+                {loadingMore && (
+                  <tr>
+                    <td colSpan={checkboxSelection ? columns.length + 1 : (columns.length || 1)} className="text-center py-3">
+                      <div className="spinner-border spinner-border-sm text-primary" role="status"></div>
                     </td>
                   </tr>
                 )}
