@@ -276,154 +276,87 @@ export default function InstallmentsReport() {
     { id: 3, column: 'customer_name', dir: 'asc' }
   ];
 
-  const renderFiltersGrid = () => (
-    <div className="card shadow-sm mb-3" style={{ border: '1px solid #dee2e6' }}>
-      <div className="card-body p-3">
-        <form onSubmit={handleSearchSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '0.75rem', alignItems: 'center' }}>
-            
-            {/* ── Row 1 ── */}
-            <div style={{ gridColumn: 'span 3' }}>
-              <div className="input-group input-group-sm flex-nowrap">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle" style={{ width: '70px' }}>المندوب</span>
-                <ReportAutocomplete
-                  items={salespersonsList}
-                  value={salespersonQuery}
-                  onChange={(text) => {
-                    setSalespersonQuery(text);
-                    if (!text) setSalespersonId('');
-                  }}
-                  onSelect={(item) => {
-                    if (item) {
-                      setSalespersonId(String(item.id || item.local_id));
-                      setSalespersonQuery(item.name || '');
-                    } else {
-                      setSalespersonId('');
-                      setSalespersonQuery('');
-                    }
-                  }}
-                  placeholder="جميع المناديب"
-                  displayKey="name"
-                  searchKeys={['name', 'local_id']}
-                  idKey="id"
-                  allowClear={true}
-                  className="form-control fw-bold border-secondary-subtle"
-                />
-              </div>
-            </div>
-
-            <div style={{ gridColumn: 'span 2' }}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">بيع من</span>
-                <DebouncedInput 
-                  type="number"
-                  min="1" max="12"
-                  className="form-control fw-bold border-secondary-subtle text-center px-1 hide-arrows" 
-                  placeholder="شهر" 
-                  value={saleFromMonth} 
-                  onChange={(e) => setSaleFromMonth(toEnglish(e.target.value))} 
-                />
-                <span className="input-group-text bg-light text-muted px-1">/</span>
-                <DebouncedInput 
-                  type="number"
-                  min="2000" max="2100"
-                  className="form-control fw-bold border-secondary-subtle text-center px-1 hide-arrows" 
-                  placeholder="سنة" 
-                  value={saleFromYear} 
-                  onChange={(e) => setSaleFromYear(toEnglish(e.target.value))} 
-                />
-              </div>
-            </div>
-
-            <div style={{ gridColumn: 'span 2' }}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">إلى</span>
-                <DebouncedInput 
-                  type="number"
-                  min="1" max="12"
-                  className="form-control fw-bold border-secondary-subtle text-center px-1 hide-arrows" 
-                  placeholder="شهر" 
-                  value={saleToMonth} 
-                  onChange={(e) => setSaleToMonth(toEnglish(e.target.value))} 
-                />
-                <span className="input-group-text bg-light text-muted px-1">/</span>
-                <DebouncedInput 
-                  type="number"
-                  min="2000" max="2100"
-                  className="form-control fw-bold border-secondary-subtle text-center px-1 hide-arrows" 
-                  placeholder="سنة" 
-                  value={saleToYear} 
-                  onChange={(e) => setSaleToYear(toEnglish(e.target.value))} 
-                />
-              </div>
-            </div>
-            
-            <div style={{ gridColumn: 'span 3' }}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2" style={{ width: '70px' }}>الموبايل</span>
-                <DebouncedInput 
-                  type="text" 
-                  className="form-control fw-bold border-secondary-subtle text-center" 
-                  dir="ltr"
-                  placeholder="رقم الموبايل" 
-                  value={phone} 
-                  onChange={(e) => setPhone(e.target.value)} 
-                />
-              </div>
-            </div>
-            
-            {/* ── Row 2 ── */}
-            <div style={{ gridColumn: 'span 4' }}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle" style={{ width: '70px' }}>العميل</span>
-                <DebouncedInput 
-                  type="text" 
-                  className="form-control fw-bold border-secondary-subtle" 
-                  placeholder="اسم العميل" 
-                  value={customerName} 
-                  onChange={(e) => setCustomerName(e.target.value)} 
-                />
-              </div>
-            </div>
-            
-            <div style={{ gridColumn: 'span 4' }}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle" style={{ width: '70px' }}>المنطقة</span>
-                <DebouncedInput 
-                  type="text" 
-                  className="form-control fw-bold border-secondary-subtle" 
-                  placeholder="المنطقة" 
-                  value={area} 
-                  onChange={(e) => setArea(e.target.value)} 
-                />
-              </div>
-            </div>
-
-            <div style={{ gridColumn: 'span 2' }} className="d-flex align-items-center gap-2 justify-content-end">
-              <button 
-                type="button" 
-                className="btn btn-outline-secondary w-100 fw-bold fs-4 py-1" 
-                onClick={() => { handleResetFilters(); }} 
-                title="إعادة ضبط الفلاتر"
-                style={{ border: '1px solid #adb5bd' }}
-              >
-                <IconRefresh size={16} className="me-1" />
-                إعادة ضبط
-              </button>
-            </div>
-
-          </div>
-        </form>
+  const renderFilters = () => (
+    <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
+      {/* Salesperson */}
+      <div style={{ width: '150px' }} className="flex-shrink-0">
+        <ReportAutocomplete
+          items={salespersonsList}
+          value={salespersonQuery}
+          onChange={(text) => {
+            setSalespersonQuery(text);
+            if (!text) setSalespersonId('');
+          }}
+          onSelect={(item) => {
+            if (item) {
+              setSalespersonId(String(item.id || item.local_id));
+              setSalespersonQuery(item.name || '');
+            } else {
+              setSalespersonId('');
+              setSalespersonQuery('');
+            }
+          }}
+          placeholder="جميع المناديب"
+          displayKey="name"
+          searchKeys={['name', 'local_id']}
+          idKey="id"
+          allowClear={true}
+          className="form-control form-control-sm fw-bold border-secondary-subtle"
+        />
       </div>
+
+      {/* Customer Name */}
+      <div className="flex-grow-1" style={{ minWidth: '120px' }}>
+        <DebouncedInput 
+          type="text" 
+          className="form-control form-control-sm fw-bold border-secondary-subtle" 
+          placeholder="اسم العميل..." 
+          value={customerName} 
+          onChange={(e) => setCustomerName(e.target.value)} 
+        />
+      </div>
+
+      {/* Phone */}
+      <div style={{ width: '110px' }} className="flex-shrink-0">
+        <DebouncedInput 
+          type="text" 
+          className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
+          dir="ltr"
+          placeholder="الموبايل" 
+          value={phone} 
+          onChange={(e) => setPhone(e.target.value)} 
+        />
+      </div>
+
+      {/* Area */}
+      <div style={{ width: '110px' }} className="flex-shrink-0">
+        <DebouncedInput 
+          type="text" 
+          className="form-control form-control-sm fw-bold border-secondary-subtle" 
+          placeholder="المنطقة" 
+          value={area} 
+          onChange={(e) => setArea(e.target.value)} 
+        />
+      </div>
+
+      {/* Reset */}
+      <button 
+        type="button" 
+        className="btn btn-outline-secondary btn-sm fw-bold px-2 py-1 flex-shrink-0 border-secondary-subtle d-flex align-items-center gap-1" 
+        onClick={handleResetFilters} 
+        disabled={loading}
+        title="إعادة ضبط"
+      >
+        <IconRefresh size={14} />
+        <span>إعادة ضبط</span>
+      </button>
     </div>
   );
 
   return (
-    <div className="container-fluid p-0 d-flex flex-column" dir="rtl" style={{ minHeight: 'calc(100vh - 100px)' }}>
-      {error && <div className="alert alert-danger mb-3">{error}</div>}
+    <div className="w-100 p-0">
+      {error && <div className="alert alert-danger mb-2 py-1">{error}</div>}
       
-      {renderFiltersGrid()}
-
       <ReportTable
         reportTitle="تقرير تحصيلات الأقساط"
         periodLabel={year && month ? `${year}/${String(month).padStart(2, '0')}` : undefined}
@@ -433,6 +366,7 @@ export default function InstallmentsReport() {
         sortableColumns={sortableColumns}
         defaultSortRules={defaultSortRules}
         summaryCards={summaryCards}
+        renderFilters={renderFilters}
         checkboxSelection={true}
         idField="payment_id"
         selectedIds={selectedIds}

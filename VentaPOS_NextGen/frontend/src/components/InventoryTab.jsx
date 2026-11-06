@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { IconTrash, IconPlus, IconEdit, IconX, IconLoader, IconSortAscending, IconSortDescending, IconFileText } from '@tabler/icons-react';
+import { IconTrash, IconPlus, IconEdit, IconLoader, IconSortAscending, IconSortDescending, IconFileText, IconSearch } from '@tabler/icons-react';
 import toast from 'react-hot-toast';
 import api from '../api';
 import { fmt, parseNumber } from '../utils/formatUtils';
+import { useStandardTableSlots } from './common/StandardTablePageLayout';
 
 export default function InventoryTab() {
   const [items, setItems] = useState([]);
@@ -16,11 +17,9 @@ export default function InventoryTab() {
     setTimeout(() => setError(null), 5000);
   };
   
-  // Branch context (simulated or fetched)
   const currentBranchId = localStorage.getItem('branchId') || 1;
 
   const [searchQuery, setSearchQuery] = useState('');
-
   const [sortColumn, setSortColumn] = useState('id');
   const [sortDirection, setSortDirection] = useState('asc');
 
@@ -90,7 +89,7 @@ export default function InventoryTab() {
   }, [currentBranchId]);
 
   const filteredItems = useMemo(() => {
-    let filtered = items.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    let filtered = items.filter(i => (i.name || '').toLowerCase().includes(searchQuery.toLowerCase()));
     
     filtered.sort((a, b) => {
       let valA, valB;
@@ -120,8 +119,6 @@ export default function InventoryTab() {
     
     return filtered;
   }, [items, searchQuery, sortColumn, sortDirection]);
-
-
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -182,7 +179,6 @@ export default function InventoryTab() {
       startMonth: item.initial_month,
       startYear: item.initial_year,
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
     setTimeout(() => nameInputRef.current && nameInputRef.current.focus(), 100);
   };
 
@@ -220,105 +216,135 @@ export default function InventoryTab() {
     }
   };
 
-  return (
-    <div>
-      {error && <div className="alert alert-danger">{error}</div>}
-
-
-
-      <div className="accordion mb-3 shadow-sm" id="addInventoryAccordion">
-        <div className={`accordion-item ${editingId ? 'border-primary' : ''}`}>
-          <h2 className="accordion-header" id="headingAddInventory">
-            <button className={`accordion-button ${editingId ? '' : 'collapsed'} py-2 bg-light`} type="button" data-bs-toggle="collapse" data-bs-target="#collapseAddInventory" aria-expanded={editingId ? 'true' : 'false'} aria-controls="collapseAddInventory">
-              <span className="fw-bold text-primary d-flex align-items-center">
-                {editingId ? <IconEdit size={18} className="me-2"/> : <IconPlus size={18} className="me-2"/>}
-                {editingId ? `تعديل الصنف: ${formData.name}` : 'إضافة صنف جديد'}
-              </span>
-            </button>
-          </h2>
-          <div id="collapseAddInventory" className={`accordion-collapse collapse ${editingId ? 'show' : ''}`} aria-labelledby="headingAddInventory" data-bs-parent="#addInventoryAccordion">
-            <div className="accordion-body p-2 bg-white">
-              <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="row g-2 align-items-end">
-                <div className="col-md-2">
-                  <label className="form-label small mb-1">اسم الصنف <span className="text-danger">*</span></label>
-                  <input type="text" className="form-control form-control-sm" name="name" value={formData.name} onChange={handleInputChange} disabled={submitting} required autoFocus ref={nameInputRef} />
-                </div>
-                <div className="col-md-1">
-                  <label className="form-label small mb-1">الكمية</label>
-                  <input type="number" className="form-control form-control-sm" name="qty" value={formData.qty} onChange={handleInputChange} min="0" disabled={submitting} />
-                </div>
-                <div className="col-md-2">
-                  <label className="form-label small mb-1">سعر الشراء</label>
-                  <input type="number" className="form-control form-control-sm" name="price" value={formData.price} onChange={handleInputChange} min="0" disabled={submitting} />
-                </div>
-                <div className="col-md-2">
-                  <label className="form-label small mb-1">المندبة</label>
-                  <input type="number" className="form-control form-control-sm" name="commission" value={formData.commission} onChange={handleInputChange} disabled={submitting} />
-                </div>
-                <div className="col-md-1">
-                  <label className="form-label small mb-1">شهر</label>
-                  <input 
-                    type="number" 
-                    className="form-control form-control-sm" 
-                    name="startMonth" 
-                    value={formData.startMonth} 
-                    min="1" 
-                    max="12" 
-                    placeholder="شهر" 
-                    onChange={handleInputChange} 
-                    disabled={submitting} 
-                    required 
-                  />
-                </div>
-                <div className="col-md-1">
-                  <label className="form-label small mb-1">سنة</label>
-                  <input 
-                    type="number" 
-                    className="form-control form-control-sm" 
-                    name="startYear" 
-                    value={formData.startYear} 
-                    min="2000" 
-                    max="2100" 
-                    placeholder="سنة" 
-                    onChange={handleInputChange} 
-                    disabled={submitting} 
-                    required 
-                  />
-                </div>
-                <div className="col-md-3 d-flex align-items-end gap-1">
-                  <button type="submit" className={`btn btn-sm w-100 ${editingId ? 'btn-success' : 'btn-primary'}`} disabled={submitting}>
-                    {submitting ? <IconLoader className="icon-spin" size={16} /> : (editingId ? <IconEdit size={16} /> : <IconPlus size={16} />)}
-                    <span className="ms-1">{editingId ? 'حفظ' : 'إضافة'}</span>
-                  </button>
-                  {editingId && (
-                    <button type="button" className="btn btn-sm btn-ghost-secondary px-2" onClick={resetForm}>إلغاء</button>
-                  )}
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div className="d-flex justify-content-between align-items-center mb-2">
-        <div className="input-icon w-50">
-          <span className="input-icon-addon"><svg xmlns="http://www.w3.org/2000/svg" className="icon" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><circle cx="10" cy="10" r="7" /><line x1="21" y1="21" x2="15" y2="15" /></svg></span>
+  // Slot injection into StandardTablePageLayout
+  const slotPortals = useStandardTableSlots({
+    row1Extra: (
+      <div className="d-flex align-items-center gap-2 ms-auto flex-nowrap" style={{ overflow: 'visible' }}>
+        <div className="input-icon" style={{ width: '220px' }}>
+          <span className="input-icon-addon"><IconSearch size={14}/></span>
           <input 
             type="text" 
-            className="form-control form-control-sm border-secondary-subtle" 
+            className="form-control form-control-sm border-secondary-subtle fw-bold" 
             placeholder="بحث حي عن الصنف..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <div className="text-end">
-          <span className="text-muted small">عدد الأصناف: <strong>{filteredItems.length}</strong></span>
-        </div>
+        <span className="badge bg-secondary text-white rounded-pill px-2 py-1 tabular-nums flex-shrink-0">
+          {filteredItems.length} صنف
+        </span>
       </div>
+    ),
+    row2: (
+      <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
+        {/* Item Name */}
+        <div className="flex-grow-1" style={{ minWidth: '160px' }}>
+          <input 
+            ref={nameInputRef} 
+            type="text" 
+            className="form-control form-control-sm border-secondary-subtle fw-bold" 
+            name="name" 
+            placeholder="اسم الصنف *" 
+            value={formData.name} 
+            onChange={handleInputChange} 
+            disabled={submitting} 
+            required 
+            autoFocus 
+          />
+        </div>
+        {/* Qty */}
+        <div style={{ width: '85px' }} className="flex-shrink-0">
+          <input 
+            type="number" 
+            className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
+            name="qty" 
+            placeholder="الكمية" 
+            value={formData.qty} 
+            onChange={handleInputChange} 
+            min="0" 
+            disabled={submitting} 
+          />
+        </div>
+        {/* Price */}
+        <div style={{ width: '100px' }} className="flex-shrink-0">
+          <input 
+            type="number" 
+            className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
+            name="price" 
+            placeholder="سعر الشراء" 
+            value={formData.price} 
+            onChange={handleInputChange} 
+            min="0" 
+            disabled={submitting} 
+          />
+        </div>
+        {/* Commission */}
+        <div style={{ width: '90px' }} className="flex-shrink-0">
+          <input 
+            type="number" 
+            className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
+            name="commission" 
+            placeholder="المندبة" 
+            value={formData.commission} 
+            onChange={handleInputChange} 
+            disabled={submitting} 
+          />
+        </div>
+        {/* Month */}
+        <div style={{ width: '70px' }} className="flex-shrink-0">
+          <input 
+            type="number" 
+            className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
+            name="startMonth" 
+            placeholder="شهر" 
+            value={formData.startMonth} 
+            min="1" 
+            max="12" 
+            onChange={handleInputChange} 
+            disabled={submitting} 
+            required 
+          />
+        </div>
+        {/* Year */}
+        <div style={{ width: '80px' }} className="flex-shrink-0">
+          <input 
+            type="number" 
+            className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
+            name="startYear" 
+            placeholder="سنة" 
+            value={formData.startYear} 
+            min="2000" 
+            max="2100" 
+            onChange={handleInputChange} 
+            disabled={submitting} 
+            required 
+          />
+        </div>
+        {/* Submit / Cancel */}
+        <div className="d-flex align-items-center gap-1 flex-shrink-0">
+          <button type="submit" className={`btn btn-sm fw-bold px-3 py-1 d-flex align-items-center gap-1 border-secondary-subtle ${editingId ? 'btn-success' : 'btn-primary'}`} disabled={submitting}>
+            {submitting ? <IconLoader className="icon-spin" size={14} /> : (editingId ? <IconEdit size={14} /> : <IconPlus size={14} />)}
+            <span>{editingId ? 'حفظ' : 'إضافة'}</span>
+          </button>
+          {editingId && (
+            <button type="button" className="btn btn-sm btn-outline-secondary fw-bold px-2 py-1 border-secondary-subtle" onClick={resetForm}>
+              إلغاء
+            </button>
+          )}
+        </div>
+      </form>
+    )
+  });
+
+  return (
+    <div>
+      {slotPortals}
+      {error && <div className="alert alert-danger mb-2 py-1">{error}</div>}
 
       {/* الجدول */}
-      <div className="card shadow-sm" style={{ border: '1px solid #dee2e6' }}>
-        <table className="table table-vcenter table-bordered table-hover text-nowrap table-sticky-header mb-0">
+      <div className="card shadow-sm border-secondary-subtle">
+        <div className="table-responsive" style={{ overflow: 'visible' }}>
+          <table className="table table-vcenter table-bordered table-hover text-nowrap table-sticky-header mb-0">
             <thead className="bg-light">
               <tr>
                 <th className="w-1 text-center align-middle border-secondary-subtle" style={{cursor:"pointer"}} onClick={() => handleSort("id")}>رقم الصنف {getSortIcon("id")}</th>
@@ -333,46 +359,42 @@ export default function InventoryTab() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="8" className="text-center py-5">
+                  <td colSpan="7" className="text-center py-5">
                     <div className="spinner-border text-primary" role="status"></div>
                   </td>
                 </tr>
               ) : filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="text-center text-muted py-4">لا توجد أصناف مطابقة</td>
+                  <td colSpan="7" className="text-center text-muted py-4">لا توجد أصناف مطابقة</td>
                 </tr>
               ) : (
-                filteredItems.map((item, index) => {
-                  const initialQty = item.initial_quantity || 0;
-                  const total = initialQty * parseNumber(item.initial_purchase_price || 0);
-                  
-                  return (
-                    <tr key={item.id} className={editingId === item.id ? 'bg-primary-lt' : ''}>
-                      <td className="text-center align-middle border-secondary-subtle text-muted fw-bold">{item.id}</td>
-                      <td className="text-start px-2 align-middle border-secondary-subtle fw-bold">{item.name}</td>
-                      <td className="text-center align-middle border-secondary-subtle">
-                        {initialQty}
-                      </td>
-                      <td className="text-center align-middle border-secondary-subtle">{fmt(item.initial_purchase_price || 0)}</td>
-                      <td className="text-center align-middle border-secondary-subtle">{item.initial_year}/{item.initial_month}</td>
-                      <td className="text-center align-middle border-secondary-subtle">{fmt(item.initial_commission_amount || 0)}</td>
-                      <td className="text-nowrap text-center align-middle border-secondary-subtle">
-                        <Link to={`/product-ledger/${item.id}`} className="btn btn-sm btn-ghost-info me-1" title="كارت الصنف وسجل العمليات">
-                          <IconFileText size={18} /> كارت الصنف
-                        </Link>
-                        <button className="btn btn-sm btn-ghost-primary me-1" title="تعديل الصنف" onClick={() => startEdit(item)}>
-                          <IconEdit size={18} />
-                        </button>
-                        <button className="btn btn-sm btn-ghost-danger" title="حذف الصنف" onClick={() => confirmDelete(item)}>
-                          <IconTrash size={18} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
+                filteredItems.map((item) => (
+                  <tr key={item.id} className={editingId === item.id ? 'bg-primary-lt' : ''}>
+                    <td className="text-center align-middle border-secondary-subtle text-muted fw-bold">{item.id}</td>
+                    <td className="text-start px-2 align-middle border-secondary-subtle fw-bold">{item.name}</td>
+                    <td className="text-center align-middle border-secondary-subtle">
+                      {item.initial_quantity || 0}
+                    </td>
+                    <td className="text-center align-middle border-secondary-subtle">{fmt(item.initial_purchase_price || 0)}</td>
+                    <td className="text-center align-middle border-secondary-subtle">{item.initial_year}/{item.initial_month}</td>
+                    <td className="text-center align-middle border-secondary-subtle">{fmt(item.initial_commission_amount || 0)}</td>
+                    <td className="text-nowrap text-center align-middle border-secondary-subtle">
+                      <Link to={`/product-ledger/${item.id}`} className="btn btn-sm btn-ghost-info me-1" title="كارت الصنف وسجل العمليات">
+                        <IconFileText size={18} /> كارت الصنف
+                      </Link>
+                      <button className="btn btn-sm btn-ghost-primary me-1" title="تعديل الصنف" onClick={() => startEdit(item)}>
+                        <IconEdit size={18} />
+                      </button>
+                      <button className="btn btn-sm btn-ghost-danger" title="حذف الصنف" onClick={() => confirmDelete(item)}>
+                        <IconTrash size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
-        </table>
+          </table>
+        </div>
       </div>
 
       {/* مودال تأكيد الحذف */}
@@ -398,7 +420,6 @@ export default function InventoryTab() {
           </div>
         </div>
       )}
-
     </div>
   );
 }

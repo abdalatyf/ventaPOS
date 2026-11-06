@@ -4,7 +4,7 @@ import Swal from 'sweetalert2';
 import useSmartScroll from '../hooks/useSmartScroll';
 import api from '../api';
 import { IconReceipt, IconPlus } from '@tabler/icons-react';
-import ReceiptsFilterToolbar from '../components/receipts/ReceiptsFilterToolbar';
+import ReceiptsFilterToolbar, { ReceiptsFilterRow1, ReceiptsFilterRow2 } from '../components/receipts/ReceiptsFilterToolbar';
 import ReceiptsTable from '../components/receipts/ReceiptsTable';
 import ReceiptContextMenu from '../components/receipts/ReceiptContextMenu';
 import PrintModal from '../components/common/PrintModal';
@@ -328,11 +328,15 @@ export default function SearchReceipts() {
           <span>إضافة فاتورة جديدة</span>
         </Link>
       }
-      toolbar={
-        <ReceiptsFilterToolbar
+      row1={
+        <ReceiptsFilterRow1
           filters={filters}
           handleFilterChange={handleFilterChange}
           handleSelectChange={handleSelectChange}
+        />
+      }
+      row2={
+        <ReceiptsFilterRow2
           salespersonName={salespersonName}
           setSalespersonName={setSalespersonName}
           setFilters={setFilters}
@@ -340,6 +344,12 @@ export default function SearchReceipts() {
           fetchSalespersonSuggestions={fetchSalespersonSuggestions}
           handleResetFilters={handleResetFilters}
           loading={loading}
+          totalInvoicesCount={totalInvoicesCount}
+          totalAmountSum={totalAmountSum}
+          selectedIds={selectedIds}
+          handlePrint={handlePrint}
+          handleBulkDelete={handleBulkDelete}
+          formatCurrency={formatCurrency}
         />
       }
       modals={

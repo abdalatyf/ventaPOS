@@ -62,49 +62,61 @@ export default function ReportsLayout() {
       <StandardTablePageLayout
         title="التقارير الإدارية والتحليلية"
         icon={IconReport}
-        toolbar={
-          <div className="card shadow-sm border bg-white p-2">
-            <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
-              {/* Report Selector */}
-              <div className="d-flex align-items-center gap-2">
-                <span className="text-muted small fw-bold">نوع التقرير:</span>
-                <select 
-                  className="form-select form-select-sm fw-bold border-primary text-primary"
-                  value={reportPath}
-                  onChange={(e) => navigate(`/reports/${e.target.value}${location.search}`)}
-                  style={{ minWidth: '220px', cursor: 'pointer' }}
-                >
-                  <option value="dashboard">الملخص (Dashboard)</option>
-                  <option value="receipts">فواتير المبيعات</option>
-                  <option value="purchases">فواتير المشتريات</option>
-                  <option value="installments">التحصيل (الأقساط)</option>
-                  <option value="expenses">المصروفات</option>
-                  <option value="profit-and-loss">الأرباح والخسائر (المجاميع)</option>
-                  <option value="averages">الأرباح والخسائر (المتوسطات)</option>
-                  <option value="inventory">حركة المخزون</option>
-                  <option value="salesperson">أداء المناديب</option>
-                </select>
-              </div>
+        row1={
+          <div className="d-flex align-items-center gap-2 flex-shrink-0" style={{ overflow: 'visible' }}>
+            {/* Report Selector */}
+            <div style={{ width: '220px' }} className="flex-shrink-0">
+              <select 
+                className="form-select form-select-sm fw-bold border-secondary-subtle text-primary"
+                value={reportPath}
+                onChange={(e) => navigate(`/reports/${e.target.value}${location.search}`)}
+                style={{ cursor: 'pointer' }}
+              >
+                <option value="dashboard">الملخص (Dashboard)</option>
+                <option value="receipts">فواتير المبيعات</option>
+                <option value="purchases">فواتير المشتريات</option>
+                <option value="installments">التحصيل (الأقساط)</option>
+                <option value="expenses">المصروفات</option>
+                <option value="profit-and-loss">الأرباح والخسائر (المجاميع)</option>
+                <option value="averages">الأرباح والخسائر (المتوسطات)</option>
+                <option value="inventory">حركة المخزون</option>
+                <option value="salesperson">أداء المناديب</option>
+              </select>
+            </div>
 
-              {/* Date Filter */}
-              <div className="d-flex align-items-center gap-2 bg-light p-1 rounded border">
-                <span className="text-muted small fw-bold ms-1">شهر:</span>
+            {/* Date Filter: Month */}
+            <div style={{ width: '90px' }} className="flex-shrink-0">
+              <div className="input-group input-group-sm">
+                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">شهر</span>
                 <input
                   type="number"
-                  className="form-control form-control-sm fw-bold text-center"
+                  className="form-control form-control-sm fw-bold text-center border-secondary-subtle px-1"
                   min="1" max="12" placeholder="شهر"
                   value={month} onChange={(e) => setMonth(e.target.value)}
-                  style={{ width: '70px' }}
-                />
-                <span className="text-muted small fw-bold ms-1">سنة:</span>
-                <input
-                  type="number"
-                  className="form-control form-control-sm fw-bold text-center"
-                  min="2000" max="2100" placeholder="سنة"
-                  value={year} onChange={(e) => setYear(e.target.value)}
-                  style={{ width: '80px' }}
                 />
               </div>
+            </div>
+
+            {/* Date Filter: Year */}
+            <div style={{ width: '95px' }} className="flex-shrink-0">
+              <div className="input-group input-group-sm">
+                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">سنة</span>
+                <input
+                  type="number"
+                  className="form-control form-control-sm fw-bold text-center border-secondary-subtle px-1"
+                  min="2000" max="2100" placeholder="سنة"
+                  value={year} onChange={(e) => setYear(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+        }
+        row2={
+          <div className="d-flex align-items-center justify-content-between w-100 flex-nowrap" style={{ overflow: 'visible' }}>
+            <div className="d-flex align-items-center gap-2">
+              <span className="badge bg-primary text-white rounded-pill px-2 py-1 fs-5">
+                فترة التقرير: شهر {month} / {year}
+              </span>
             </div>
           </div>
         }

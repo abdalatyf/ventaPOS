@@ -240,174 +240,148 @@ export default function ReceiptsReport() {
     );
   };
 
-  const renderFiltersGrid = () => (
-    <div className="card shadow-sm mb-3" style={{ border: '1px solid #dee2e6' }}>
-      <div className="card-body p-3">
-        <form onSubmit={(e) => { e.preventDefault(); fetchReceipts(filters); }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '0.75rem', alignItems: 'center' }}>
-            
-            {/* ── Row 1 ── */}
-            <div style={{ gridColumn: 'span 2' }}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">النوع</span>
-                <select 
-                  name="sale_type" 
-                  className="form-select fw-bold border-secondary-subtle px-1 text-center" 
-                  value={filters.sale_type} 
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setFilters(prev => {
-                      const newFilters = { ...prev, sale_type: val };
-                      fetchReceipts(newFilters);
-                      return newFilters;
-                    });
-                  }}
-                >
-                  <option value="ALL">الكل</option>
-                  <option value="CASH">كاش فقط</option>
-                  <option value="INSTALLMENT">قسط فقط</option>
-                  <option value="HAS_DOWN_PAYMENT">بمقدم فقط</option>
-                </select>
-              </div>
-            </div>
-
-            <div style={{ gridColumn: 'span 3' }}>
-              <div className="input-group input-group-sm flex-nowrap">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle" style={{ width: '70px' }}>المندوب</span>
-                <ReportAutocomplete
-                  items={salespersons}
-                  value={salespersonQuery}
-                  onChange={(text) => {
-                    setSalespersonQuery(text);
-                    if (!text) {
-                      setFilters(prev => {
-                        const newFilters = { ...prev, salesperson_id: '' };
-                        fetchReceipts(newFilters);
-                        return newFilters;
-                      });
-                    }
-                  }}
-                  onSelect={(item) => {
-                    if (item) {
-                      setFilters(prev => {
-                        const newFilters = { ...prev, salesperson_id: String(item.id || item.local_id) };
-                        fetchReceipts(newFilters);
-                        return newFilters;
-                      });
-                      setSalespersonQuery(item.name || '');
-                    } else {
-                      setFilters(prev => {
-                        const newFilters = { ...prev, salesperson_id: '' };
-                        fetchReceipts(newFilters);
-                        return newFilters;
-                      });
-                      setSalespersonQuery('');
-                    }
-                  }}
-                  placeholder="جميع المناديب"
-                  displayKey="name"
-                  searchKeys={['name', 'username', 'local_id']}
-                  idKey="id"
-                  allowClear={true}
-                  className="form-control fw-bold border-secondary-subtle"
-                />
-              </div>
-            </div>
-
-            <div style={{ gridColumn: 'span 1' }}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">من فتورة</span>
-                <DebouncedInput 
-                  type="text" 
-                  inputMode="numeric"
-                  name="receipt_from" 
-                  className="form-control fw-bold border-secondary-subtle text-center px-1" 
-                  value={filters.receipt_from} 
-                  onChange={handleFilterChange} 
-                />
-              </div>
-            </div>
-
-            <div style={{ gridColumn: 'span 1' }}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">إلى</span>
-                <DebouncedInput 
-                  type="text" 
-                  inputMode="numeric"
-                  name="receipt_to" 
-                  className="form-control fw-bold border-secondary-subtle text-center px-1" 
-                  value={filters.receipt_to} 
-                  onChange={handleFilterChange} 
-                />
-              </div>
-            </div>
-
-            <div style={{ gridColumn: 'span 3' }}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2" style={{ width: '70px' }}>الموبايل</span>
-                <DebouncedInput 
-                  type="text" 
-                  name="phone" 
-                  className="form-control fw-bold border-secondary-subtle text-center" 
-                  dir="ltr"
-                  value={filters.phone} 
-                  onChange={handleFilterChange} 
-                />
-              </div>
-            </div>
-
-            {/* ── Row 2 ── */}
-            <div style={{ gridColumn: 'span 4' }}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle" style={{ width: '70px' }}>العميل</span>
-                <DebouncedInput 
-                  type="text" 
-                  name="customer_name" 
-                  className="form-control fw-bold border-secondary-subtle" 
-                  value={filters.customer_name} 
-                  onChange={handleFilterChange} 
-                />
-              </div>
-            </div>
-
-            <div style={{ gridColumn: 'span 4' }}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2" style={{ width: '70px' }}>المنطقة</span>
-                <DebouncedInput 
-                  type="text" 
-                  name="area" 
-                  className="form-control fw-bold border-secondary-subtle" 
-                  value={filters.area} 
-                  onChange={handleFilterChange} 
-                />
-              </div>
-            </div>
-
-            <div style={{ gridColumn: 'span 2' }} className="d-flex align-items-center gap-2 justify-content-end">
-              <button type="button" className="btn btn-outline-secondary w-100 fw-bold fs-4 py-1" onClick={() => { 
-                  setFilters(initialFilters); 
-                  setSalespersonQuery(''); 
-                  fetchReceipts(initialFilters); 
-                }} disabled={loading} style={{ border: '1px solid #adb5bd' }}>
-                <IconRefresh size={16} className="me-1" />
-                إعادة ضبط
-              </button>
-            </div>
-
-          </div>
-        </form>
+  const renderFilters = () => (
+    <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
+      {/* Sale Type */}
+      <div style={{ width: '110px' }} className="flex-shrink-0">
+        <select 
+          name="sale_type" 
+          className="form-select form-select-sm fw-bold border-secondary-subtle px-1 text-center" 
+          value={filters.sale_type} 
+          onChange={(e) => {
+            const val = e.target.value;
+            setFilters(prev => {
+              const newFilters = { ...prev, sale_type: val };
+              fetchReceipts(newFilters);
+              return newFilters;
+            });
+          }}
+        >
+          <option value="ALL">الكل</option>
+          <option value="CASH">كاش فقط</option>
+          <option value="INSTALLMENT">قسط فقط</option>
+          <option value="HAS_DOWN_PAYMENT">بمقدم فقط</option>
+        </select>
       </div>
+
+      {/* Salesperson */}
+      <div style={{ width: '150px' }} className="flex-shrink-0">
+        <ReportAutocomplete
+          items={salespersons}
+          value={salespersonQuery}
+          onChange={(text) => {
+            setSalespersonQuery(text);
+            if (!text) {
+              setFilters(prev => {
+                const newFilters = { ...prev, salesperson_id: '' };
+                fetchReceipts(newFilters);
+                return newFilters;
+              });
+            }
+          }}
+          onSelect={(item) => {
+            if (item) {
+              setFilters(prev => {
+                const newFilters = { ...prev, salesperson_id: String(item.id || item.local_id) };
+                fetchReceipts(newFilters);
+                return newFilters;
+              });
+              setSalespersonQuery(item.name || '');
+            } else {
+              setFilters(prev => {
+                const newFilters = { ...prev, salesperson_id: '' };
+                fetchReceipts(newFilters);
+                return newFilters;
+              });
+              setSalespersonQuery('');
+            }
+          }}
+          placeholder="جميع المناديب"
+          displayKey="name"
+          searchKeys={['name', 'username', 'local_id']}
+          idKey="id"
+          allowClear={true}
+          className="form-control form-control-sm fw-bold border-secondary-subtle"
+        />
+      </div>
+
+      {/* Customer Name */}
+      <div className="flex-grow-1" style={{ minWidth: '120px' }}>
+        <DebouncedInput 
+          type="text" 
+          name="customer_name" 
+          className="form-control form-control-sm fw-bold border-secondary-subtle" 
+          placeholder="اسم العميل..."
+          value={filters.customer_name} 
+          onChange={handleFilterChange} 
+        />
+      </div>
+
+      {/* Phone */}
+      <div style={{ width: '110px' }} className="flex-shrink-0">
+        <DebouncedInput 
+          type="text" 
+          name="phone" 
+          className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
+          dir="ltr"
+          placeholder="الموبايل"
+          value={filters.phone} 
+          onChange={handleFilterChange} 
+        />
+      </div>
+
+      {/* From Receipt */}
+      <div style={{ width: '75px' }} className="flex-shrink-0">
+        <DebouncedInput 
+          type="text" 
+          inputMode="numeric"
+          name="receipt_from" 
+          className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
+          placeholder="من"
+          value={filters.receipt_from} 
+          onChange={handleFilterChange} 
+        />
+      </div>
+
+      {/* To Receipt */}
+      <div style={{ width: '75px' }} className="flex-shrink-0">
+        <DebouncedInput 
+          type="text" 
+          inputMode="numeric"
+          name="receipt_to" 
+          className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
+          placeholder="إلى"
+          value={filters.receipt_to} 
+          onChange={handleFilterChange} 
+        />
+      </div>
+
+      {/* Reset */}
+      <button 
+        type="button" 
+        className="btn btn-outline-secondary btn-sm fw-bold px-2 py-1 flex-shrink-0 border-secondary-subtle d-flex align-items-center gap-1" 
+        onClick={() => { 
+          setFilters(initialFilters); 
+          setSalespersonQuery(''); 
+          fetchReceipts(initialFilters); 
+        }} 
+        disabled={loading}
+        title="إعادة ضبط"
+      >
+        <IconRefresh size={14} />
+        <span>إعادة ضبط</span>
+      </button>
     </div>
   );
 
   return (
-    <div className="container-fluid p-0 d-flex flex-column" dir="rtl" style={{ minHeight: 'calc(100vh - 100px)' }}>
-      {renderFiltersGrid()}
+    <div className="w-100 p-0">
       <ReportTable
         columns={columns}
         data={receipts}
         loading={loading && receipts.length === 0}
         summaryCards={summaryCards}
+        renderFilters={renderFilters}
         renderRow={renderRow}
         emptyMessage="لا توجد فواتير لهذه المعايير"
         emptyIcon={IconReceipt}

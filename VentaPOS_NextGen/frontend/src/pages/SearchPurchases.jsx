@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import api from '../api';
-import { IconReceipt, IconPlus, IconFilter } from '@tabler/icons-react';
-import PurchaseFilterToolbar from '../components/purchases/PurchaseFilterToolbar';
+import { IconReceipt, IconPlus } from '@tabler/icons-react';
+import { PurchaseFilterRow1, PurchaseFilterRow2 } from '../components/purchases/PurchaseFilterToolbar';
 import PurchaseTable from '../components/purchases/PurchaseTable';
 import PurchaseContextMenu from '../components/purchases/PurchaseContextMenu';
 import PrintModal from '../components/common/PrintModal';
@@ -27,7 +27,6 @@ export default function SearchPurchases() {
   const [suppliers, setSuppliers] = useState([]);
   const [productsMap, setProductsMap] = useState({});
   const [loading, setLoading] = useState(false);
-  const [showFilters, setShowFilters] = useState(true);
   const [contextMenu, setContextMenu] = useState(null);
   const filterTimeout = useRef(null);
   
@@ -308,24 +307,13 @@ export default function SearchPurchases() {
       title="دفتر فواتير الشراء ومرتجع المصنع"
       icon={IconReceipt}
       headerActions={
-        <>
-          <button 
-            className={`btn ${showFilters ? 'btn-secondary' : 'btn-outline-secondary'} d-flex align-items-center gap-1 fw-bold fs-4 py-2`}
-            onClick={() => setShowFilters(!showFilters)}
-            title="إظهار / إخفاء البحث"
-          >
-            <IconFilter size={20} />
-            {showFilters ? 'إخفاء البحث' : 'إظهار البحث'}
-          </button>
-          <Link to="/purchases/new" className="btn btn-success d-flex align-items-center gap-1 fw-bold fs-4 border-secondary-subtle py-2">
-            <IconPlus size={20} />
-            <span>إضافة فاتورة جديدة</span>
-          </Link>
-        </>
+        <Link to="/purchases/new" className="btn btn-success d-flex align-items-center gap-1 fw-bold fs-4 border-secondary-subtle py-2">
+          <IconPlus size={20} />
+          <span>إضافة فاتورة جديدة</span>
+        </Link>
       }
-      toolbar={
-        <PurchaseFilterToolbar
-          showFilters={showFilters}
+      row1={
+        <PurchaseFilterRow1
           filters={filters}
           handleFilterChange={handleFilterChange}
           handleSelectChange={handleSelectChange}
@@ -336,6 +324,16 @@ export default function SearchPurchases() {
           handleSearchSubmit={handleSearchSubmit}
           handleResetFilters={handleResetFilters}
           loading={loading}
+        />
+      }
+      row2={
+        <PurchaseFilterRow2
+          totalInvoicesCount={totalInvoicesCount}
+          selectedIds={selectedIds}
+          handleOpenPrintModal={handleOpenPrintModal}
+          handleBulkDelete={handleBulkDelete}
+          totalAmountSum={totalAmountSum}
+          formatCurrency={formatCurrency}
         />
       }
       modals={
@@ -361,15 +359,11 @@ export default function SearchPurchases() {
       <PurchaseTable
         invoices={invoices}
         loading={loading}
-        totalInvoicesCount={totalInvoicesCount}
-        totalAmountSum={totalAmountSum}
         selectedIds={selectedIds}
         globalAllIds={globalAllIds}
         toggleSelect={toggleSelect}
         toggleSelectAll={toggleSelectAll}
-        handleBulkDelete={handleBulkDelete}
         handleContextMenu={handleContextMenu}
-        handleOpenPrintModal={handleOpenPrintModal}
         formatCurrency={formatCurrency}
         getSupplierName={getSupplierName}
         lastRowElementRef={lastRowElementRef}

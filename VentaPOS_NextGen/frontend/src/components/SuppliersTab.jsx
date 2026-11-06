@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { IconTrash, IconPlus, IconLoader, IconEdit, IconCheck, IconX , IconSortAscending, IconSortDescending, IconSearch } from '@tabler/icons-react';
+import { IconTrash, IconPlus, IconLoader, IconEdit, IconCheck, IconX, IconSortAscending, IconSortDescending, IconSearch } from '@tabler/icons-react';
 import toast from 'react-hot-toast';
 import api from '../api';
-
+import { useStandardTableSlots } from './common/StandardTablePageLayout';
 
 export default function SuppliersTab() {
   const [suppliers, setSuppliers] = useState([]);
@@ -22,7 +22,6 @@ export default function SuppliersTab() {
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
 
-  
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState(null);
 
@@ -46,7 +45,7 @@ export default function SuppliersTab() {
   };
 
   const filteredAndSortedSuppliers = React.useMemo(() => {
-    let filtered = suppliers.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    let filtered = suppliers.filter(s => (s.name || '').toLowerCase().includes(searchQuery.toLowerCase()));
     filtered.sort((a, b) => {
       let valA = a[sortColumn];
       let valB = b[sortColumn];
@@ -58,7 +57,6 @@ export default function SuppliersTab() {
     });
     return filtered;
   }, [suppliers, searchQuery, sortColumn, sortDirection]);
-
 
   const fetchSuppliers = async () => {
     try {
@@ -140,52 +138,62 @@ export default function SuppliersTab() {
     }
   };
 
+  // Slot injection into StandardTablePageLayout
+  const slotPortals = useStandardTableSlots({
+    row1Extra: (
+      <div className="d-flex align-items-center gap-2 ms-auto flex-nowrap" style={{ overflow: 'visible' }}>
+        <div className="input-icon" style={{ width: '220px' }}>
+          <span className="input-icon-addon"><IconSearch size={14}/></span>
+          <input 
+            type="text" 
+            className="form-control form-control-sm border-secondary-subtle fw-bold" 
+            placeholder="بحث حي عن مورد..." 
+            value={searchQuery} 
+            onChange={(e) => setSearchQuery(e.target.value)} 
+          />
+        </div>
+        <span className="badge bg-secondary text-white rounded-pill px-2 py-1 tabular-nums flex-shrink-0">
+          {filteredAndSortedSuppliers.length} مورد
+        </span>
+      </div>
+    ),
+    row2: (
+      <form onSubmit={handleAdd} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
+        <div className="flex-grow-1" style={{ minWidth: '200px' }}>
+          <input 
+            ref={nameInputRef} 
+            type="text" 
+            className="form-control form-control-sm border-secondary-subtle fw-bold" 
+            value={newSupplierName} 
+            onChange={(e) => setNewSupplierName(e.target.value)} 
+            placeholder="اسم المورد / المصنع الجديد... *" 
+            required 
+            autoFocus 
+            disabled={submitting || loading} 
+          />
+        </div>
+        <button 
+          type="submit" 
+          className="btn btn-sm btn-primary fw-bold px-3 py-1 flex-shrink-0 d-flex align-items-center gap-1 border-secondary-subtle" 
+          disabled={submitting || loading}
+        >
+          {submitting ? <IconLoader className="icon-spin" size={14} /> : <IconPlus size={14} />}
+          <span>إضافة مورد</span>
+        </button>
+      </form>
+    )
+  });
+
   return (
     <div>
-      {error && <div className="alert alert-danger">{error}</div>}
-
-      <div className="accordion mb-3 shadow-sm" id="addSupplierAccordion">
-        <div className="accordion-item">
-          <h2 className="accordion-header" id="headingAddSupplier">
-            <button className="accordion-button collapsed py-2 bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAddSupplier" aria-expanded="false" aria-controls="collapseAddSupplier">
-              <span className="fw-bold text-primary d-flex align-items-center">
-                <IconPlus size={18} className="me-2"/> إضافة مورد
-              </span>
-            </button>
-          </h2>
-          <div id="collapseAddSupplier" className="accordion-collapse collapse" aria-labelledby="headingAddSupplier" data-bs-parent="#addSupplierAccordion">
-            <div className="accordion-body p-2 bg-white">
-              <form onSubmit={handleAdd} className="row g-2 align-items-end">
-                <div className="col-md-6">
-                  <label className="form-label small mb-1">اسم المورد / المصنع <span className="text-danger">*</span></label>
-                  <input ref={nameInputRef} type="text" className="form-control form-control-sm" value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)} placeholder="أدخل اسم المورد..." required autoFocus disabled={submitting || loading} />
-                </div>
-                <div className="col-md-3 d-flex align-items-end">
-                  <button type="submit" className="btn btn-sm btn-primary w-100" disabled={submitting || loading}>
-                    {submitting ? <IconLoader className="icon-spin" size={16} /> : <IconPlus size={16} />}
-                    <span className="ms-1">إضافة مورد</span>
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div className="d-flex justify-content-between align-items-center mb-2">
-        <div className="input-icon w-50">
-          <span className="input-icon-addon"><IconSearch size={16}/></span>
-          <input type="text" className="form-control form-control-sm border-secondary-subtle" placeholder="بحث حي عن مورد..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-        </div>
-        <div className="text-end">
-          <span className="text-muted small">العدد: <strong>{filteredAndSortedSuppliers.length}</strong></span>
-        </div>
-      </div>
+      {slotPortals}
+      {error && <div className="alert alert-danger mb-2 py-1">{error}</div>}
 
       {/* الجدول */}
-      <div className="card shadow-sm" style={{ border: '1px solid #dee2e6' }}>
-        <table className="table table-vcenter table-bordered table-hover text-nowrap table-sticky-header mb-0">
-          <thead className="bg-light">
+      <div className="card shadow-sm border-secondary-subtle">
+        <div className="table-responsive" style={{ overflow: 'visible' }}>
+          <table className="table table-vcenter table-bordered table-hover text-nowrap table-sticky-header mb-0">
+            <thead className="bg-light">
               <tr>
                 <th className="w-1 text-center align-middle border-secondary-subtle" style={{cursor:"pointer"}} onClick={() => handleSort("id")}>رقم المورد {getSortIcon("id")}</th>
                 <th className="text-start px-2 align-middle border-secondary-subtle" style={{cursor:"pointer"}} onClick={() => handleSort("name")}>اسم المورد {getSortIcon("name")}</th>
@@ -205,7 +213,7 @@ export default function SuppliersTab() {
                   <td colSpan="4" className="text-center text-muted py-4">لا يوجد موردين مضافين</td>
                 </tr>
               ) : (
-                filteredAndSortedSuppliers.map((s, index) => {
+                filteredAndSortedSuppliers.map((s) => {
                   const isEditing = editingId === s.id;
                   
                   if (isEditing) {
@@ -215,7 +223,7 @@ export default function SuppliersTab() {
                         <td className="text-start px-2 align-middle border-secondary-subtle">
                           <input 
                             type="text" 
-                            className="form-control form-control-sm" 
+                            className="form-control form-control-sm border-secondary-subtle fw-bold" 
                             value={editName} 
                             onChange={(e) => setEditName(e.target.value)}
                             autoFocus
@@ -252,7 +260,8 @@ export default function SuppliersTab() {
                 })
               )}
             </tbody>
-        </table>
+          </table>
+        </div>
       </div>
 
       {/* مودال تأكيد الحذف */}

@@ -60,42 +60,39 @@ Because the manager transcribes transactions from physical paper notebooks, data
 
 ---
 
-## 4. Standardized Table Architecture (Dual-Mode Sticky & Unified Interaction)
+## 4. Standardized Table Architecture (`StandardTablePageLayout.jsx` & Unified Window-Level Sticky Header)
 
-Tables in VentaPOS NextGen operate under two clearly demarcated modes to balance high-speed master data management with multi-column financial reporting:
+All 5 table/listing pages (`SearchReceipts.jsx`, `SearchPurchases.jsx`, `Expenses.jsx`, `Dimensions.jsx`, and `ReportsLayout.jsx` / `ReportTable.jsx`) share a single parent layout template (`StandardTablePageLayout.jsx`) that enforces an identical top-section height and unified window-level sticky table headers:
 
 ```
-Mode A: Window-Level Sticky Tables (Management Tabs & Forms)
+Unified Table Page Architecture (StandardTablePageLayout.jsx)
 ┌────────────────────────────────────────────────────────┐
 │ 1. Fixed Navbar (top: 0, height: 56px, z-index: 1030)  │
 ├────────────────────────────────────────────────────────┤
-│ 2. Sticky Headers (.table-sticky-header th: top: 56px) │
+│ 2. Top Section (.standard-page-top-section, scrolls):  │
+│    - Header Banner (.standard-page-header: 48px)       │
+│    - 2-Row Controls Card (.standard-top-card: 2x48px)  │
 ├────────────────────────────────────────────────────────┤
-│ 3. Table Rows (Normal Window Document Flow)            │
-└────────────────────────────────────────────────────────┘
-
-Mode B: Report Container Sticky Tables (Reports & Search)
-┌────────────────────────────────────────────────────────┐
-│ 1. Fixed Navbar (top: 0, height: 56px, z-index: 1030)  │
+│ 3. Sticky Table Header (thead th: top: 56px, z: 1010)  │
 ├────────────────────────────────────────────────────────┤
-│ 2. Sticky Toolbar (top: 56px, height: 56px, z: 1020)   │
-├────────────────────────────────────────────────────────┤
-│ 3. Sticky Headers (ReportTable thead: top: 0, z: 1010) │
-├────────────────────────────────────────────────────────┤
-│ 4. Table Body with sleek 6px vertical scrollbar        │
+│ 4. Table Rows (Normal Window Document Flow, Y = 231px) │
 └────────────────────────────────────────────────────────┘
 ```
 
-### 4.1 Mode A: Window-Level Sticky Tables (`.table-sticky-header`)
-- **Usage**: Master management screens (`InventoryTab`, `SalespersonsTab`, `SuppliersTab`, `Expenses`, `ProductLedger`).
-- **Sticky Offset**: Headers stick directly to `top: var(--navbar-height, 56px)`. When a `.sticky-toolbar` precedes the table in the same card, the container must use `.has-sticky-toolbar`, offsetting the header by `calc(var(--navbar-height) + var(--toolbar-height))`.
-- **CSS Overflow Rule (Crucial)**: Window-level sticky tables must **never** be wrapped in an unconstrained `.table-responsive` (`overflow-x: auto`) div without `overflow: visible`, because CSS specifications compute `overflow-y: auto` whenever `overflow-x` is scrollable, which breaks viewport-relative `position: sticky`.
+### 4.1 Locked Top Section Height ("Title + 2 Rows")
+- **Equal Vertical Table Start (`Y = 231px`)**: Every table page renders `.standard-page-top-section` containing:
+  1. **Header Banner (`.standard-page-header`, fixed `48px` height)**: Page Icon + Title on the right, and `headerActions` on the left.
+  2. **Unified 2-Row Controls Card (`.standard-top-card`, `2 × 48px` rows)**:
+     - **Row 1 (`.standard-top-row-1`, `48px`)**: Primary filters, tabs, and live search controls.
+     - **Row 2 (`.standard-top-row-2`, `48px`)**: Inline add forms (`Expenses`, `Dimensions`), bulk selection actions, status counts, KPI `summaryCards` pills (`ReportTable`), print button, and sort dropdown.
+- **React Portal Slots (`useStandardTableSlots`)**: Composite child components (`InventoryTab.jsx`, `SalespersonsTab.jsx`, `SuppliersTab.jsx`, and `ReportTable.jsx`) portal their `row1Extra` and `row2` controls directly into `.standard-top-card` without rendering extra accordions, filter cards, or `.card-header` bars above `<table>`.
+- **No Footer Wrapper**: Table pages use a top wrapper only and never render a sticky bottom footer wrapper.
+- **Scope Boundary**: Data-entry and specialized screens (`POS.jsx`, `PurchaseEntry.jsx`, `ReturnReceipt.jsx`, `ProductLedger.jsx`) retain their dedicated custom layouts.
 
-### 4.2 Mode B: Report Container Sticky Tables (`ReportTable.jsx` + `useSmartScroll.js`)
-- **Usage**: Audited analytical reports (`ProfitAndLossReport`, `InventoryMovementReport`, `SalespersonPerformanceReport`, `PurchasesReport`, etc.) and `SearchReceipts`.
-- **Hybrid Scroll Mechanics**: `useSmartScroll` dynamically calculates the table container's `maxHeight` using `ResizeObserver` (never a body-wide `MutationObserver`), ensuring the document reaches its natural bottom at the exact pixel the sticky toolbar touches the top navbar.
-- **Visible Scrollbar Rule**: Hiding vertical scrollbars (`width: 0px`) is strictly prohibited. The container must display a sleek `6px` vertical scrollbar thumb with subtle contrast so desktop users can visually gauge report length and drag-scroll.
-- **Dynamic Multi-Level Header Offset**: When a report features a 2-row grouped header (`SalespersonPerformanceReport`), the height of row 1 is measured dynamically via `ResizeObserver` and stored in `--header-row-1-height` (avoiding hardcoded pixel overlaps or gaps across zoom levels).
+### 4.2 Window-Level Sticky Table Headers (`top: var(--navbar-height, 56px)`)
+- **Natural Top Section Scroll**: When scrolling down the page, the entire `.standard-page-top-section` (Title + Row 1 + Row 2) scrolls away naturally with the window to maximize vertical screen space for table rows.
+- **Sticky `<thead><th>` Only**: Only the table header (`<thead><th>`) sticks directly beneath the 56px Navbar (`position: sticky !important; top: var(--navbar-height, 56px) !important; z-index: 1010;`). For 2-level grouped report headers (`SalespersonPerformanceReport.jsx`), `.report-sticky-header tr.level-2 th` sticks at `calc(var(--navbar-height, 56px) + 37px)`.
+- **CSS Overflow Rule (Crucial)**: `.standard-page-table-area .table-responsive` and `.report-table-container` enforce `overflow: visible !important; max-height: none !important;` so Bootstrap's `.table-responsive` (`overflow-x: auto`) never creates a nested scroll container that traps `position: sticky`.
 
 ### 4.3 Sorting, Column Summaries & Keyboard Interaction Rules
 1. **Direct Header Click-to-Sort**: Clicking any sortable column header (`<th>`) immediately toggles primary sorting (`asc` $\rightarrow$ `desc` $\rightarrow$ default) with visible directional indicator arrows (`↑` / `↓`). The multi-rule `"ترتيب حسب"` dropdown is retained for composite multi-column sorting and must dismiss automatically upon outside click or `Escape`.

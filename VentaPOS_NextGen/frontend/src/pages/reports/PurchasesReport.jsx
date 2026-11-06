@@ -4,7 +4,7 @@ import api from '../../api';
 import { ReportsContext } from './ReportsLayout';
 import ReportTable from '../../components/ReportTable';
 import DebouncedInput from '../../components/DebouncedInput';
-import { fmtNum, formatMMYYYY } from '../../utils/formatUtils';
+import { fmtNum } from '../../utils/formatUtils';
 
 export default function PurchasesReport() {
   const { year, month, branchId } = useContext(ReportsContext);
@@ -94,203 +94,189 @@ export default function PurchasesReport() {
     setItemQuery('');
   };
 
+  const summaryCards = [
+    { label: 'صافي المشتريات', value: `${fmtNum(summary.total_purchases_amount || 0)} ج.م`, color: 'primary' },
+    { label: 'فواتير الشراء', value: fmtNum(summary.total_purchases_count || 0), color: 'success' },
+    { label: 'مرتجعات الشراء', value: fmtNum(summary.total_returns_count || 0), color: 'warning' },
+    { label: 'قيمة المرتجع', value: `${fmtNum(summary.total_returns_amount || 0)} ج.م`, color: 'danger' },
+    { label: 'صافي القطع', value: `${fmtNum(summary.total_items_quantity || 0)} قطعة`, color: 'info' },
+    { label: 'عدد الموردين', value: fmtNum(summary.suppliers_count || 0), color: 'secondary' },
+  ];
+
+  const renderFilters = () => (
+    <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
+      {/* Supplier Dropdown */}
+      <div style={{ width: '150px' }} className="flex-shrink-0">
+        <select
+          className="form-select form-select-sm border-secondary-subtle fw-bold"
+          value={selectedSupplier}
+          onChange={(e) => setSelectedSupplier(e.target.value)}
+        >
+          <option value="">جميع الموردين</option>
+          {suppliers.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Invoice Type */}
+      <div style={{ width: '130px' }} className="flex-shrink-0">
+        <select
+          className="form-select form-select-sm border-secondary-subtle fw-bold"
+          value={invoiceType}
+          onChange={(e) => setInvoiceType(e.target.value)}
+        >
+          <option value="ALL">الكل</option>
+          <option value="PURCHASE">شراء فقط</option>
+          <option value="RETURN">مرتجع فقط</option>
+        </select>
+      </div>
+
+      {/* Item Query */}
+      <div className="flex-grow-1" style={{ minWidth: '130px' }}>
+        <DebouncedInput
+          type="text"
+          className="form-control form-control-sm border-secondary-subtle fw-bold"
+          placeholder="بحث في الأصناف..."
+          value={itemQuery}
+          onChange={(val) => setItemQuery(val)}
+        />
+      </div>
+
+      {/* Invoice From/To */}
+      <div style={{ width: '80px' }} className="flex-shrink-0">
+        <input
+          type="number"
+          className="form-control form-control-sm text-center border-secondary-subtle fw-bold px-1"
+          placeholder="من رقم"
+          value={invoiceFrom}
+          onChange={(e) => setInvoiceFrom(e.target.value)}
+        />
+      </div>
+      <div style={{ width: '80px' }} className="flex-shrink-0">
+        <input
+          type="number"
+          className="form-control form-control-sm text-center border-secondary-subtle fw-bold px-1"
+          placeholder="إلى رقم"
+          value={invoiceTo}
+          onChange={(e) => setInvoiceTo(e.target.value)}
+        />
+      </div>
+
+      {/* Reset Button */}
+      <button
+        type="button"
+        className="btn btn-sm btn-outline-secondary px-2 py-1 flex-shrink-0 border-secondary-subtle d-flex align-items-center gap-1"
+        onClick={handleResetFilters}
+        title="إعادة ضبط"
+      >
+        <IconRefresh size={14} />
+        <span>إعادة ضبط</span>
+      </button>
+
+      {/* Filter Button */}
+      <button
+        type="button"
+        className="btn btn-sm btn-primary px-3 py-1 flex-shrink-0 border-secondary-subtle d-flex align-items-center gap-1 fw-bold"
+        onClick={fetchPurchases}
+      >
+        <IconFilter size={14} />
+        <span>تصفية</span>
+      </button>
+    </div>
+  );
+
+  const columns = [
+    {
+      key: 'invoice_number',
+      label: 'رقم الفاتورة',
+      align: 'center',
+      className: 'fw-bold tabular-nums',
+      render: (inv) => `#${inv.invoice_number}`,
+      getValue: (inv) => `#${inv.invoice_number}`,
+    },
+    {
+      key: 'invoice_type',
+      label: 'النوع',
+      align: 'center',
+      render: (inv) =>
+        inv.invoice_type === 'RETURN' ? (
+          <span className="badge bg-warning-lt text-warning fw-bold d-inline-flex align-items-center gap-1">
+            <IconArrowBackUp size={14} />
+            مرتجع مشتريات
+          </span>
+        ) : (
+          <span className="badge bg-success-lt text-success fw-bold d-inline-flex align-items-center gap-1">
+            <IconPackage size={14} />
+            فاتورة شراء
+          </span>
+        ),
+      getValue: (inv) => (inv.invoice_type === 'RETURN' ? 'مرتجع مشتريات' : 'فاتورة شراء'),
+    },
+    {
+      key: 'supplier_name',
+      label: 'المورد',
+      align: 'start',
+      className: 'fw-bold text-dark px-2',
+      render: (inv) => inv.supplier_name || 'غير محدد',
+    },
+    {
+      key: 'items_summary',
+      label: 'الأصناف المشتراة',
+      align: 'start',
+      className: 'text-muted small px-2',
+      render: (inv) => inv.items_summary || '-',
+    },
+    {
+      key: 'total_units',
+      label: 'إجمالي القطع',
+      align: 'center',
+      className: 'tabular-nums fw-bold',
+      render: (inv) => fmtNum(inv.total_units || 0),
+    },
+    {
+      key: 'invoice_date',
+      label: 'التاريخ',
+      align: 'center',
+      className: 'tabular-nums text-muted',
+      render: (inv) => inv.invoice_date || '-',
+    },
+    {
+      key: 'total_cost',
+      label: 'الإجمالي (ج.م)',
+      align: 'center',
+      className: 'tabular-nums fw-bold text-primary',
+      render: (inv) => fmtNum(inv.total_cost || 0),
+      format: 'currency',
+    },
+  ];
+
   return (
-    <div className="d-flex flex-column gap-3">
-      {/* 6 KPI Summary Cards */}
-      <div className="row g-2">
-        <div className="col-6 col-md-4 col-xl-2">
-          <div className="card shadow-sm border-0 border-start border-primary border-3">
-            <div className="card-body p-2">
-              <div className="text-muted small fw-bold">صافي المشتريات</div>
-              <div className="h3 mb-0 fw-bold text-primary tabular-nums mt-1">
-                {fmtNum(summary.total_purchases_amount || 0)} <span className="fs-6">ج.م</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-6 col-md-4 col-xl-2">
-          <div className="card shadow-sm border-0 border-start border-success border-3">
-            <div className="card-body p-2">
-              <div className="text-muted small fw-bold">فواتير الشراء</div>
-              <div className="h3 mb-0 fw-bold text-success tabular-nums mt-1">
-                {fmtNum(summary.total_purchases_count || 0)}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-6 col-md-4 col-xl-2">
-          <div className="card shadow-sm border-0 border-start border-warning border-3">
-            <div className="card-body p-2">
-              <div className="text-muted small fw-bold">مرتجعات الشراء</div>
-              <div className="h3 mb-0 fw-bold text-warning tabular-nums mt-1">
-                {fmtNum(summary.total_returns_count || 0)}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-6 col-md-4 col-xl-2">
-          <div className="card shadow-sm border-0 border-start border-danger border-3">
-            <div className="card-body p-2">
-              <div className="text-muted small fw-bold">قيمة المرتجع</div>
-              <div className="h3 mb-0 fw-bold text-danger tabular-nums mt-1">
-                {fmtNum(summary.total_returns_amount || 0)} <span className="fs-6">ج.م</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-6 col-md-4 col-xl-2">
-          <div className="card shadow-sm border-0 border-start border-info border-3">
-            <div className="card-body p-2">
-              <div className="text-muted small fw-bold">صافي القطع</div>
-              <div className="h3 mb-0 fw-bold text-info tabular-nums mt-1">
-                {fmtNum(summary.total_items_quantity || 0)} <span className="fs-6">قطعة</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-6 col-md-4 col-xl-2">
-          <div className="card shadow-sm border-0 border-start border-secondary border-3">
-            <div className="card-body p-2">
-              <div className="text-muted small fw-bold">عدد الموردين</div>
-              <div className="h3 mb-0 fw-bold text-secondary tabular-nums mt-1">
-                {fmtNum(summary.suppliers_count || 0)}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter Toolbar */}
-      <div className="card shadow-sm border-0">
-        <div className="card-body p-2">
-          <div className="row g-2 align-items-center">
-            <div className="col-12 col-md-3">
-              <select
-                className="form-select form-select-sm"
-                value={selectedSupplier}
-                onChange={(e) => setSelectedSupplier(e.target.value)}
-              >
-                <option value="">جميع الموردين</option>
-                {suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="col-6 col-md-2">
-              <select
-                className="form-select form-select-sm"
-                value={invoiceType}
-                onChange={(e) => setInvoiceType(e.target.value)}
-              >
-                <option value="ALL">الكل (شراء ومرتجع)</option>
-                <option value="PURCHASE">فواتير شراء فقط</option>
-                <option value="RETURN">مرتجعات مشتريات فقط</option>
-              </select>
-            </div>
-
-            <div className="col-6 col-md-2">
-              <DebouncedInput
-                type="text"
-                className="form-control form-control-sm"
-                placeholder="بحث في الأصناف..."
-                value={itemQuery}
-                onChange={(val) => setItemQuery(val)}
-              />
-            </div>
-
-            <div className="col-6 col-md-2 d-flex gap-1">
-              <input
-                type="number"
-                className="form-control form-control-sm text-center"
-                placeholder="من رقم"
-                value={invoiceFrom}
-                onChange={(e) => setInvoiceFrom(e.target.value)}
-              />
-              <input
-                type="number"
-                className="form-control form-control-sm text-center"
-                placeholder="إلى رقم"
-                value={invoiceTo}
-                onChange={(e) => setInvoiceTo(e.target.value)}
-              />
-            </div>
-
-            <div className="col-6 col-md-3 d-flex justify-content-end gap-2">
-              <button
-                type="button"
-                className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
-                onClick={handleResetFilters}
-              >
-                <IconRefresh size={14} />
-                إعادة ضبط
-              </button>
-              <button
-                type="button"
-                className="btn btn-sm btn-primary d-flex align-items-center gap-1 fw-bold"
-                onClick={fetchPurchases}
-              >
-                <IconFilter size={14} />
-                تصفية
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Error state */}
+    <div className="w-100 p-0">
       {error && (
-        <div className="alert alert-danger py-2">
+        <div className="alert alert-danger py-2 mb-2">
           {error}
         </div>
       )}
 
-      {/* Mode B Sticky Table */}
-      <ReportTable loading={loading} isEmpty={filteredInvoices.length === 0} emptyText="لا توجد فواتير مشتريات مطابقة">
-        <thead className="table-sticky-header">
-          <tr>
-            <th style={{ width: '10%' }}>رقم الفاتورة</th>
-            <th style={{ width: '12%' }}>النوع</th>
-            <th style={{ width: '18%' }}>المورد</th>
-            <th style={{ width: '30%' }}>الأصناف المشتراة</th>
-            <th style={{ width: '10%' }} className="text-center">إجمالي القطع</th>
-            <th style={{ width: '10%' }} className="text-center">التاريخ</th>
-            <th style={{ width: '10%' }} className="text-end">الإجمالي (ج.م)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filteredInvoices.map((inv) => (
-            <tr key={inv.id}>
-              <td className="fw-bold tabular-nums">#{inv.invoice_number}</td>
-              <td>
-                {inv.invoice_type === 'RETURN' ? (
-                  <span className="badge bg-warning-lt text-warning fw-bold d-inline-flex align-items-center gap-1">
-                    <IconArrowBackUp size={14} />
-                    مرتجع مشتريات
-                  </span>
-                ) : (
-                  <span className="badge bg-success-lt text-success fw-bold d-inline-flex align-items-center gap-1">
-                    <IconPackage size={14} />
-                    فاتورة شراء
-                  </span>
-                )}
-              </td>
-              <td className="fw-bold text-dark">{inv.supplier_name}</td>
-              <td className="text-muted small">{inv.items_summary}</td>
-              <td className="text-center tabular-nums fw-bold">{fmtNum(inv.total_units || 0)}</td>
-              <td className="text-center tabular-nums text-muted">{inv.invoice_date}</td>
-              <td className="text-end tabular-nums fw-bold text-primary">
-                {fmtNum(inv.total_cost || 0)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </ReportTable>
+      <ReportTable
+        reportTitle="تقرير فواتير المشتريات"
+        periodLabel={year && month ? `${year}/${String(month).padStart(2, '0')}` : undefined}
+        columns={columns}
+        data={filteredInvoices}
+        loading={loading}
+        summaryCards={summaryCards}
+        renderFilters={renderFilters}
+        sortableColumns={[
+          { id: 'invoice_number', label: 'رقم الفاتورة' },
+          { id: 'supplier_name', label: 'المورد' },
+          { id: 'total_units', label: 'إجمالي القطع' },
+          { id: 'total_cost', label: 'الإجمالي' },
+        ]}
+        defaultSortRules={[{ id: 1, column: 'invoice_number', dir: 'desc' }]}
+        emptyMessage="لا توجد فواتير مشتريات مطابقة"
+        emptyIcon={IconPackage}
+      />
     </div>
   );
 }

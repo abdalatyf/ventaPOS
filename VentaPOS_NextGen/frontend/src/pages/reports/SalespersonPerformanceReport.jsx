@@ -310,53 +310,41 @@ export default function SalespersonPerformanceReport() {
     );
   };
 
-  const renderFiltersGrid = () => (
-    <div className="card shadow-sm mb-3" style={{ border: '1px solid #dee2e6' }}>
-      <div className="card-body p-3">
-        <form onSubmit={(e) => e.preventDefault()}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '0.75rem', alignItems: 'center' }}>
-            
-            <div style={{ gridColumn: 'span 5' }}>
-              <div className="input-group input-group-sm flex-nowrap">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle" style={{ width: '80px' }}>المندوب</span>
-                <ReportAutocomplete
-                  items={items}
-                  value={searchQuery}
-                  onChange={(text) => {
-                    setSearchQuery(text);
-                    if (!text) setSelectedSalesperson(null);
-                  }}
-                  onSelect={(sp) => {
-                    setSelectedSalesperson(sp);
-                    if (sp) setSearchQuery(sp.name || '');
-                  }}
-                  placeholder="ابحث عن مندوب..."
-                  displayKey="name"
-                  idKey="salesperson_id"
-                  searchKeys={['name', 'local_id', 'salesperson_id']}
-                  allowClear={true}
-                  className="form-control fw-bold border-secondary-subtle"
-                />
-              </div>
-            </div>
-
-          </div>
-        </form>
+  const renderFilters = () => (
+    <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
+      <div style={{ width: '220px' }} className="flex-shrink-0">
+        <ReportAutocomplete
+          items={items}
+          value={searchQuery}
+          onChange={(text) => {
+            setSearchQuery(text);
+            if (!text) setSelectedSalesperson(null);
+          }}
+          onSelect={(sp) => {
+            setSelectedSalesperson(sp);
+            if (sp) setSearchQuery(sp.name || '');
+          }}
+          placeholder="ابحث عن مندوب..."
+          displayKey="name"
+          idKey="salesperson_id"
+          searchKeys={['name', 'local_id', 'salesperson_id']}
+          allowClear={true}
+          className="form-control form-control-sm fw-bold border-secondary-subtle"
+        />
       </div>
     </div>
   );
 
   return (
-    <div className="container-fluid p-0 d-flex flex-column" dir="rtl" style={{ minHeight: 'calc(100vh - 100px)' }}>
-      {error && <div className="alert alert-danger mb-3">{error}</div>}
-      
-      {renderFiltersGrid()}
+    <div className="w-100 p-0">
+      {error && <div className="alert alert-danger mb-2 py-1">{error}</div>}
 
       <ReportTable
         columns={columns}
         data={processedItems}
         loading={loading}
         summaryCards={summaryCards}
+        renderFilters={renderFilters}
         sortableColumns={[
           { id: 'name', label: 'اسم المندوب' },
           { id: 'receipts_count', label: 'عدد الفواتير' },

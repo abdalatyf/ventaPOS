@@ -195,82 +195,69 @@ export default function InventoryMovementReport() {
     { label: 'إجمالي القيمة', value: fmtNum(totals.total_value || data.total_inventory_value), color: 'success', icon: IconCoin }
   ];
 
-  const renderFiltersGrid = () => (
-    <div className="card shadow-sm mb-3" style={{ border: '1px solid #dee2e6' }}>
-      <div className="card-body p-3">
-        <form onSubmit={(e) => e.preventDefault()}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '0.75rem', alignItems: 'center' }}>
-            
-            <div style={{ gridColumn: 'span 5' }}>
-              <div className="input-group input-group-sm flex-nowrap">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle" style={{ width: '80px' }}>الصنف</span>
-                <ReportAutocomplete
-                  items={items}
-                  value={searchQuery}
-                  onChange={(text) => {
-                    setSearchQuery(text);
-                    if (!text) setSelectedProduct(null);
-                  }}
-                  onSelect={(prod) => {
-                    setSelectedProduct(prod);
-                    if (prod) setSearchQuery(prod.product_name || '');
-                  }}
-                  placeholder="ابحث عن صنف..."
-                  displayKey="product_name"
-                  idKey="product_id"
-                  searchKeys={['product_name', 'product_id', 'id']}
-                  allowClear={true}
-                  className="form-control fw-bold border-secondary-subtle"
-                />
-              </div>
-            </div>
+  const renderFilters = () => (
+    <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
+      {/* Product */}
+      <div className="flex-grow-1" style={{ minWidth: '180px' }}>
+        <ReportAutocomplete
+          items={items}
+          value={searchQuery}
+          onChange={(text) => {
+            setSearchQuery(text);
+            if (!text) setSelectedProduct(null);
+          }}
+          onSelect={(prod) => {
+            setSelectedProduct(prod);
+            if (prod) setSearchQuery(prod.product_name || '');
+          }}
+          placeholder="ابحث عن صنف..."
+          displayKey="product_name"
+          idKey="product_id"
+          searchKeys={['product_name', 'product_id', 'id']}
+          allowClear={true}
+          className="form-control form-control-sm fw-bold border-secondary-subtle"
+        />
+      </div>
 
-            <div style={{ gridColumn: 'span 5' }}>
-              <div className="input-group input-group-sm flex-nowrap">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle" style={{ width: '80px' }}>المندوب</span>
-                <ReportAutocomplete
-                  items={salespersonsList}
-                  value={salespersonQuery}
-                  onChange={(text) => {
-                    setSalespersonQuery(text);
-                    if (!text) setSalespersonId('');
-                  }}
-                  onSelect={(sp) => {
-                    if (sp) {
-                      setSalespersonId(String(sp.id || sp.local_id));
-                      setSalespersonQuery(sp.name || '');
-                    } else {
-                      setSalespersonId('');
-                      setSalespersonQuery('');
-                    }
-                  }}
-                  placeholder="جميع المناديب"
-                  displayKey="name"
-                  idKey="id"
-                  searchKeys={['name', 'local_id']}
-                  allowClear={true}
-                  className="form-control fw-bold border-secondary-subtle"
-                />
-              </div>
-            </div>
-
-          </div>
-        </form>
+      {/* Salesperson */}
+      <div style={{ width: '180px' }} className="flex-shrink-0">
+        <ReportAutocomplete
+          items={salespersonsList}
+          value={salespersonQuery}
+          onChange={(text) => {
+            setSalespersonQuery(text);
+            if (!text) setSalespersonId('');
+          }}
+          onSelect={(sp) => {
+            if (sp) {
+              setSalespersonId(String(sp.id || sp.local_id));
+              setSalespersonQuery(sp.name || '');
+            } else {
+              setSalespersonId('');
+              setSalespersonQuery('');
+            }
+          }}
+          placeholder="جميع المناديب"
+          displayKey="name"
+          idKey="id"
+          searchKeys={['name', 'local_id']}
+          allowClear={true}
+          className="form-control form-control-sm fw-bold border-secondary-subtle"
+        />
       </div>
     </div>
   );
 
   return (
-    <div className="container-fluid p-0 d-flex flex-column" dir="rtl" style={{ minHeight: 'calc(100vh - 100px)' }}>
-      {error && <div className="alert alert-danger mb-3">{error}</div>}
-      
-      {renderFiltersGrid()}
+    <div className="w-100 p-0">
+      {error && <div className="alert alert-danger mb-2 py-1">{error}</div>}
 
       <ReportTable
         columns={columns}
         data={processedItems}
         loading={loading}
         summaryCards={summaryCards}
+        renderFilters={renderFilters}
         sortableColumns={[
           { id: 'product_name', label: 'الصنف' },
           { id: 'opening_stock', label: 'رصيد أول' },

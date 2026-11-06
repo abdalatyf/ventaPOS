@@ -132,93 +132,73 @@ export default function ExpensesReport() {
     }
   ];
 
-  const renderFiltersGrid = () => (
-    <div className="card shadow-sm mb-3" style={{ border: '1px solid #dee2e6' }}>
-      <div className="card-body p-3">
-        <form onSubmit={(e) => e.preventDefault()}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '0.75rem', alignItems: 'center' }}>
-            
-            <div style={{ gridColumn: 'span 3' }}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">البيان</span>
-                <DebouncedInput 
-                  type="text" 
-                  className="form-control fw-bold border-secondary-subtle" 
-                  placeholder="بحث في البيان..." 
-                  value={descriptionQuery}
-                  onChange={(e) => setDescriptionQuery(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div style={{ gridColumn: 'span 2' }}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">التصنيف</span>
-                <select
-                  className="form-select fw-bold border-secondary-subtle"
-                  value={categoryQuery}
-                  onChange={(e) => setCategoryQuery(e.target.value)}
-                >
-                  <option value="">كل التصنيفات</option>
-                  {CATEGORY_PRESETS.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div style={{ gridColumn: 'span 2' }}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">من مبلغ</span>
-                <DebouncedInput 
-                  type="text" 
-                  inputMode="numeric"
-                  className="form-control fw-bold border-secondary-subtle text-center px-1" 
-                  placeholder="0" 
-                  value={minAmount}
-                  onChange={(e) => setMinAmount(toEnglish(e.target.value))}
-                />
-              </div>
-            </div>
-
-            <div style={{ gridColumn: 'span 2' }}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">إلى مبلغ</span>
-                <DebouncedInput 
-                  type="text" 
-                  inputMode="numeric"
-                  className="form-control fw-bold border-secondary-subtle text-center px-1" 
-                  placeholder="0" 
-                  value={maxAmount}
-                  onChange={(e) => setMaxAmount(toEnglish(e.target.value))}
-                />
-              </div>
-            </div>
-
-            <div style={{ gridColumn: 'span 1' }} className="d-flex align-items-center gap-2 justify-content-end">
-              <button 
-                type="button" 
-                className="btn btn-outline-secondary w-100 fw-bold fs-4 py-1" 
-                onClick={handleResetFilters}
-                title="إعادة ضبط الفلاتر"
-                style={{ border: '1px solid #adb5bd' }}
-              >
-                <IconRefresh size={16} className="me-1" />
-                إعادة ضبط
-              </button>
-            </div>
-
-          </div>
-        </form>
+  const renderFilters = () => (
+    <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
+      {/* Description */}
+      <div className="flex-grow-1" style={{ minWidth: '150px' }}>
+        <DebouncedInput 
+          type="text" 
+          className="form-control form-control-sm fw-bold border-secondary-subtle" 
+          placeholder="بحث في البيان..." 
+          value={descriptionQuery}
+          onChange={(e) => setDescriptionQuery(e.target.value)}
+        />
       </div>
+
+      {/* Category */}
+      <div style={{ width: '130px' }} className="flex-shrink-0">
+        <select
+          className="form-select form-select-sm fw-bold border-secondary-subtle"
+          value={categoryQuery}
+          onChange={(e) => setCategoryQuery(e.target.value)}
+        >
+          <option value="">كل التصنيفات</option>
+          {CATEGORY_PRESETS.map((cat) => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Min Amount */}
+      <div style={{ width: '90px' }} className="flex-shrink-0">
+        <DebouncedInput 
+          type="text" 
+          inputMode="numeric"
+          className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
+          placeholder="من مبلغ" 
+          value={minAmount}
+          onChange={(e) => setMinAmount(toEnglish(e.target.value))}
+        />
+      </div>
+
+      {/* Max Amount */}
+      <div style={{ width: '90px' }} className="flex-shrink-0">
+        <DebouncedInput 
+          type="text" 
+          inputMode="numeric"
+          className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
+          placeholder="إلى مبلغ" 
+          value={maxAmount}
+          onChange={(e) => setMaxAmount(toEnglish(e.target.value))}
+        />
+      </div>
+
+      {/* Reset */}
+      <button 
+        type="button" 
+        className="btn btn-outline-secondary btn-sm fw-bold px-2 py-1 flex-shrink-0 border-secondary-subtle d-flex align-items-center gap-1" 
+        onClick={handleResetFilters}
+        title="إعادة ضبط الفلاتر"
+      >
+        <IconRefresh size={14} />
+        <span>إعادة ضبط</span>
+      </button>
     </div>
   );
 
   return (
-    <div className="container-fluid p-0 d-flex flex-column" dir="rtl" style={{ minHeight: 'calc(100vh - 100px)' }}>
-      {error && <div className="alert alert-danger mb-3">{error}</div>}
-      
-      {renderFiltersGrid()}
+    <div className="w-100 p-0">
+      {error && <div className="alert alert-danger mb-2 py-1">{error}</div>}
 
       <ReportTable
         columns={columns}
@@ -234,6 +214,7 @@ export default function ExpensesReport() {
           { id: 1, column: 'id', dir: 'desc' }
         ]}
         summaryCards={summaryCards}
+        renderFilters={renderFilters}
         emptyMessage="لا توجد مصروفات مسجلة في هذه الفترة"
         emptyIcon={IconReceipt}
       />

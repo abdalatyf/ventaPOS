@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { IconTrash, IconPlus, IconEdit, IconCheck, IconX, IconLoader , IconSortAscending, IconSortDescending, IconSearch } from '@tabler/icons-react';
+import { IconTrash, IconPlus, IconEdit, IconCheck, IconX, IconLoader, IconSortAscending, IconSortDescending, IconSearch } from '@tabler/icons-react';
 import toast from 'react-hot-toast';
 import api from '../api';
-
+import { useStandardTableSlots } from './common/StandardTablePageLayout';
 
 export default function SalespersonsTab() {
   const [salespersons, setSalespersons] = useState([]);
@@ -15,8 +15,7 @@ export default function SalespersonsTab() {
     setTimeout(() => setError(null), 5000);
   };
   
-  // Branch context (simulated or fetched)
-  const currentBranchId = localStorage.getItem('branchId') || 1; // Assuming default branch ID 1
+  const currentBranchId = localStorage.getItem('branchId') || 1;
   const currentBranchName = localStorage.getItem('branchName') || 'الفرع الرئيسي';
 
   // Add state
@@ -52,7 +51,7 @@ export default function SalespersonsTab() {
   };
 
   const filteredAndSortedSalespersons = React.useMemo(() => {
-    let filtered = salespersons.filter(sp => sp.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    let filtered = salespersons.filter(sp => (sp.name || '').toLowerCase().includes(searchQuery.toLowerCase()));
     filtered.sort((a, b) => {
       let valA = a[sortColumn];
       let valB = b[sortColumn];
@@ -64,7 +63,6 @@ export default function SalespersonsTab() {
     });
     return filtered;
   }, [salespersons, searchQuery, sortColumn, sortDirection]);
-
 
   const fetchSalespersons = async () => {
     try {
@@ -122,7 +120,7 @@ export default function SalespersonsTab() {
   };
 
   const saveEdit = async (id) => {
-    if (!editName.trim()) return; // منع الحفظ إذا كان الاسم فارغاً
+    if (!editName.trim()) return;
     
     try {
       const res = await api.put(`/salespersons/${id}/`, { name: editName.trim() });
@@ -154,55 +152,65 @@ export default function SalespersonsTab() {
     }
   };
 
+  // Slot injection into StandardTablePageLayout
+  const slotPortals = useStandardTableSlots({
+    row1Extra: (
+      <div className="d-flex align-items-center gap-2 ms-auto flex-nowrap" style={{ overflow: 'visible' }}>
+        <div className="input-icon" style={{ width: '220px' }}>
+          <span className="input-icon-addon"><IconSearch size={14}/></span>
+          <input 
+            type="text" 
+            className="form-control form-control-sm border-secondary-subtle fw-bold" 
+            placeholder="بحث حي عن مندوب..." 
+            value={searchQuery} 
+            onChange={(e) => setSearchQuery(e.target.value)} 
+          />
+        </div>
+        <span className="badge bg-secondary text-white rounded-pill px-2 py-1 tabular-nums flex-shrink-0">
+          {filteredAndSortedSalespersons.length} مندوب
+        </span>
+      </div>
+    ),
+    row2: (
+      <form onSubmit={handleAdd} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
+        <div className="flex-grow-1" style={{ minWidth: '200px' }}>
+          <input 
+            ref={nameInputRef} 
+            type="text" 
+            className="form-control form-control-sm border-secondary-subtle fw-bold" 
+            value={newName} 
+            onChange={(e) => setNewName(e.target.value)} 
+            placeholder="اسم المندوب الجديد... *" 
+            required 
+            autoFocus 
+            disabled={submitting || loading} 
+          />
+        </div>
+        <div className="text-muted small flex-shrink-0 px-2">
+          فرع: <strong>{currentBranchName}</strong>
+        </div>
+        <button 
+          type="submit" 
+          className="btn btn-sm btn-primary fw-bold px-3 py-1 flex-shrink-0 d-flex align-items-center gap-1 border-secondary-subtle" 
+          disabled={submitting || loading}
+        >
+          {submitting ? <IconLoader className="icon-spin" size={14} /> : <IconPlus size={14} />}
+          <span>إضافة مندوب</span>
+        </button>
+      </form>
+    )
+  });
+
   return (
     <div>
-      {error && <div className="alert alert-danger">{error}</div>}
-
-      <div className="accordion mb-3 shadow-sm" id="addSalespersonAccordion">
-        <div className="accordion-item">
-          <h2 className="accordion-header" id="headingAddSalesperson">
-            <button className="accordion-button collapsed py-2 bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAddSalesperson" aria-expanded="false" aria-controls="collapseAddSalesperson">
-              <span className="fw-bold text-primary d-flex align-items-center">
-                <IconPlus size={18} className="me-2"/> إضافة مندوب
-              </span>
-            </button>
-          </h2>
-          <div id="collapseAddSalesperson" className="accordion-collapse collapse" aria-labelledby="headingAddSalesperson" data-bs-parent="#addSalespersonAccordion">
-            <div className="accordion-body p-2 bg-white">
-              <form onSubmit={handleAdd} className="row g-2 align-items-end">
-                <div className="col-md-6">
-                  <label className="form-label small mb-1">اسم المندوب <span className="text-danger">*</span></label>
-                  <input ref={nameInputRef} type="text" className="form-control form-control-sm" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="اسم المندوب..." required autoFocus disabled={submitting || loading} />
-                </div>
-                <div className="col-md-3 d-flex align-items-end">
-                  <button type="submit" className="btn btn-sm btn-primary w-100" disabled={submitting || loading}>
-                    {submitting ? <IconLoader className="icon-spin" size={16} /> : <IconPlus size={16} />}
-                    <span className="ms-1">إضافة</span>
-                  </button>
-                </div>
-                <div className="col-12 mt-1">
-                  <small className="text-muted" style={{fontSize: '0.75rem'}}>ملاحظة: سيتم التعيين لفرع: <strong>{currentBranchName}</strong></small>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div className="d-flex justify-content-between align-items-center mb-2">
-        <div className="input-icon w-50">
-          <span className="input-icon-addon"><IconSearch size={16}/></span>
-          <input type="text" className="form-control form-control-sm border-secondary-subtle" placeholder="بحث حي عن مندوب..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-        </div>
-        <div className="text-end">
-          <span className="text-muted small">العدد: <strong>{filteredAndSortedSalespersons.length}</strong></span>
-        </div>
-      </div>
+      {slotPortals}
+      {error && <div className="alert alert-danger mb-2 py-1">{error}</div>}
 
       {/* الجدول */}
-      <div className="card shadow-sm" style={{ border: '1px solid #dee2e6' }}>
-        <table className="table table-vcenter table-bordered table-hover text-nowrap table-sticky-header mb-0">
-          <thead className="bg-light">
+      <div className="card shadow-sm border-secondary-subtle">
+        <div className="table-responsive" style={{ overflow: 'visible' }}>
+          <table className="table table-vcenter table-bordered table-hover text-nowrap table-sticky-header mb-0">
+            <thead className="bg-light">
               <tr>
                 <th className="w-1 text-center align-middle border-secondary-subtle" style={{cursor:"pointer"}} onClick={() => handleSort("id")}>رقم المندوب {getSortIcon("id")}</th>
                 <th className="text-start px-2 align-middle border-secondary-subtle">الاسم</th>
@@ -222,7 +230,7 @@ export default function SalespersonsTab() {
                   <td colSpan="4" className="text-center text-muted py-4">لا يوجد مناديب في هذا الفرع</td>
                 </tr>
               ) : (
-                filteredAndSortedSalespersons.map((sp, index) => {
+                filteredAndSortedSalespersons.map((sp) => {
                   const isEditing = editingId === sp.id;
                   
                   if (isEditing) {
@@ -232,7 +240,7 @@ export default function SalespersonsTab() {
                         <td className="text-start px-2 align-middle border-secondary-subtle">
                           <input 
                             type="text" 
-                            className="form-control form-control-sm" 
+                            className="form-control form-control-sm border-secondary-subtle fw-bold" 
                             value={editName} 
                             onChange={(e) => setEditName(e.target.value)}
                             autoFocus
@@ -269,7 +277,8 @@ export default function SalespersonsTab() {
                 })
               )}
             </tbody>
-        </table>
+          </table>
+        </div>
       </div>
 
       {/* مودال تأكيد الحذف */}

@@ -4,6 +4,7 @@ import { IconSortAscending, IconPlus, IconTrash, IconPrinter } from '@tabler/ico
 import PrintModal from './common/PrintModal';
 import api from '../api';
 import './ReportTable.css';
+import { useStandardTableSlots } from './common/StandardTablePageLayout';
 
 const SortDropdown = ({ sortRules, setSortRules, sortableColumns }) => {
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -50,12 +51,12 @@ const SortDropdown = ({ sortRules, setSortRules, sortableColumns }) => {
     <div className="dropdown" ref={dropdownRef}>
       <button 
         type="button"
-        className={`btn btn-sm btn-outline-secondary fw-bold px-3 py-1 d-flex align-items-center gap-1 ${showSortMenu ? 'active' : ''}`}
+        className={`btn btn-sm btn-outline-secondary fw-bold px-3 py-1 d-flex align-items-center gap-1 border-secondary-subtle ${showSortMenu ? 'active' : ''}`}
         onClick={() => setShowSortMenu(!showSortMenu)}
         title="ترتيب متعدد الأعمدة"
       >
-        <IconSortAscending size={16} />
-        ترتيب حسب
+        <IconSortAscending size={14} />
+        <span>ترتيب حسب</span>
         {sortRules.length > 0 && (
           <span className="badge bg-secondary ms-1 rounded-pill">{sortRules.length}</span>
         )}
@@ -133,6 +134,7 @@ export default function ReportTable({
   filtersSummary = [],
   footerRow = null,
   onPrintReport = null,
+  children = null,
 }) {
   const { setTableRef } = useSmartScroll();
   const [sortRules, setSortRules] = useState(defaultSortRules);
@@ -151,14 +153,12 @@ export default function ReportTable({
     setSortRules(prevRules => {
       const existingIdx = prevRules.findIndex(r => r.column === colKey);
       if (existingIdx === -1) {
-        // Set as primary sort rule
         return [{ id: Date.now(), column: colKey, dir: 'asc' }];
       }
       const existing = prevRules[existingIdx];
       if (existing.dir === 'asc') {
         return [{ ...existing, dir: 'desc' }];
       }
-      // If already desc, remove rule to return to default
       return [];
     });
   }, []);
@@ -325,44 +325,50 @@ export default function ReportTable({
     await api.post('/reports/desktop_print/', payload);
   };
 
-  return (
-    <div className="card shadow-sm border-secondary-subtle flex-grow-1 d-flex flex-column mb-3" style={{ minHeight: 0 }}>
-      {/* Unified Sticky Toolbar */}
-      <div className="sticky-toolbar bg-white border-bottom p-2 d-print-none d-flex align-items-center gap-2">
-        
-        {renderFilters && renderFilters()}
-
-        {summaryCards && summaryCards.length > 0 && (
-          <div className="flex-grow-1 overflow-auto hide-vertical-scroll" style={{ minWidth: 0 }}>
-            <div className="d-flex flex-nowrap gap-2 pb-1 px-1">
-              {summaryCards.map((card, i) => {
-                const IconComp = card.icon;
-                return (
-                  <div key={i} className="flex-shrink-0">
-                    <div className="text-dark fw-bold border px-3 py-1 bg-white rounded shadow-sm d-flex align-items-center gap-2 report-summary-card">
-                      {IconComp && <IconComp size={16} className={`text-${card.color || 'primary'}`} />}
-                      <span className="text-muted small">{card.label}:</span>
-                      <span className={`text-${card.color || 'primary'} fw-bolder fs-4`}>{card.value}</span>
-                    </div>
+  // Inject row1Extra (filters) and row2 (summary pills + print + sort) into StandardTablePageLayout
+  const slotPortals = useStandardTableSlots({
+    row1Extra: renderFilters ? (
+      <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
+        {typeof renderFilters === 'function' ? renderFilters() : renderFilters}
+      </div>
+    ) : null,
+    row2: (
+      <div className="d-flex align-items-center justify-content-between w-100 flex-nowrap" style={{ overflow: 'visible' }}>
+        {summaryCards && summaryCards.length > 0 ? (
+          <div className="d-flex align-items-center gap-2 flex-nowrap overflow-auto hide-vertical-scroll" style={{ minWidth: 0 }}>
+            {summaryCards.map((card, i) => {
+              const IconComp = card.icon;
+              return (
+                <div key={i} className="flex-shrink-0">
+                  <div className="text-dark fw-bold border px-3 py-1 bg-white rounded shadow-sm d-flex align-items-center gap-2 report-summary-card" style={{ borderColor: '#adb5bd' }}>
+                    {IconComp && <IconComp size={14} className={`text-${card.color || 'primary'}`} />}
+                    <span className="text-muted small">{card.label}:</span>
+                    <span className={`text-${card.color || 'primary'} fw-bolder fs-4 tabular-nums`}>{card.value}</span>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="d-flex align-items-center gap-2">
+            <span className="badge bg-secondary text-white rounded-pill px-2 py-1 tabular-nums">
+              {processedData.length || (data ? data.length : 0)} سجل
+            </span>
           </div>
         )}
 
-        <div className="ms-auto d-flex gap-2 align-items-center">
+        <div className="ms-auto d-flex gap-2 align-items-center flex-shrink-0">
           {headerToolbarExtra}
 
           <button
             type="button"
-            className="btn btn-sm btn-outline-primary fw-bold px-3 py-1 d-flex align-items-center gap-1"
+            className="btn btn-sm btn-outline-primary fw-bold px-3 py-1 d-flex align-items-center gap-1 border-secondary-subtle"
             onClick={onPrintReport || (() => setPrintModalOpen(true))}
-            disabled={loading || processedData.length === 0}
+            disabled={loading || (processedData.length === 0 && (!data || data.length === 0))}
             title="طباعة التقرير"
           >
-            <IconPrinter size={16} />
-            <span>طباعة التقرير</span>
+            <IconPrinter size={14} />
+            <span>طباعة</span>
           </button>
 
           {/* Multi-Rule Sort Dropdown */}
@@ -373,119 +379,131 @@ export default function ReportTable({
           />
         </div>
       </div>
+    )
+  });
 
+  return (
+    <>
+      {slotPortals}
+      <div className="card shadow-sm border-secondary-subtle flex-grow-1 d-flex flex-column mb-3" style={{ minHeight: 0 }}>
       {/* Table Container */}
       <div 
         ref={handleSetTableRef} 
         tabIndex={0}
         onKeyDown={handleKeyDown}
         className="table-responsive hide-vertical-scroll report-table-container flex-grow-1 rounded-bottom focus-ring-none" 
-        style={{ maxHeight: 'calc(100vh - 200px)', outline: 'none' }}
+        style={{ outline: 'none', overflow: 'visible' }}
       >
-        <table className="table table-bordered table-vcenter table-hover mb-0 text-nowrap">
-          <thead className="bg-light report-sticky-header">
-            {renderHeader ? (
-              typeof renderHeader === 'function' ? renderHeader({ toggleSort, sortRules, getColSortDir }) : renderHeader
-            ) : (
-              <tr>
-                {checkboxSelection && (
-                  <th className="text-center w-1">
-                    <input 
-                      type="checkbox" 
-                      className="form-check-input border-secondary-subtle" 
-                      checked={processedData.length > 0 && selectedIds.length === processedData.length}
-                      onChange={handleSelectAll} 
-                    />
-                  </th>
-                )}
-                {columns.map((col, i) => {
-                  const colKey = col.key || col.id;
-                  const sortable = col.sortable !== false && isColSortable(colKey);
-                  const sortDir = getColSortDir(colKey);
-                  return (
-                    <th 
-                      key={colKey || i} 
-                      className={`text-${col.align || 'center'} ${col.className || ''} ${sortable ? 'sortable-th' : ''}`} 
-                      style={col.style}
-                      onClick={sortable ? () => toggleSort(colKey) : undefined}
-                      title={sortable ? 'انقر للترتيب' : undefined}
-                    >
-                      <div className="d-flex align-items-center justify-content-center gap-1">
-                        <span>{col.label}</span>
-                        {sortable && (
-                          <span className="small text-muted" style={{ minWidth: '12px' }}>
-                            {sortDir === 'asc' ? '↑' : sortDir === 'desc' ? '↓' : ''}
-                          </span>
-                        )}
-                      </div>
-                    </th>
-                  );
-                })}
-              </tr>
-            )}
-          </thead>
-          <tbody>
-            {loading ? (
-              [...Array(10)].map((_, i) => (
-                <tr key={i}>
-                  {checkboxSelection && <td><div className="placeholder w-100"></div></td>}
-                  {columns.map((col, j) => (
-                    <td key={j}><div className="placeholder w-100"></div></td>
-                  ))}
-                </tr>
-              ))
-            ) : processedData.length > 0 ? (
-              processedData.map((item, index) => {
-                const isFocused = focusedRowIndex === index;
-                if (renderRow) {
-                  return renderRow({
-                    item, 
-                    index, 
-                    isSelected: selectedIds.includes(item[idField]),
-                    toggleSelect: () => toggleSelect(item[idField]),
-                    isFocused
-                  });
-                }
-                
-                return (
-                  <tr 
-                    key={item[idField] || index}
-                    data-row-index={index}
-                    className={isFocused ? 'table-row-focused' : ''}
-                    onClick={() => setFocusedRowIndex(index)}
-                  >
+        <table className="table table-bordered table-vcenter table-hover mb-0 text-nowrap table-sticky-header">
+          {children ? (
+            children
+          ) : (
+            <>
+              <thead className="bg-light report-sticky-header">
+                {renderHeader ? (
+                  typeof renderHeader === 'function' ? renderHeader({ toggleSort, sortRules, getColSortDir }) : renderHeader
+                ) : (
+                  <tr>
                     {checkboxSelection && (
-                      <td className="text-center align-middle border-secondary-subtle">
+                      <th className="text-center w-1">
                         <input 
                           type="checkbox" 
                           className="form-check-input border-secondary-subtle" 
-                          checked={selectedIds.includes(item[idField])}
-                          onChange={() => toggleSelect(item[idField])}
+                          checked={processedData.length > 0 && selectedIds.length === processedData.length}
+                          onChange={handleSelectAll} 
                         />
-                      </td>
+                      </th>
                     )}
-                    {columns.map((col, j) => {
-                      let val = col.render ? col.render(item, index) : item[col.key];
-                      if (col.format === 'currency') val = (Number(val) || 0).toLocaleString('en-US');
-                      if (col.format === 'number') val = val;
+                    {columns.map((col, i) => {
+                      const colKey = col.key || col.id;
+                      const sortable = col.sortable !== false && isColSortable(colKey);
+                      const sortDir = getColSortDir(colKey);
                       return (
-                        <td key={j} className={`text-${col.align || 'center'} align-middle border-secondary-subtle ${col.className || ''}`} style={col.style} dir={col.dir}>
-                          {val}
-                        </td>
+                        <th 
+                          key={colKey || i} 
+                          className={`text-${col.align || 'center'} ${col.className || ''} ${sortable ? 'sortable-th' : ''}`} 
+                          style={col.style}
+                          onClick={sortable ? () => toggleSort(colKey) : undefined}
+                          title={sortable ? 'انقر للترتيب' : undefined}
+                        >
+                          <div className="d-flex align-items-center justify-content-center gap-1">
+                            <span>{col.label}</span>
+                            {sortable && (
+                              <span className="small text-muted" style={{ minWidth: '12px' }}>
+                                {sortDir === 'asc' ? '↑' : sortDir === 'desc' ? '↓' : ''}
+                              </span>
+                            )}
+                          </div>
+                        </th>
                       );
                     })}
                   </tr>
-                );
-              })
-            ) : (
-              <tr>
-                <td colSpan={checkboxSelection ? columns.length + 1 : columns.length} className="text-center py-5">
-                  {EmptyIcon && <EmptyIcon size={48} className="text-muted mb-2 opacity-50" />}
-                  <h4 className="text-muted fw-bold">{emptyMessage}</h4>
-                </td>
-              </tr>
-            )}
-          </tbody>
+                )}
+              </thead>
+              <tbody>
+                {loading ? (
+                  [...Array(10)].map((_, i) => (
+                    <tr key={i}>
+                      {checkboxSelection && <td><div className="placeholder w-100"></div></td>}
+                      {columns.map((col, j) => (
+                        <td key={j}><div className="placeholder w-100"></div></td>
+                      ))}
+                    </tr>
+                  ))
+                ) : processedData.length > 0 ? (
+                  processedData.map((item, index) => {
+                    const isFocused = focusedRowIndex === index;
+                    if (renderRow) {
+                      return renderRow({
+                        item, 
+                        index, 
+                        isSelected: selectedIds.includes(item[idField]),
+                        toggleSelect: () => toggleSelect(item[idField]),
+                        isFocused
+                      });
+                    }
+                    
+                    return (
+                      <tr 
+                        key={item[idField] || index}
+                        data-row-index={index}
+                        className={isFocused ? 'table-row-focused' : ''}
+                        onClick={() => setFocusedRowIndex(index)}
+                      >
+                        {checkboxSelection && (
+                          <td className="text-center align-middle border-secondary-subtle">
+                            <input 
+                              type="checkbox" 
+                              className="form-check-input border-secondary-subtle" 
+                              checked={selectedIds.includes(item[idField])}
+                              onChange={() => toggleSelect(item[idField])}
+                            />
+                          </td>
+                        )}
+                        {columns.map((col, j) => {
+                          let val = col.render ? col.render(item, index) : item[col.key];
+                          if (col.format === 'currency') val = (Number(val) || 0).toLocaleString('en-US');
+                          if (col.format === 'number') val = val;
+                          return (
+                            <td key={j} className={`text-${col.align || 'center'} align-middle border-secondary-subtle ${col.className || ''}`} style={col.style} dir={col.dir}>
+                              {val}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={checkboxSelection ? columns.length + 1 : (columns.length || 1)} className="text-center py-5">
+                      {EmptyIcon && <EmptyIcon size={48} className="text-muted mb-2 opacity-50" />}
+                      <h4 className="text-muted fw-bold">{emptyMessage}</h4>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </>
+          )}
         </table>
       </div>
 
@@ -499,6 +517,7 @@ export default function ReportTable({
           onExecute={executePrintReport}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }
