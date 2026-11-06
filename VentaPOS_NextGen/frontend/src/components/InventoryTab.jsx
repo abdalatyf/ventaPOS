@@ -218,24 +218,108 @@ export default function InventoryTab() {
     }
   };
 
+  const currentBranchName = localStorage.getItem('branchName') || 'الفرع الرئيسي';
+
   // Slot injection into StandardTablePageLayout
   const slotPortals = useStandardTableSlots({
-    row1Extra: (
-      <div className="d-flex align-items-center gap-2 ms-auto flex-nowrap" style={{ overflow: 'visible' }}>
-        <div className="input-icon" style={{ width: '220px' }}>
-          <span className="input-icon-addon"><IconSearch size={14}/></span>
+    row2: (
+      <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
+        {/* Item Name */}
+        <div className="flex-grow-1" style={{ minWidth: '160px' }}>
           <input 
+            ref={nameInputRef} 
             type="text" 
             className="form-control form-control-sm border-secondary-subtle fw-bold" 
-            placeholder="بحث حي عن الصنف..." 
-            value={searchQuery} 
-            onChange={(e) => setSearchQuery(e.target.value)} 
+            name="name" 
+            placeholder="اسم الصنف *" 
+            value={formData.name} 
+            onChange={handleInputChange} 
+            disabled={submitting} 
+            required 
+            autoFocus 
           />
         </div>
-        <span className="badge bg-secondary text-white rounded-pill px-2 py-1 tabular-nums flex-shrink-0">
-          {filteredItems.length} صنف
-        </span>
-      </div>
+        {/* Qty */}
+        <div style={{ width: '85px' }} className="flex-shrink-0">
+          <input 
+            type="number" 
+            className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
+            name="qty" 
+            placeholder="الكمية" 
+            value={formData.qty} 
+            onChange={handleInputChange} 
+            min="0" 
+            disabled={submitting} 
+          />
+        </div>
+        {/* Price */}
+        <div style={{ width: '100px' }} className="flex-shrink-0">
+          <input 
+            type="number" 
+            className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
+            name="price" 
+            placeholder="سعر الشراء" 
+            value={formData.price} 
+            onChange={handleInputChange} 
+            min="0" 
+            disabled={submitting} 
+          />
+        </div>
+        {/* Commission */}
+        <div style={{ width: '90px' }} className="flex-shrink-0">
+          <input 
+            type="number" 
+            className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
+            name="commission" 
+            placeholder="المندبة" 
+            value={formData.commission} 
+            onChange={handleInputChange} 
+            disabled={submitting} 
+          />
+        </div>
+        {/* Month */}
+        <div style={{ width: '70px' }} className="flex-shrink-0">
+          <input 
+            type="number" 
+            className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
+            name="startMonth" 
+            placeholder="شهر" 
+            value={formData.startMonth} 
+            min="1" 
+            max="12" 
+            onChange={handleInputChange} 
+            disabled={submitting} 
+            required 
+          />
+        </div>
+        {/* Year */}
+        <div style={{ width: '80px' }} className="flex-shrink-0">
+          <input 
+            type="number" 
+            className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
+            name="startYear" 
+            placeholder="سنة" 
+            value={formData.startYear} 
+            min="2000" 
+            max="2100" 
+            onChange={handleInputChange} 
+            disabled={submitting} 
+            required 
+          />
+        </div>
+        {/* Submit / Cancel */}
+        <div className="d-flex align-items-center gap-1 flex-shrink-0">
+          <button type="submit" className={`btn btn-sm fw-bold px-3 py-1 d-flex align-items-center gap-1 border-secondary-subtle ${editingId ? 'btn-success' : 'btn-primary'}`} disabled={submitting}>
+            {submitting ? <IconLoader className="icon-spin" size={14} /> : (editingId ? <IconEdit size={14} /> : <IconPlus size={14} />)}
+            <span>{editingId ? 'حفظ' : 'إضافة'}</span>
+          </button>
+          {editingId && (
+            <button type="button" className="btn btn-sm btn-outline-secondary fw-bold px-2 py-1 border-secondary-subtle" onClick={resetForm}>
+              إلغاء
+            </button>
+          )}
+        </div>
+      </form>
     )
   });
 
@@ -248,103 +332,27 @@ export default function InventoryTab() {
       <div className="card shadow-sm border-secondary-subtle mb-0">
         {/* Row 1 of Table Card: Sticky Toolbar directly above <thead> */}
         <div className="sticky-toolbar border-bottom px-3 d-flex align-items-center justify-content-between gap-2 d-print-none">
-          <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
-            {/* Item Name */}
-            <div className="flex-grow-1" style={{ minWidth: '160px' }}>
+          <div className="d-flex align-items-center gap-2">
+            <div className="input-icon" style={{ width: '260px' }}>
+              <span className="input-icon-addon"><IconSearch size={14}/></span>
               <input 
-                ref={nameInputRef} 
                 type="text" 
                 className="form-control form-control-sm border-secondary-subtle fw-bold" 
-                name="name" 
-                placeholder="اسم الصنف *" 
-                value={formData.name} 
-                onChange={handleInputChange} 
-                disabled={submitting} 
-                required 
-                autoFocus 
+                placeholder="بحث حي عن الصنف..." 
+                value={searchQuery} 
+                onChange={(e) => setSearchQuery(e.target.value)} 
               />
             </div>
-            {/* Qty */}
-            <div style={{ width: '85px' }} className="flex-shrink-0">
-              <input 
-                type="number" 
-                className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
-                name="qty" 
-                placeholder="الكمية" 
-                value={formData.qty} 
-                onChange={handleInputChange} 
-                min="0" 
-                disabled={submitting} 
-              />
-            </div>
-            {/* Price */}
-            <div style={{ width: '100px' }} className="flex-shrink-0">
-              <input 
-                type="number" 
-                className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
-                name="price" 
-                placeholder="سعر الشراء" 
-                value={formData.price} 
-                onChange={handleInputChange} 
-                min="0" 
-                disabled={submitting} 
-              />
-            </div>
-            {/* Commission */}
-            <div style={{ width: '90px' }} className="flex-shrink-0">
-              <input 
-                type="number" 
-                className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
-                name="commission" 
-                placeholder="المندبة" 
-                value={formData.commission} 
-                onChange={handleInputChange} 
-                disabled={submitting} 
-              />
-            </div>
-            {/* Month */}
-            <div style={{ width: '70px' }} className="flex-shrink-0">
-              <input 
-                type="number" 
-                className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
-                name="startMonth" 
-                placeholder="شهر" 
-                value={formData.startMonth} 
-                min="1" 
-                max="12" 
-                onChange={handleInputChange} 
-                disabled={submitting} 
-                required 
-              />
-            </div>
-            {/* Year */}
-            <div style={{ width: '80px' }} className="flex-shrink-0">
-              <input 
-                type="number" 
-                className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
-                name="startYear" 
-                placeholder="سنة" 
-                value={formData.startYear} 
-                min="2000" 
-                max="2100" 
-                onChange={handleInputChange} 
-                disabled={submitting} 
-                required 
-              />
-            </div>
-            {/* Submit / Cancel */}
-            <div className="d-flex align-items-center gap-1 flex-shrink-0">
-              <button type="submit" className={`btn btn-sm fw-bold px-3 py-1 d-flex align-items-center gap-1 border-secondary-subtle ${editingId ? 'btn-success' : 'btn-primary'}`} disabled={submitting}>
-                {submitting ? <IconLoader className="icon-spin" size={14} /> : (editingId ? <IconEdit size={14} /> : <IconPlus size={14} />)}
-                <span>{editingId ? 'حفظ' : 'إضافة'}</span>
-              </button>
-              {editingId && (
-                <button type="button" className="btn btn-sm btn-outline-secondary fw-bold px-2 py-1 border-secondary-subtle" onClick={resetForm}>
-                  إلغاء
-                </button>
-              )}
-            </div>
-          </form>
+            <span className="badge bg-secondary text-white rounded-pill px-2 py-1 tabular-nums flex-shrink-0">
+              {filteredItems.length} صنف
+            </span>
+          </div>
+
+          <div className="d-flex align-items-center">
+            <span className="badge bg-light text-dark border border-secondary-subtle px-3 py-1 fs-5 fw-bold">
+              الفرع: {currentBranchName}
+            </span>
+          </div>
         </div>
 
         {/* Row 2 of Table Card: Table Container */}

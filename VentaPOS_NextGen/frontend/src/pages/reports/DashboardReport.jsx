@@ -4,10 +4,19 @@ import { IconWallet, IconTrendingUp } from '@tabler/icons-react';
 import api from '../../api';
 import { ReportsContext } from './ReportsLayout';
 import { fmtNum } from '../../utils/formatUtils';
+import { useStandardTableSlots } from '../../components/common/StandardTablePageLayout';
 
 export default function DashboardReport() {
   const { year, month, branchId } = useContext(ReportsContext);
   const navigate = useNavigate();
+
+  const slotPortals = useStandardTableSlots({
+    row2: (
+      <div className="text-muted fw-bold small d-flex align-items-center gap-2">
+        <span>ملخص الأداء المالي والتشغيلي الشامل للفرع</span>
+      </div>
+    )
+  });
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -69,6 +78,7 @@ export default function DashboardReport() {
 
   return (
     <div className="container-fluid p-0">
+      {slotPortals}
       <div className="row g-3">
         
         {/* تفاصيل المكسب (P&L Breakdown) */}

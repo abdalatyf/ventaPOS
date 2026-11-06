@@ -326,13 +326,18 @@ export default function ReportTable({
     await api.post('/reports/desktop_print/', payload);
   };
 
-  // Inject row1Extra (filters) into StandardTablePageLayout
+  // Inject row2 (filters or default status) into StandardTablePageLayout
   const slotPortals = useStandardTableSlots({
-    row1Extra: renderFilters ? (
-      <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
+    row2: renderFilters ? (
+      <div className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
         {typeof renderFilters === 'function' ? renderFilters() : renderFilters}
       </div>
-    ) : null,
+    ) : (
+      <div className="text-muted fw-bold small d-flex align-items-center gap-2">
+        <span>التقرير: {effectiveReportTitle}</span>
+        {periodLabel && <span>• الفترة: {periodLabel}</span>}
+      </div>
+    ),
   });
 
   return (

@@ -317,6 +317,10 @@ export default function SearchPurchases() {
           filters={filters}
           handleFilterChange={handleFilterChange}
           handleSelectChange={handleSelectChange}
+        />
+      }
+      row2={
+        <PurchaseFilterRow2
           supplierSearchQuery={supplierSearchQuery}
           handleSupplierQueryChange={handleSupplierQueryChange}
           handleSupplierSelect={handleSupplierSelect}

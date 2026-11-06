@@ -140,24 +140,34 @@ export default function SuppliersTab() {
     }
   };
 
+  const currentBranchName = localStorage.getItem('branchName') || 'الفرع الرئيسي';
+
   // Slot injection into StandardTablePageLayout
   const slotPortals = useStandardTableSlots({
-    row1Extra: (
-      <div className="d-flex align-items-center gap-2 ms-auto flex-nowrap" style={{ overflow: 'visible' }}>
-        <div className="input-icon" style={{ width: '220px' }}>
-          <span className="input-icon-addon"><IconSearch size={14}/></span>
+    row2: (
+      <form onSubmit={handleAdd} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
+        <div className="flex-grow-1" style={{ minWidth: '200px' }}>
           <input 
+            ref={nameInputRef} 
             type="text" 
             className="form-control form-control-sm border-secondary-subtle fw-bold" 
-            placeholder="بحث حي عن مورد..." 
-            value={searchQuery} 
-            onChange={(e) => setSearchQuery(e.target.value)} 
+            value={newSupplierName} 
+            onChange={(e) => setNewSupplierName(e.target.value)} 
+            placeholder="اسم المورد / المصنع الجديد... *" 
+            required 
+            autoFocus 
+            disabled={submitting || loading} 
           />
         </div>
-        <span className="badge bg-secondary text-white rounded-pill px-2 py-1 tabular-nums flex-shrink-0">
-          {filteredAndSortedSuppliers.length} مورد
-        </span>
-      </div>
+        <button 
+          type="submit" 
+          className="btn btn-sm btn-primary fw-bold px-3 py-1 flex-shrink-0 d-flex align-items-center gap-1 border-secondary-subtle" 
+          disabled={submitting || loading}
+        >
+          {submitting ? <IconLoader className="icon-spin" size={14} /> : <IconPlus size={14} />}
+          <span>إضافة مورد</span>
+        </button>
+      </form>
     )
   });
 
@@ -170,29 +180,27 @@ export default function SuppliersTab() {
       <div className="card shadow-sm border-secondary-subtle mb-0">
         {/* Row 1 of Table Card: Sticky Toolbar directly above <thead> */}
         <div className="sticky-toolbar border-bottom px-3 d-flex align-items-center justify-content-between gap-2 d-print-none">
-          <form onSubmit={handleAdd} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
-            <div className="flex-grow-1" style={{ minWidth: '200px' }}>
+          <div className="d-flex align-items-center gap-2">
+            <div className="input-icon" style={{ width: '260px' }}>
+              <span className="input-icon-addon"><IconSearch size={14}/></span>
               <input 
-                ref={nameInputRef} 
                 type="text" 
                 className="form-control form-control-sm border-secondary-subtle fw-bold" 
-                value={newSupplierName} 
-                onChange={(e) => setNewSupplierName(e.target.value)} 
-                placeholder="اسم المورد / المصنع الجديد... *" 
-                required 
-                autoFocus 
-                disabled={submitting || loading} 
+                placeholder="بحث حي عن مورد..." 
+                value={searchQuery} 
+                onChange={(e) => setSearchQuery(e.target.value)} 
               />
             </div>
-            <button 
-              type="submit" 
-              className="btn btn-sm btn-primary fw-bold px-3 py-1 flex-shrink-0 d-flex align-items-center gap-1 border-secondary-subtle" 
-              disabled={submitting || loading}
-            >
-              {submitting ? <IconLoader className="icon-spin" size={14} /> : <IconPlus size={14} />}
-              <span>إضافة مورد</span>
-            </button>
-          </form>
+            <span className="badge bg-secondary text-white rounded-pill px-2 py-1 tabular-nums flex-shrink-0">
+              {filteredAndSortedSuppliers.length} مورد
+            </span>
+          </div>
+
+          <div className="d-flex align-items-center">
+            <span className="badge bg-light text-dark border border-secondary-subtle px-3 py-1 fs-5 fw-bold">
+              الفرع: {currentBranchName}
+            </span>
+          </div>
         </div>
 
         {/* Row 2 of Table Card: Table Container */}

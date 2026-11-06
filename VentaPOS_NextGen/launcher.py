@@ -190,6 +190,28 @@ def background_init(window, port, url):
     else:
         window.load_html('<h1 style="color:red; text-align:center; margin-top:20%; font-family:sans-serif;">فشل تشغيل الخادم. يرجى مراجعة سجلات النظام.</h1>')
 
+def on_closing(*args, **kwargs):
+    try:
+        import ctypes
+        MB_YESNO = 0x04
+        MB_ICONWARNING = 0x30
+        MB_RTLREADING = 0x100000
+        MB_RIGHT = 0x80000
+        MB_TOPMOST = 0x40000
+        IDYES = 6
+
+        flags = MB_YESNO | MB_ICONWARNING | MB_RTLREADING | MB_RIGHT | MB_TOPMOST
+        res = ctypes.windll.user32.MessageBoxW(
+            None,
+            "هل أنت متأكد من رغبتك في إغلاق برنامج VentaPOS؟\nتأكد من حفظ كافة البيانات قبل الخروج.",
+            "تأكيد الخروج من النظام",
+            flags
+        )
+        return res == IDYES
+    except Exception as e:
+        print(f"Error showing closing confirmation: {e}")
+        return True
+
 def main():
     port = get_free_port()
     url = f"http://127.0.0.1:{port}"
@@ -231,6 +253,7 @@ def main():
         min_size=(1024, 768),
         maximized=True
     )
+    window.events.closing += on_closing
 
     # Start the init process in a background thread
     init_thread = threading.Thread(target=background_init, args=(window, port, url), daemon=True)

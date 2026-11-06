@@ -1,27 +1,20 @@
 import React from 'react';
 import Autocomplete from '../Autocomplete';
-import { IconSearch, IconRefresh, IconPrinter, IconTrash } from '@tabler/icons-react';
+import { IconSearch, IconRefresh } from '@tabler/icons-react';
 
 export function PurchaseFilterRow1({
   filters,
   handleFilterChange,
-  handleSelectChange,
-  supplierSearchQuery,
-  handleSupplierQueryChange,
-  handleSupplierSelect,
-  fetchSupplierSuggestions,
-  handleSearchSubmit,
-  handleResetFilters,
-  loading
+  handleSelectChange
 }) {
   return (
     <div className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Invoice Type */}
-      <div style={{ width: '130px' }} className="flex-shrink-0">
+      <div style={{ width: '160px' }} className="flex-shrink-0">
         <div className="input-group input-group-sm">
-          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">النوع</span>
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">النوع</span>
           <select 
-            className="form-select fw-bold border-secondary-subtle px-1" 
+            className="form-select fw-bold border-secondary-subtle px-2" 
             name="invoice_type" 
             value={filters.invoice_type} 
             onChange={handleSelectChange}
@@ -34,9 +27,9 @@ export function PurchaseFilterRow1({
       </div>
 
       {/* Invoice Number */}
-      <div style={{ width: '130px' }} className="flex-shrink-0">
+      <div style={{ width: '180px' }} className="flex-shrink-0">
         <div className="input-group input-group-sm">
-          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">رقم الفاتورة</span>
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">رقم الفاتورة</span>
           <input 
             type="text" 
             className="form-control fw-bold border-secondary-subtle text-center px-1" 
@@ -49,9 +42,9 @@ export function PurchaseFilterRow1({
       </div>
 
       {/* Month */}
-      <div style={{ width: '90px' }} className="flex-shrink-0">
+      <div style={{ width: '120px' }} className="flex-shrink-0">
         <div className="input-group input-group-sm">
-          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">الشهر</span>
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">الشهر</span>
           <input
             type="number"
             min="1"
@@ -66,9 +59,9 @@ export function PurchaseFilterRow1({
       </div>
 
       {/* Year */}
-      <div style={{ width: '90px' }} className="flex-shrink-0">
+      <div style={{ width: '120px' }} className="flex-shrink-0">
         <div className="input-group input-group-sm">
-          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">السنة</span>
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">السنة</span>
           <input
             type="number"
             min="2000"
@@ -81,9 +74,23 @@ export function PurchaseFilterRow1({
           />
         </div>
       </div>
+    </div>
+  );
+}
 
+export function PurchaseFilterRow2({
+  supplierSearchQuery,
+  handleSupplierQueryChange,
+  handleSupplierSelect,
+  fetchSupplierSuggestions,
+  handleSearchSubmit,
+  handleResetFilters,
+  loading
+}) {
+  return (
+    <div className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Supplier Autocomplete */}
-      <div className="flex-grow-1" style={{ minWidth: '160px' }}>
+      <div className="flex-grow-1" style={{ minWidth: '240px' }}>
         <div className="input-group input-group-sm flex-nowrap">
           <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">المورد</span>
           <Autocomplete
@@ -100,7 +107,7 @@ export function PurchaseFilterRow1({
       {/* Reset Button */}
       <button 
         type="button" 
-        className="btn btn-outline-secondary btn-sm fw-bold px-2 py-1 flex-shrink-0 d-flex align-items-center gap-1 border-secondary-subtle" 
+        className="btn btn-outline-secondary btn-sm fw-bold px-3 py-1 flex-shrink-0 d-flex align-items-center gap-1 border-secondary-subtle" 
         onClick={handleResetFilters} 
         disabled={loading}
         title="إعادة ضبط"
@@ -123,53 +130,6 @@ export function PurchaseFilterRow1({
   );
 }
 
-export function PurchaseFilterRow2({
-  totalInvoicesCount,
-  selectedIds = [],
-  handleOpenPrintModal,
-  handleBulkDelete,
-  totalAmountSum,
-  formatCurrency
-}) {
-  return (
-    <div className="d-flex align-items-center justify-content-between w-100 flex-nowrap" style={{ overflow: 'visible' }}>
-      {/* Right / Start: Count badge & bulk actions */}
-      <div className="d-flex align-items-center gap-2">
-        <span className="text-secondary fw-bold small">النتائج:</span>
-        <span className="badge bg-primary text-white rounded-pill px-2 py-1 tabular-nums">{totalInvoicesCount} فاتورة</span>
-
-        {selectedIds.length > 0 && (
-          <div className="d-flex align-items-center gap-2 border-start border-secondary-subtle ps-2 ms-1">
-            <span className="fw-bold small me-1">تم تحديد {selectedIds.length}</span>
-            {handleOpenPrintModal && (
-              <button 
-                className="btn btn-outline-primary btn-sm fw-bold py-1 px-2 border-secondary-subtle d-flex align-items-center gap-1" 
-                onClick={() => handleOpenPrintModal(selectedIds)}
-              >
-                <IconPrinter size={14} /> طباعة محددة
-              </button>
-            )}
-            <button 
-              className="btn btn-outline-danger btn-sm fw-bold py-1 px-2 border-secondary-subtle d-flex align-items-center gap-1" 
-              onClick={handleBulkDelete}
-            >
-              <IconTrash size={14} /> حذف محددة
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Left / End: Total purchases badge */}
-      <div className="d-flex align-items-center">
-        <div className="text-dark fw-bold fs-4 border px-3 py-1 bg-white rounded shadow-sm d-flex align-items-center gap-2" style={{ borderColor: '#adb5bd' }}>
-          <span>إجمالي فواتير الشراء:</span>
-          <span className="text-danger fw-bolder fs-4 tabular-nums">{formatCurrency(totalAmountSum)}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function PurchaseFilterToolbar(props) {
   if (props.showFilters === false) return null;
   return (
@@ -181,3 +141,4 @@ export default function PurchaseFilterToolbar(props) {
     </div>
   );
 }
+

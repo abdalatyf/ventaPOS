@@ -333,6 +333,12 @@ export default function SearchReceipts() {
           filters={filters}
           handleFilterChange={handleFilterChange}
           handleSelectChange={handleSelectChange}
+        />
+      }
+      row2={
+        <ReceiptsFilterRow2
+          filters={filters}
+          handleFilterChange={handleFilterChange}
           salespersonName={salespersonName}
           setSalespersonName={setSalespersonName}
           setFilters={setFilters}

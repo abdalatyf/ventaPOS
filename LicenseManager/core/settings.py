@@ -10,11 +10,18 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import sys
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
-
+if getattr(sys, 'frozen', False):
+    BASE_DIR = Path(sys._MEIPASS)
+    DATA_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'VentaPOS_LicenseManager'
+else:
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    DATA_DIR = BASE_DIR
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -25,17 +32,15 @@ SECRET_KEY = 'django-insecure-pmwa6)4dmwtcdykry@qts9ebq@huw1wzu-^#9o!wei809!b!gk
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
-
-import os
+ALLOWED_HOSTS = ['*']
 
 # كلمة السر الموحدة لدخول لوحة التحكم
 MASTER_PASSWORD = os.environ.get("VENTA_LICENSE_MASTER_PASSWORD", "") or "123"
 
 # Supabase Cloud Logging Configuration (Fail-Closed)
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://tgfhyyfwgcvotxfwbnhd.supabase.co")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")  # Keep empty until provided by user
-MARKETEER_ID = os.environ.get("MARKETEER_ID", "")  # Keep empty until provided by user
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "sb_publishable_gcWrwWZkYdY_e7jU1QByNA_363wKtxX")
+MARKETEER_ID = os.environ.get("MARKETEER_ID", "default_marketeer")
 
 # Application definition
 
@@ -85,7 +90,7 @@ WSGI_APPLICATION = 'core.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': DATA_DIR / 'db.sqlite3',
     }
 }
 

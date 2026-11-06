@@ -65,7 +65,7 @@ export default function ReportsLayout() {
         row1={
           <div className="d-flex align-items-center gap-2 flex-shrink-0" style={{ overflow: 'visible' }}>
             {/* Report Selector */}
-            <div style={{ width: '220px' }} className="flex-shrink-0">
+            <div style={{ width: '240px' }} className="flex-shrink-0">
               <select 
                 className="form-select form-select-sm fw-bold border-secondary-subtle text-primary"
                 value={reportPath}
@@ -85,7 +85,7 @@ export default function ReportsLayout() {
             </div>
 
             {/* Date Filter: Month */}
-            <div style={{ width: '90px' }} className="flex-shrink-0">
+            <div style={{ width: '105px' }} className="flex-shrink-0">
               <div className="input-group input-group-sm">
                 <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">شهر</span>
                 <input
@@ -98,7 +98,7 @@ export default function ReportsLayout() {
             </div>
 
             {/* Date Filter: Year */}
-            <div style={{ width: '95px' }} className="flex-shrink-0">
+            <div style={{ width: '110px' }} className="flex-shrink-0">
               <div className="input-group input-group-sm">
                 <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">سنة</span>
                 <input
