@@ -26,7 +26,9 @@ vi.mock('../api', () => ({
     post: vi.fn(() => Promise.resolve({ data: {} })),
     put: vi.fn(() => Promise.resolve({ data: {} })),
     delete: vi.fn(() => Promise.resolve({ data: {} })),
-  }
+  },
+  getLicenseStatus: vi.fn(() => Promise.resolve({ is_print_only: false, is_expired: false, status: 'active' })),
+  clearLicenseCache: vi.fn(),
 }));
 
 describe('POS & Standardized Table Pages Mount Tests', () => {

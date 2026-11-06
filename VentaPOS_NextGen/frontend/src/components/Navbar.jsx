@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import api from '../api';
+import api, { getLicenseStatus } from '../api';
 import logo from '../assets/venta.png';
 import QuickRestoreModal from './common/QuickRestoreModal';
 import UpdateModal from './common/UpdateModal';
@@ -39,14 +39,21 @@ export default function Navbar() {
   const [showManualModal, setShowManualModal] = useState(false);
 
   useEffect(() => {
-    const checkLicense = () => {
-      api.get('/license/status/').then(res => {
-        setIsPrintOnly(Boolean(res.data?.is_print_only));
+    let isMounted = true;
+    const checkLicense = (forceRefresh = false) => {
+      getLicenseStatus(forceRefresh).then(data => {
+        if (isMounted) {
+          setIsPrintOnly(Boolean(data?.is_print_only));
+        }
       }).catch(err => console.error(err));
     };
     checkLicense();
-    window.addEventListener('license_updated', checkLicense);
-    return () => window.removeEventListener('license_updated', checkLicense);
+    const handleUpdate = () => checkLicense(true);
+    window.addEventListener('license_updated', handleUpdate);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('license_updated', handleUpdate);
+    };
   }, []);
 
   useEffect(() => {

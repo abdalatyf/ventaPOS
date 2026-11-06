@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import api from '../api';
+import api, { getLicenseStatus } from '../api';
 
 import POSCustomerForm from '../components/pos/POSCustomerForm';
 import POSItemsTable from '../components/pos/POSItemsTable';
@@ -55,12 +55,25 @@ const POS = () => {
   const [licenseInfo, setLicenseInfo] = useState({ isPrintOnly: false, licStartDate: null });
 
   useEffect(() => {
-    api.get('/license/status/').then(res => {
-      setLicenseInfo({
-        isPrintOnly: Boolean(res.data?.is_print_only),
-        licStartDate: res.data?.lic_start_date || res.data?.start_date || null
-      });
-    }).catch(err => console.error('Failed to load license status in POS', err));
+    let isMounted = true;
+    const fetchLic = (forceRefresh = false) => {
+      getLicenseStatus(forceRefresh).then(data => {
+        if (isMounted) {
+          setLicenseInfo({
+            isPrintOnly: Boolean(data?.is_print_only),
+            licStartDate: data?.lic_start_date || data?.start_date || null
+          });
+        }
+      }).catch(err => console.error('Failed to load license status in POS', err));
+    };
+
+    fetchLic();
+    const handleUpdate = () => fetchLic(true);
+    window.addEventListener('license_updated', handleUpdate);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('license_updated', handleUpdate);
+    };
   }, []);
 
   const isPreLicenseDate = useMemo(() => {

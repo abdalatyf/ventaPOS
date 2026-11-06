@@ -1,32 +1,33 @@
 import React, { useEffect, useState } from 'react';
-import api from '../api';
+import { getLicenseStatus } from '../api';
 
 export default function SubscriptionWarningBanner() {
   const [licenseStatus, setLicenseStatus] = useState(null);
 
   useEffect(() => {
-    const fetchStatus = async () => {
+    let isMounted = true;
+
+    const fetchStatus = async (forceRefresh = false) => {
       try {
-        const res = await api.get('/license/status/');
-        if (res.data) {
-          setLicenseStatus(res.data);
+        const data = await getLicenseStatus(forceRefresh);
+        if (isMounted && data) {
+          setLicenseStatus(data);
         }
       } catch (err) {
         console.error("Failed to fetch license status", err);
       }
     };
     
-    // Check initially and also listen for updates (e.g. from POS Entry)
+    // Initial fetch from shared cache
     fetchStatus();
     
-    // Optional: Re-fetch periodically or when window gets focus or license updates
-    const handleFocus = () => fetchStatus();
-    const handleUpdate = () => fetchStatus();
-    window.addEventListener('focus', handleFocus);
+    // Only re-fetch when license actually updates or subscription changes
+    const handleUpdate = () => fetchStatus(true);
     window.addEventListener('license_updated', handleUpdate);
     window.addEventListener('subscription_expired', handleUpdate);
+
     return () => {
-      window.removeEventListener('focus', handleFocus);
+      isMounted = false;
       window.removeEventListener('license_updated', handleUpdate);
       window.removeEventListener('subscription_expired', handleUpdate);
     };

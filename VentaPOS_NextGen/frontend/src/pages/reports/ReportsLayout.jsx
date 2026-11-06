@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { IconFilter, IconReport, IconPrinter } from '@tabler/icons-react';
 import { useDefaultDate } from '../../hooks/useDefaultDate';
 import StandardTablePageLayout from '../../components/common/StandardTablePageLayout';
+import { getLicenseStatus } from '../../api';
 
 export const ReportsContext = createContext();
 
@@ -15,10 +16,47 @@ export default function ReportsLayout() {
   const [year, setYear] = useState('');
   const [month, setMonth] = useState('');
   const [activePrintHandler, setActivePrintHandler] = useState(null);
+  const [licenseWarning, setLicenseWarning] = useState(null);
 
   const registerPrintHandler = useCallback((handler) => {
     setActivePrintHandler(() => handler);
   }, []);
+
+  // Verify license: block print-only plan and show expired warnings
+  useEffect(() => {
+    let isMounted = true;
+    const verifyLicense = async (forceRefresh = false) => {
+      try {
+        const data = await getLicenseStatus(forceRefresh);
+        if (!isMounted || !data) return;
+
+        // Print-Only license (product_id 2 or 3) blocks analytical reports
+        if (data.is_print_only) {
+          navigate('/pos', { replace: true });
+          return;
+        }
+
+        // Expired subscription warning
+        if (data.is_expired || data.status === 'expired') {
+          setLicenseWarning('الاشتراك منتهي. التقارير متاحة للاطلاع والمراجعة فقط.');
+        } else if (data.is_last_month) {
+          setLicenseWarning('تنبيه: الاشتراك ينتهي هذا الشهر. يرجى تجديد الترخيص.');
+        } else {
+          setLicenseWarning(null);
+        }
+      } catch (err) {
+        console.error('Failed to verify license in ReportsLayout', err);
+      }
+    };
+
+    verifyLicense();
+    const handleUpdate = () => verifyLicense(true);
+    window.addEventListener('license_updated', handleUpdate);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('license_updated', handleUpdate);
+    };
+  }, [navigate]);
   
   // Extract report type from current path
   const currentPath = location.pathname.split('/').pop();
@@ -142,6 +180,12 @@ export default function ReportsLayout() {
         }
       >
         <div className="p-0">
+          {licenseWarning && (
+            <div className="alert alert-warning py-2 px-3 mb-2 mx-3 small fw-bold d-flex align-items-center gap-2 border-warning-subtle" role="alert">
+              <span>⚠️</span>
+              <span>{licenseWarning}</span>
+            </div>
+          )}
           <Outlet />
         </div>
       </StandardTablePageLayout>

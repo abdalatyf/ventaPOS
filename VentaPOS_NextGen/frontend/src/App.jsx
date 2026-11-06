@@ -11,7 +11,7 @@ import ActivationSetup from './pages/ActivationSetup';
 import AppShell from './components/AppShell';
 import DemoBanner from './components/DemoBanner';
 import SubscriptionWarningBanner from './components/SubscriptionWarningBanner';
-import api from './api';
+import api, { getLicenseStatus } from './api';
 
 import BranchSelection from './pages/BranchSelection';
 import PurchaseEntry from './pages/PurchaseEntry';
@@ -66,12 +66,29 @@ const PrintOnlyGate = ({ children }) => {
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    api.get('/license/status/').then(res => {
-      if (res.data?.is_print_only) {
-        setIsPrintOnly(true);
-      }
-      setChecked(true);
-    }).catch(() => setChecked(true));
+    let isMounted = true;
+    const verify = (forceRefresh = false) => {
+      getLicenseStatus(forceRefresh).then(data => {
+        if (isMounted) {
+          if (data?.is_print_only) {
+            setIsPrintOnly(true);
+          } else {
+            setIsPrintOnly(false);
+          }
+          setChecked(true);
+        }
+      }).catch(() => {
+        if (isMounted) setChecked(true);
+      });
+    };
+
+    verify();
+    const handleUpdate = () => verify(true);
+    window.addEventListener('license_updated', handleUpdate);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('license_updated', handleUpdate);
+    };
   }, []);
 
   if (!checked) return null;

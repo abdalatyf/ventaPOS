@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { IconDatabase } from '@tabler/icons-react';
-import api from '../api';
+import { getLicenseStatus } from '../api';
 import QuickRestoreModal from './common/QuickRestoreModal';
 
 export default function DemoBanner() {
@@ -11,24 +11,28 @@ export default function DemoBanner() {
   const location = useLocation();
 
   useEffect(() => {
-    const checkStatus = () => {
-      api.get('/license/status/').then(res => {
-        if (res.data.is_demo) {
-          setIsDemo(true);
-        } else {
-          setIsDemo(false);
+    let isMounted = true;
+
+    const checkStatus = (forceRefresh = false) => {
+      getLicenseStatus(forceRefresh).then(data => {
+        if (isMounted) {
+          setIsDemo(Boolean(data?.is_demo));
         }
       }).catch(() => {
-        setIsDemo(false);
+        if (isMounted) {
+          setIsDemo(false);
+        }
       });
     };
 
     checkStatus();
-    window.addEventListener('license_updated', checkStatus);
+    const handleUpdate = () => checkStatus(true);
+    window.addEventListener('license_updated', handleUpdate);
     return () => {
-      window.removeEventListener('license_updated', checkStatus);
+      isMounted = false;
+      window.removeEventListener('license_updated', handleUpdate);
     };
-  }, [location.pathname]);
+  }, []);
 
   if (!isDemo) return null;
   

@@ -59,4 +59,38 @@ api.interceptors.response.use(
   }
 );
 
+// Shared license cache and in-flight request deduplication
+let cachedLicenseStatus = null;
+let inFlightLicensePromise = null;
+
+export const clearLicenseCache = () => {
+  cachedLicenseStatus = null;
+  inFlightLicensePromise = null;
+};
+
+export const getLicenseStatus = async (forceRefresh = false) => {
+  if (!forceRefresh && cachedLicenseStatus) {
+    return cachedLicenseStatus;
+  }
+  if (inFlightLicensePromise) {
+    return inFlightLicensePromise;
+  }
+  inFlightLicensePromise = api.get('/license/status/')
+    .then((res) => {
+      cachedLicenseStatus = res.data || {};
+      inFlightLicensePromise = null;
+      return cachedLicenseStatus;
+    })
+    .catch((err) => {
+      inFlightLicensePromise = null;
+      throw err;
+    });
+  return inFlightLicensePromise;
+};
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('license_updated', clearLicenseCache);
+  window.addEventListener('subscription_expired', clearLicenseCache);
+}
+
 export default api;

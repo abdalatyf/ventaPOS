@@ -4,7 +4,7 @@ import {
   IconTruck, 
   IconPackage 
 } from '@tabler/icons-react';
-import api from '../api';
+import api, { getLicenseStatus } from '../api';
 import SalespersonsTab from '../components/SalespersonsTab';
 import SuppliersTab from '../components/SuppliersTab';
 import InventoryTab from '../components/InventoryTab';
@@ -15,12 +15,23 @@ export default function Dimensions() {
   const [isPrintOnly, setIsPrintOnly] = useState(false);
 
   useEffect(() => {
-    api.get('/license/status/').then(res => {
-      if (res.data?.is_print_only) {
-        setIsPrintOnly(true);
-        setActiveTab('salespersons');
-      }
-    }).catch(err => console.error(err));
+    let isMounted = true;
+    const checkLicense = (forceRefresh = false) => {
+      getLicenseStatus(forceRefresh).then(data => {
+        if (isMounted && data?.is_print_only) {
+          setIsPrintOnly(true);
+          setActiveTab('salespersons');
+        }
+      }).catch(err => console.error(err));
+    };
+
+    checkLicense();
+    const handleUpdate = () => checkLicense(true);
+    window.addEventListener('license_updated', handleUpdate);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('license_updated', handleUpdate);
+    };
   }, []);
 
   return (
