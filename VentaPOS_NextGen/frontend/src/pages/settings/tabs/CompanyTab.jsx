@@ -95,10 +95,10 @@ export default function CompanyTab({ isFirstSetup = false, onSetupComplete = nul
       )}
       
       {/* Receipt Preview Section */}
-      <div className="card shadow-sm border-0 mb-4 bg-light">
-        <div className="card-header bg-white py-3 border-bottom-0 d-flex justify-content-between align-items-center">
-          <h6 className="mb-0 fw-bold text-secondary"><IconReceiptTax className="me-2" /> معاينة ترويسة جدول الأقساط والوصل</h6>
-          <span className="badge bg-primary rounded-pill">تحديث مباشر</span>
+      <div className="card shadow-sm border-secondary-subtle mb-4">
+        <div className="card-header bg-white py-3 border-bottom border-secondary-subtle d-flex justify-content-between align-items-center">
+          <h6 className="mb-0 fw-bold text-dark d-flex align-items-center gap-2"><IconReceiptTax className="text-primary" size={20} /> معاينة ترويسة جدول الأقساط والوصل</h6>
+          <span className="badge bg-primary-subtle text-primary rounded-pill px-3 py-1">تحديث مباشر</span>
         </div>
         <div className="card-body d-flex justify-content-center pt-2 pb-4">
           {/* Invoice Table Mockup */}

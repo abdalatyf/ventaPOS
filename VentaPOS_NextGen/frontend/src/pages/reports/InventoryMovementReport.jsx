@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
-import { IconBox, IconPackage, IconCoin } from '@tabler/icons-react';
+import { IconBox, IconPackage, IconCoin, IconRefresh } from '@tabler/icons-react';
 import api from '../../api';
 import { ReportsContext } from './ReportsLayout';
 import ReportTable from '../../components/ReportTable';
@@ -195,10 +195,10 @@ export default function InventoryMovementReport() {
     { label: 'إجمالي القيمة', value: fmtNum(totals.total_value || data.total_inventory_value), color: 'success', icon: IconCoin }
   ];
 
-  const renderFilters = () => (
+  const subFiltersRow1 = () => (
     <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Product */}
-      <div className="flex-grow-1" style={{ minWidth: '180px' }}>
+      <div className="flex-grow-1" style={{ minWidth: '220px' }}>
         <ReportAutocomplete
           items={items}
           value={searchQuery}
@@ -220,7 +220,7 @@ export default function InventoryMovementReport() {
       </div>
 
       {/* Salesperson */}
-      <div style={{ width: '180px' }} className="flex-shrink-0">
+      <div style={{ width: '220px' }} className="flex-shrink-0">
         <ReportAutocomplete
           items={salespersonsList}
           value={salespersonQuery}
@@ -237,13 +237,39 @@ export default function InventoryMovementReport() {
               setSalespersonQuery('');
             }
           }}
-          placeholder="جميع المناديب"
+          placeholder="جميع المناديب..."
           displayKey="name"
           idKey="id"
           searchKeys={['name', 'local_id']}
           allowClear={true}
           className="form-control form-control-sm fw-bold border-secondary-subtle"
         />
+      </div>
+    </div>
+  );
+
+  const subFiltersRow2 = () => (
+    <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
+      <button 
+        type="button" 
+        className="btn btn-outline-secondary btn-sm fw-bold px-2 py-1 flex-shrink-0 border-secondary-subtle d-flex align-items-center gap-1" 
+        onClick={() => {
+          setSearchQuery('');
+          setSelectedProduct(null);
+          setSalespersonId('');
+          setSalespersonQuery('');
+        }}
+        disabled={loading}
+        title="إعادة ضبط"
+      >
+        <IconRefresh size={14} />
+        <span>إعادة ضبط</span>
+      </button>
+
+      <div className="text-muted small fw-bold ms-auto d-flex align-items-center gap-2">
+        <span>الفترة: {year}/{String(month).padStart(2, '0')}</span>
+        <span>•</span>
+        <span>عدد الأصناف المطابقة: {processedItems.length}</span>
       </div>
     </div>
   );
@@ -257,7 +283,8 @@ export default function InventoryMovementReport() {
         data={processedItems}
         loading={loading}
         summaryCards={summaryCards}
-        renderFilters={renderFilters}
+        subFiltersRow1={subFiltersRow1}
+        subFiltersRow2={subFiltersRow2}
         sortableColumns={[
           { id: 'product_name', label: 'الصنف' },
           { id: 'opening_stock', label: 'رصيد أول' },

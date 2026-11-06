@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { IconUser, IconReceipt, IconCoin, IconCash } from '@tabler/icons-react';
+import { IconUser, IconReceipt, IconCoin, IconCash, IconRefresh } from '@tabler/icons-react';
 import api from '../../api';
 import { ReportsContext } from './ReportsLayout';
 import ReportTable from '../../components/ReportTable';
@@ -310,9 +310,9 @@ export default function SalespersonPerformanceReport() {
     );
   };
 
-  const renderFilters = () => (
+  const subFiltersRow1 = () => (
     <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
-      <div style={{ width: '220px' }} className="flex-shrink-0">
+      <div style={{ width: '260px' }} className="flex-shrink-0">
         <ReportAutocomplete
           items={items}
           value={searchQuery}
@@ -332,6 +332,30 @@ export default function SalespersonPerformanceReport() {
           className="form-control form-control-sm fw-bold border-secondary-subtle"
         />
       </div>
+
+      <button 
+        type="button" 
+        className="btn btn-outline-secondary btn-sm fw-bold px-2 py-1 flex-shrink-0 border-secondary-subtle d-flex align-items-center gap-1" 
+        onClick={() => {
+          setSearchQuery('');
+          setSelectedSalesperson(null);
+        }}
+        disabled={loading}
+        title="إعادة ضبط"
+      >
+        <IconRefresh size={14} />
+        <span>إعادة ضبط</span>
+      </button>
+    </div>
+  );
+
+  const subFiltersRow2 = () => (
+    <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
+      <div className="text-muted small fw-bold d-flex align-items-center gap-2">
+        <span>الفترة: {year}/{String(month).padStart(2, '0')}</span>
+        <span>•</span>
+        <span>إجمالي عدد المناديب النشطين: {processedItems.length}</span>
+      </div>
     </div>
   );
 
@@ -344,7 +368,8 @@ export default function SalespersonPerformanceReport() {
         data={processedItems}
         loading={loading}
         summaryCards={summaryCards}
-        renderFilters={renderFilters}
+        subFiltersRow1={subFiltersRow1}
+        subFiltersRow2={subFiltersRow2}
         sortableColumns={[
           { id: 'name', label: 'اسم المندوب' },
           { id: 'receipts_count', label: 'عدد الفواتير' },

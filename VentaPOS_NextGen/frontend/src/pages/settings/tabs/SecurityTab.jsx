@@ -88,9 +88,12 @@ export default function SecurityTab() {
   }
 
   return (
-    <div className="card shadow-sm border-0 mb-4 animate__animated animate__fadeIn">
-      <div className="card-header bg-dark text-white py-3">
-        <h5 className="mb-0 fw-bold"><IconShieldLock className="me-2" /> أمان الحساب (تغيير كلمة المرور)</h5>
+    <div className="card shadow-sm border-secondary-subtle mb-4 animate__animated animate__fadeIn">
+      <div className="card-header bg-white border-bottom border-secondary-subtle py-3">
+        <h5 className="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+          <IconShieldLock size={20} className="text-primary" />
+          <span>أمان الحساب (تغيير كلمة المرور)</span>
+        </h5>
       </div>
       <div className="card-body">
         {error && (

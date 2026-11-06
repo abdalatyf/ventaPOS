@@ -121,9 +121,8 @@ export default function BranchSelection() {
             {branches.map(branch => (
               <div className="col-12 col-md-6 mb-3" key={branch.id}>
                 <div 
-                  className="card card-link card-link-pop cursor-pointer h-100" 
+                  className="card shadow-sm border-secondary-subtle cursor-pointer h-100" 
                   onClick={() => handleSelectBranch(branch)}
-                  style={{ borderRadius: '12px', border: '1px solid #e0e6ed', transition: 'all 0.2s' }}
                 >
                   <div className="card-body d-flex align-items-center justify-content-between p-4">
                     <div className="d-flex align-items-center">
@@ -143,7 +142,7 @@ export default function BranchSelection() {
                         <IconEdit size={18} />
                       </button>
                       <button 
-                        className="btn btn-icon btn-danger-outline text-danger border-0" 
+                        className="btn btn-icon btn-outline-danger border-0" 
                         onClick={(e) => handleDeleteBranch(e, branch)}
                         title="حذف الفرع"
                       >
@@ -158,9 +157,8 @@ export default function BranchSelection() {
             {branches.length < 10 && (
               <div className="col-12 col-md-6 mb-3">
                 <div 
-                  className="card card-link card-link-pop cursor-pointer h-100 border-dashed" 
+                  className="card shadow-sm border-secondary-subtle cursor-pointer h-100 border-dashed" 
                   onClick={openAddModal}
-                  style={{ borderRadius: '12px', borderColor: '#cbd5e1', backgroundColor: '#f1f5f9' }}
                 >
                   <div className="card-body d-flex align-items-center justify-content-center p-4 text-secondary">
                     <IconPlus size={24} className="me-2" />

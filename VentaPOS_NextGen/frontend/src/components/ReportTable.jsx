@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback, useContext } from 'react';
 import useSmartScroll from '../hooks/useSmartScroll';
 import { IconSortAscending, IconPlus, IconTrash, IconPrinter } from '@tabler/icons-react';
 import PrintModal from './common/PrintModal';
 import api from '../api';
 import './ReportTable.css';
 import { useStandardTableSlots } from './common/StandardTablePageLayout';
+import { ReportsContext } from '../pages/Reports/ReportsLayout';
 
 const SortDropdown = ({ sortRules, setSortRules, sortableColumns }) => {
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -117,7 +118,10 @@ export default function ReportTable({
   data = [],
   loading = false,
   summaryCards = [],
+  subFiltersRow1 = null,
+  subFiltersRow2 = null,
   renderFilters = null,
+  renderFiltersRow2 = null,
   renderRow = null,
   renderHeader = null,
   emptyMessage = "لا توجد بيانات للفترة المحددة",
@@ -142,6 +146,19 @@ export default function ReportTable({
   const [focusedRowIndex, setFocusedRowIndex] = useState(-1);
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const tableContainerElemRef = useRef(null);
+
+  const reportsContext = useContext(ReportsContext);
+  useEffect(() => {
+    if (reportsContext?.registerPrintHandler) {
+      reportsContext.registerPrintHandler(() => {
+        if (onPrintReport) {
+          onPrintReport();
+        } else {
+          setPrintModalOpen(true);
+        }
+      });
+    }
+  }, [reportsContext?.registerPrintHandler, onPrintReport]);
 
   // Combine ref for useSmartScroll and internal keyboard focus
   const handleSetTableRef = useCallback((node) => {
@@ -326,11 +343,19 @@ export default function ReportTable({
     await api.post('/reports/desktop_print/', payload);
   };
 
-  // Inject row2 (filters or default status) into StandardTablePageLayout
+  const effectiveRow1 = subFiltersRow1 || (subFiltersRow2 ? renderFilters : null);
+  const effectiveRow2 = subFiltersRow2 || renderFiltersRow2 || (!subFiltersRow1 ? renderFilters : null);
+
+  // Inject row1 and row2 (Sub-Filter Rows) into StandardTablePageLayout
   const slotPortals = useStandardTableSlots({
-    row2: renderFilters ? (
+    row1Extra: effectiveRow1 ? (
       <div className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
-        {typeof renderFilters === 'function' ? renderFilters() : renderFilters}
+        {typeof effectiveRow1 === 'function' ? effectiveRow1() : effectiveRow1}
+      </div>
+    ) : null,
+    row2: effectiveRow2 ? (
+      <div className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
+        {typeof effectiveRow2 === 'function' ? effectiveRow2() : effectiveRow2}
       </div>
     ) : (
       <div className="text-muted fw-bold small d-flex align-items-center gap-2">

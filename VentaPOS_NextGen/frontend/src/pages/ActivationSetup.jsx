@@ -10,13 +10,13 @@ export default function ActivationSetup() {
 
   return (
     <div className="page page-center" style={{ backgroundColor: '#f1f5f9', minHeight: '100vh', fontFamily: "'Cairo', sans-serif" }}>
-      <div className="container-tight py-4" style={{ maxWidth: '800px' }}>
+      <div className="container-fluid py-4 w-100" style={{ maxWidth: '960px' }}>
         <div className="text-center mb-4">
           <h2 className="fw-bold mb-2">تهانينا! تم تفعيل VentaPOS بنجاح 🎉</h2>
           <p className="mb-0 opacity-75 fs-5">يرجى إدخال بيانات مؤسستك الحقيقية الآن لإضافتها على الإيصالات (يمكنك تعديلها لاحقاً).</p>
         </div>
         
-        <div className="card shadow-lg border-0 rounded-4 mb-3">
+        <div className="card shadow-sm border-secondary-subtle mb-3">
           <div className="card-body p-5">
             <CompanyTab isFirstSetup={true} onSetupComplete={() => {
                 localStorage.removeItem('branchId');

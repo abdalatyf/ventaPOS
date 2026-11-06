@@ -240,10 +240,10 @@ export default function ReceiptsReport() {
     );
   };
 
-  const renderFilters = () => (
+  const subFiltersRow1 = () => (
     <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Sale Type */}
-      <div style={{ width: '110px' }} className="flex-shrink-0">
+      <div style={{ width: '120px' }} className="flex-shrink-0">
         <select 
           name="sale_type" 
           className="form-select form-select-sm fw-bold border-secondary-subtle px-1 text-center" 
@@ -257,15 +257,41 @@ export default function ReceiptsReport() {
             });
           }}
         >
-          <option value="ALL">الكل</option>
+          <option value="ALL">جميع الأنواع</option>
           <option value="CASH">كاش فقط</option>
           <option value="INSTALLMENT">قسط فقط</option>
           <option value="HAS_DOWN_PAYMENT">بمقدم فقط</option>
         </select>
       </div>
 
+      {/* From Receipt */}
+      <div style={{ width: '85px' }} className="flex-shrink-0">
+        <DebouncedInput 
+          type="text" 
+          inputMode="numeric"
+          name="receipt_from" 
+          className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
+          placeholder="من رقم"
+          value={filters.receipt_from} 
+          onChange={handleFilterChange} 
+        />
+      </div>
+
+      {/* To Receipt */}
+      <div style={{ width: '85px' }} className="flex-shrink-0">
+        <DebouncedInput 
+          type="text" 
+          inputMode="numeric"
+          name="receipt_to" 
+          className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
+          placeholder="إلى رقم"
+          value={filters.receipt_to} 
+          onChange={handleFilterChange} 
+        />
+      </div>
+
       {/* Salesperson */}
-      <div style={{ width: '150px' }} className="flex-shrink-0">
+      <div className="flex-grow-1" style={{ minWidth: '180px' }}>
         <ReportAutocomplete
           items={salespersons}
           value={salespersonQuery}
@@ -296,7 +322,7 @@ export default function ReceiptsReport() {
               setSalespersonQuery('');
             }
           }}
-          placeholder="جميع المناديب"
+          placeholder="جميع المناديب..."
           displayKey="name"
           searchKeys={['name', 'username', 'local_id']}
           idKey="id"
@@ -304,9 +330,13 @@ export default function ReceiptsReport() {
           className="form-control form-control-sm fw-bold border-secondary-subtle"
         />
       </div>
+    </div>
+  );
 
+  const subFiltersRow2 = () => (
+    <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Customer Name */}
-      <div className="flex-grow-1" style={{ minWidth: '120px' }}>
+      <div className="flex-grow-1" style={{ minWidth: '150px' }}>
         <DebouncedInput 
           type="text" 
           name="customer_name" 
@@ -318,40 +348,26 @@ export default function ReceiptsReport() {
       </div>
 
       {/* Phone */}
-      <div style={{ width: '110px' }} className="flex-shrink-0">
+      <div style={{ width: '130px' }} className="flex-shrink-0">
         <DebouncedInput 
           type="text" 
           name="phone" 
           className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
           dir="ltr"
-          placeholder="الموبايل"
+          placeholder="الموبايل..."
           value={filters.phone} 
           onChange={handleFilterChange} 
         />
       </div>
 
-      {/* From Receipt */}
-      <div style={{ width: '75px' }} className="flex-shrink-0">
+      {/* Area */}
+      <div style={{ width: '130px' }} className="flex-shrink-0">
         <DebouncedInput 
           type="text" 
-          inputMode="numeric"
-          name="receipt_from" 
+          name="area" 
           className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
-          placeholder="من"
-          value={filters.receipt_from} 
-          onChange={handleFilterChange} 
-        />
-      </div>
-
-      {/* To Receipt */}
-      <div style={{ width: '75px' }} className="flex-shrink-0">
-        <DebouncedInput 
-          type="text" 
-          inputMode="numeric"
-          name="receipt_to" 
-          className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
-          placeholder="إلى"
-          value={filters.receipt_to} 
+          placeholder="المنطقة..."
+          value={filters.area} 
           onChange={handleFilterChange} 
         />
       </div>
@@ -382,7 +398,8 @@ export default function ReceiptsReport() {
         loading={loading && receipts.length === 0}
         loadingMore={loadingMore}
         summaryCards={summaryCards}
-        renderFilters={renderFilters}
+        subFiltersRow1={subFiltersRow1}
+        subFiltersRow2={subFiltersRow2}
         renderRow={renderRow}
         emptyMessage="لا توجد فواتير لهذه المعايير"
         emptyIcon={IconReceipt}

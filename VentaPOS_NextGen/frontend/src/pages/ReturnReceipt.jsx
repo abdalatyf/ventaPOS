@@ -135,7 +135,7 @@ export default function ReturnReceipt() {
 
   if (loading) {
     return (
-      <div className="container-xl py-5 text-center">
+      <div className="container-fluid py-5 text-center">
         <div className="spinner-border text-primary mb-3"></div>
         <h4>جاري تحميل بيانات الفاتورة...</h4>
       </div>
@@ -261,7 +261,7 @@ export default function ReturnReceipt() {
       <div className="row">
         {/* Cart selection */}
         <div className="col-lg-7">
-          <div className="card shadow-sm mb-2" style={{ position: 'relative', zIndex: 30 }}>
+          <div className="card shadow-sm border-secondary-subtle mb-2" style={{ position: 'relative', zIndex: 30 }}>
             <div className="card-header bg-light">
               <h3 className="card-title m-0">تحديد الأصناف المسترجعة</h3>
             </div>
@@ -315,7 +315,7 @@ export default function ReturnReceipt() {
 
         {/* Financials & Reschedule */}
         <div className="col-lg-5">
-          <div className="card shadow-sm mb-2 border-primary" style={{ position: 'relative', zIndex: 30 }}>
+          <div className="card shadow-sm border-secondary-subtle mb-2" style={{ position: 'relative', zIndex: 30 }}>
             <div className="card-header bg-primary text-white">
               <h3 className="card-title m-0 text-white">الخلاصة المالية وإعادة الجدولة</h3>
             </div>

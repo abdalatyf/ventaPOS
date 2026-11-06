@@ -17,8 +17,8 @@ export const StandardTableLayoutContext = createContext(null);
  */
 export function useStandardTableSlots(slots) {
   const context = useContext(StandardTableLayoutContext);
-  const row1Extra = slots?.row1Extra;
-  const row2 = slots?.row2;
+  const row1Extra = slots?.row1Extra || slots?.row1;
+  const row2 = slots?.row2 || slots?.row2Extra;
   const hasRow2 = Boolean(row2);
   const setHasChildRow2 = context?.setHasChildRow2;
 
@@ -72,6 +72,7 @@ export function useStandardTableSlots(slots) {
 export default function StandardTablePageLayout({
   title,
   icon: Icon,
+  headerContent = null,
   headerActions = null,
   row1 = null,
   row2 = null,
@@ -96,7 +97,7 @@ export default function StandardTablePageLayout({
       <div className={containerClassName} dir="rtl">
         {/* ── Fixed Height Top Section (Title + Row 1 + Optional Row 2) ── */}
         <div className="standard-page-top-section d-print-none">
-          {(title || headerActions) && (
+          {(title || headerContent || headerActions) && (
             <div className="standard-page-header d-flex justify-content-between align-items-center border-bottom border-secondary-subtle">
               <div className="d-flex align-items-center gap-2">
                 {Icon && <Icon className="text-primary flex-shrink-0" size={24} />}
@@ -105,6 +106,7 @@ export default function StandardTablePageLayout({
                     {title}
                   </h2>
                 )}
+                {headerContent}
               </div>
               {headerActions && (
                 <div className="d-flex align-items-center gap-2">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
-import { IconCalculator, IconFilter } from '@tabler/icons-react';
+import { IconCalculator, IconFilter, IconRefresh } from '@tabler/icons-react';
 import api from '../../api';
 import { ReportsContext } from './ReportsLayout';
 import ReportTable from '../../components/ReportTable';
@@ -142,10 +142,96 @@ export default function AveragesReport() {
     }
   ];
 
+  const subFiltersRow1 = () => (
+    <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
+      {/* Search Product */}
+      <div className="flex-grow-1" style={{ minWidth: '220px' }}>
+        <ReportAutocomplete
+          items={uniqueProducts}
+          value={productQuery}
+          onChange={(text) => {
+            setProductQuery(text);
+            if (!text) setSelectedProduct(null);
+          }}
+          onSelect={(prod) => {
+            setSelectedProduct(prod);
+            if (prod) setProductQuery(prod.name || '');
+          }}
+          placeholder="ابحث عن صنف..."
+          displayKey="name"
+          idKey="id"
+          searchKeys={['name', 'id']}
+          allowClear={true}
+          className="form-control form-control-sm fw-bold border-secondary-subtle"
+        />
+      </div>
+
+      {/* Sale Type Select */}
+      <div style={{ width: '150px' }} className="flex-shrink-0">
+        <select 
+          className="form-select form-select-sm fw-bold border-secondary-subtle text-center" 
+          value={saleTypeFilter}
+          onChange={(e) => setSaleTypeFilter(e.target.value)}
+        >
+          <option value="all">جميع المبيعات</option>
+          <option value="cash">كاش فقط</option>
+          <option value="installment">قسط فقط</option>
+        </select>
+      </div>
+    </div>
+  );
+
+  const subFiltersRow2 = () => (
+    <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
+      {/* Salesperson Autocomplete */}
+      <div style={{ width: '220px' }} className="flex-shrink-0">
+        <ReportAutocomplete
+          items={salespersons}
+          value={salespersonQuery}
+          onChange={(text) => {
+            setSalespersonQuery(text);
+            if (!text) setSalespersonId('');
+          }}
+          onSelect={(sp) => {
+            if (sp) {
+              setSalespersonId(String(sp.id || sp.local_id));
+              setSalespersonQuery(sp.name || '');
+            } else {
+              setSalespersonId('');
+              setSalespersonQuery('');
+            }
+          }}
+          placeholder="تصفية حسب المندوب..."
+          displayKey="name"
+          idKey="id"
+          searchKeys={['name', 'local_id']}
+          allowClear={true}
+          className="form-control form-control-sm fw-bold border-secondary-subtle"
+        />
+      </div>
+
+      {/* Reset */}
+      <button 
+        type="button" 
+        className="btn btn-outline-secondary btn-sm fw-bold px-2 py-1 flex-shrink-0 border-secondary-subtle d-flex align-items-center gap-1" 
+        onClick={() => {
+          setProductQuery('');
+          setSelectedProduct(null);
+          setSaleTypeFilter('all');
+          setSalespersonId('');
+          setSalespersonQuery('');
+        }}
+        disabled={loading}
+        title="إعادة ضبط"
+      >
+        <IconRefresh size={14} />
+        <span>إعادة ضبط</span>
+      </button>
+    </div>
+  );
+
   return (
-    <div className="container-fluid p-0 d-flex flex-column" dir="rtl" style={{ minHeight: 'calc(100vh - 100px)' }}>
-      {error && <div className="alert alert-danger mb-3">{error}</div>}
-      
+    <div className="w-100 p-0">
       <ReportTable
         columns={columns}
         data={items}
@@ -164,70 +250,8 @@ export default function AveragesReport() {
           { id: 1, column: 'avg_sell', dir: 'desc' },
           { id: 2, column: 'qty', dir: 'desc' }
         ]}
-        renderFilters={() => (
-          <div className="d-flex flex-wrap align-items-center gap-2">
-            {/* Search Product */}
-            <div style={{ width: '220px' }}>
-              <ReportAutocomplete
-                items={uniqueProducts}
-                value={productQuery}
-                onChange={(text) => {
-                  setProductQuery(text);
-                  if (!text) setSelectedProduct(null);
-                }}
-                onSelect={(prod) => {
-                  setSelectedProduct(prod);
-                  if (prod) setProductQuery(prod.name || '');
-                }}
-                placeholder="ابحث عن صنف..."
-                displayKey="name"
-                idKey="id"
-                searchKeys={['name', 'id']}
-                allowClear={true}
-              />
-            </div>
-
-            {/* Sale Type Select */}
-            <div className="input-group input-group-sm" style={{ width: '140px' }}>
-              <span className="input-group-text"><IconFilter size={14} /></span>
-              <select 
-                className="form-select" 
-                value={saleTypeFilter}
-                onChange={(e) => setSaleTypeFilter(e.target.value)}
-              >
-                <option value="all">الكل</option>
-                <option value="cash">كاش فقط</option>
-                <option value="installment">قسط فقط</option>
-              </select>
-            </div>
-
-            {/* Salesperson Autocomplete */}
-            <div style={{ width: '200px' }}>
-              <ReportAutocomplete
-                items={salespersons}
-                value={salespersonQuery}
-                onChange={(text) => {
-                  setSalespersonQuery(text);
-                  if (!text) setSalespersonId('');
-                }}
-                onSelect={(sp) => {
-                  if (sp) {
-                    setSalespersonId(String(sp.id || sp.local_id));
-                    setSalespersonQuery(sp.name || '');
-                  } else {
-                    setSalespersonId('');
-                    setSalespersonQuery('');
-                  }
-                }}
-                placeholder="تصفية حسب المندوب..."
-                displayKey="name"
-                idKey="id"
-                searchKeys={['name', 'local_id']}
-                allowClear={true}
-              />
-            </div>
-          </div>
-        )}
+        subFiltersRow1={subFiltersRow1}
+        subFiltersRow2={subFiltersRow2}
         emptyMessage="لا توجد بيانات متوسطات لهذه الفترة"
         emptyIcon={IconCalculator}
       />

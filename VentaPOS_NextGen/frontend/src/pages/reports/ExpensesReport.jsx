@@ -132,10 +132,10 @@ export default function ExpensesReport() {
     }
   ];
 
-  const renderFilters = () => (
+  const subFiltersRow1 = () => (
     <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Description */}
-      <div className="flex-grow-1" style={{ minWidth: '150px' }}>
+      <div className="flex-grow-1" style={{ minWidth: '200px' }}>
         <DebouncedInput 
           type="text" 
           className="form-control form-control-sm fw-bold border-secondary-subtle" 
@@ -146,7 +146,7 @@ export default function ExpensesReport() {
       </div>
 
       {/* Category */}
-      <div style={{ width: '130px' }} className="flex-shrink-0">
+      <div style={{ width: '160px' }} className="flex-shrink-0">
         <select
           className="form-select form-select-sm fw-bold border-secondary-subtle"
           value={categoryQuery}
@@ -158,26 +158,30 @@ export default function ExpensesReport() {
           ))}
         </select>
       </div>
+    </div>
+  );
 
+  const subFiltersRow2 = () => (
+    <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Min Amount */}
-      <div style={{ width: '90px' }} className="flex-shrink-0">
+      <div style={{ width: '120px' }} className="flex-shrink-0">
         <DebouncedInput 
           type="text" 
           inputMode="numeric"
           className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
-          placeholder="من مبلغ" 
+          placeholder="من مبلغ..." 
           value={minAmount}
           onChange={(e) => setMinAmount(toEnglish(e.target.value))}
         />
       </div>
 
       {/* Max Amount */}
-      <div style={{ width: '90px' }} className="flex-shrink-0">
+      <div style={{ width: '120px' }} className="flex-shrink-0">
         <DebouncedInput 
           type="text" 
           inputMode="numeric"
           className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
-          placeholder="إلى مبلغ" 
+          placeholder="إلى مبلغ..." 
           value={maxAmount}
           onChange={(e) => setMaxAmount(toEnglish(e.target.value))}
         />
@@ -214,7 +218,8 @@ export default function ExpensesReport() {
           { id: 1, column: 'id', dir: 'desc' }
         ]}
         summaryCards={summaryCards}
-        renderFilters={renderFilters}
+        subFiltersRow1={subFiltersRow1}
+        subFiltersRow2={subFiltersRow2}
         emptyMessage="لا توجد مصروفات مسجلة في هذه الفترة"
         emptyIcon={IconReceipt}
       />

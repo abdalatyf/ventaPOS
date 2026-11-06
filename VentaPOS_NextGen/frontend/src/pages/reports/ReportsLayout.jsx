@@ -1,6 +1,6 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { IconFilter, IconReport } from '@tabler/icons-react';
+import { IconFilter, IconReport, IconPrinter } from '@tabler/icons-react';
 import { useDefaultDate } from '../../hooks/useDefaultDate';
 import StandardTablePageLayout from '../../components/common/StandardTablePageLayout';
 
@@ -14,6 +14,11 @@ export default function ReportsLayout() {
 
   const [year, setYear] = useState('');
   const [month, setMonth] = useState('');
+  const [activePrintHandler, setActivePrintHandler] = useState(null);
+
+  const registerPrintHandler = useCallback((handler) => {
+    setActivePrintHandler(() => handler);
+  }, []);
   
   // Extract report type from current path
   const currentPath = location.pathname.split('/').pop();
@@ -46,6 +51,16 @@ export default function ReportsLayout() {
     }
   }, [year, month, navigate, location.pathname, location.search]);
 
+  const contextValue = useMemo(() => ({
+    year,
+    month,
+    branchId,
+    registerPrintHandler,
+    handlePrint: () => {
+      if (activePrintHandler) activePrintHandler();
+    }
+  }), [year, month, branchId, registerPrintHandler, activePrintHandler]);
+
   if (dateLoading || !year || !month) {
     return (
       <div className="page-wrapper flex-fill d-flex align-items-center justify-content-center" style={{ height: '100vh' }}>
@@ -58,14 +73,15 @@ export default function ReportsLayout() {
   }
 
   return (
-    <ReportsContext.Provider value={{ year, month, branchId }}>
+    <ReportsContext.Provider value={contextValue}>
       <StandardTablePageLayout
         title="التقارير الإدارية والتحليلية"
         icon={IconReport}
-        row1={
+        headerContent={
           <div className="d-flex align-items-center gap-2 flex-shrink-0" style={{ overflow: 'visible' }}>
-            {/* Report Selector */}
-            <div style={{ width: '240px' }} className="flex-shrink-0">
+            {/* Report Selector with explicit label "نوع التقرير" */}
+            <div className="input-group input-group-sm" style={{ width: '290px' }}>
+              <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">نوع التقرير</span>
               <select 
                 className="form-select form-select-sm fw-bold border-secondary-subtle text-primary"
                 value={reportPath}
@@ -110,6 +126,19 @@ export default function ReportsLayout() {
               </div>
             </div>
           </div>
+        }
+        headerActions={
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-primary fw-bold px-3 py-1 d-flex align-items-center gap-1 border-secondary-subtle"
+            onClick={() => {
+              if (activePrintHandler) activePrintHandler();
+            }}
+            title="طباعة التقرير"
+          >
+            <IconPrinter size={15} />
+            <span>طباعة التقرير</span>
+          </button>
         }
       >
         <div className="p-0">

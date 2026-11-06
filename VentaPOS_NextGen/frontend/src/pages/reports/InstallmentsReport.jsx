@@ -19,11 +19,6 @@ export default function InstallmentsReport() {
   const [salespersonQuery, setSalespersonQuery] = useState('');
   const [salespersonsList, setSalespersonsList] = useState([]);
   
-  const [saleFromYear, setSaleFromYear] = useState('');
-  const [saleFromMonth, setSaleFromMonth] = useState('');
-  const [saleToYear, setSaleToYear] = useState('');
-  const [saleToMonth, setSaleToMonth] = useState('');
-  
   const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
   const [area, setArea] = useState('');
@@ -67,21 +62,12 @@ export default function InstallmentsReport() {
     setLoading(true);
     setError('');
     try {
-      const cleanFromMonth = toEnglish(saleFromMonth).trim();
-      const cleanFromYear = toEnglish(saleFromYear).trim();
-      const cleanToMonth = toEnglish(saleToMonth).trim();
-      const cleanToYear = toEnglish(saleToYear).trim();
-
       const res = await api.get('/reports/installments/', {
         params: {
           branch_id: branchId,
           year: year || undefined,
           month: month || undefined,
           salesperson_id: salespersonId || undefined,
-          sale_from_year: cleanFromYear || undefined,
-          sale_from_month: cleanFromMonth || undefined,
-          sale_to_year: cleanToYear || undefined,
-          sale_to_month: cleanToMonth || undefined,
           customer_name: customerName ? toEnglish(customerName).trim() : undefined,
           phone: phone ? toEnglish(phone).trim() : undefined,
           area: area ? area.trim() : undefined,
@@ -101,7 +87,7 @@ export default function InstallmentsReport() {
     if (branchId) {
       fetchData();
     }
-  }, [year, month, branchId, salespersonId, saleFromMonth, saleFromYear, saleToMonth, saleToYear, customerName, phone, area]);
+  }, [year, month, branchId, salespersonId, customerName, phone, area]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -111,10 +97,6 @@ export default function InstallmentsReport() {
   const handleResetFilters = () => {
     setSalespersonId('');
     setSalespersonQuery('');
-    setSaleFromYear('');
-    setSaleFromMonth('');
-    setSaleToYear('');
-    setSaleToMonth('');
     setCustomerName('');
     setPhone('');
     setArea('');
@@ -276,10 +258,10 @@ export default function InstallmentsReport() {
     { id: 3, column: 'customer_name', dir: 'asc' }
   ];
 
-  const renderFilters = () => (
+  const subFiltersRow1 = () => (
     <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Salesperson */}
-      <div style={{ width: '150px' }} className="flex-shrink-0">
+      <div style={{ width: '220px' }} className="flex-shrink-0">
         <ReportAutocomplete
           items={salespersonsList}
           value={salespersonQuery}
@@ -296,7 +278,7 @@ export default function InstallmentsReport() {
               setSalespersonQuery('');
             }
           }}
-          placeholder="جميع المناديب"
+          placeholder="جميع المناديب..."
           displayKey="name"
           searchKeys={['name', 'local_id']}
           idKey="id"
@@ -306,7 +288,7 @@ export default function InstallmentsReport() {
       </div>
 
       {/* Customer Name */}
-      <div className="flex-grow-1" style={{ minWidth: '120px' }}>
+      <div className="flex-grow-1" style={{ minWidth: '160px' }}>
         <DebouncedInput 
           type="text" 
           className="form-control form-control-sm fw-bold border-secondary-subtle" 
@@ -316,26 +298,30 @@ export default function InstallmentsReport() {
         />
       </div>
 
+      {/* Area */}
+      <div style={{ width: '150px' }} className="flex-shrink-0">
+        <DebouncedInput 
+          type="text" 
+          className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
+          placeholder="المنطقة..." 
+          value={area} 
+          onChange={(e) => setArea(e.target.value)} 
+        />
+      </div>
+    </div>
+  );
+
+  const subFiltersRow2 = () => (
+    <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Phone */}
-      <div style={{ width: '110px' }} className="flex-shrink-0">
+      <div style={{ width: '140px' }} className="flex-shrink-0">
         <DebouncedInput 
           type="text" 
           className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
           dir="ltr"
-          placeholder="الموبايل" 
+          placeholder="الموبايل..." 
           value={phone} 
           onChange={(e) => setPhone(e.target.value)} 
-        />
-      </div>
-
-      {/* Area */}
-      <div style={{ width: '110px' }} className="flex-shrink-0">
-        <DebouncedInput 
-          type="text" 
-          className="form-control form-control-sm fw-bold border-secondary-subtle" 
-          placeholder="المنطقة" 
-          value={area} 
-          onChange={(e) => setArea(e.target.value)} 
         />
       </div>
 
@@ -350,6 +336,18 @@ export default function InstallmentsReport() {
         <IconRefresh size={14} />
         <span>إعادة ضبط</span>
       </button>
+
+      {/* Print Selected Invoices */}
+      {selectedIds.length > 0 && (
+        <button 
+          type="button"
+          className="btn btn-sm btn-outline-primary fw-bold px-3 py-1 d-flex align-items-center gap-1 flex-shrink-0 border-secondary-subtle" 
+          onClick={handlePrintSelected}
+        >
+          <IconPrinter size={15} />
+          <span>طباعة جداول المحدد ({selectedIds.length})</span>
+        </button>
+      )}
     </div>
   );
 
@@ -366,21 +364,12 @@ export default function InstallmentsReport() {
         sortableColumns={sortableColumns}
         defaultSortRules={defaultSortRules}
         summaryCards={summaryCards}
-        renderFilters={renderFilters}
+        subFiltersRow1={subFiltersRow1}
+        subFiltersRow2={subFiltersRow2}
         checkboxSelection={true}
         idField="payment_id"
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
-        headerToolbarExtra={
-          selectedIds.length > 0 && (
-            <button 
-              className="btn btn-sm btn-outline-primary fw-bold px-3 py-1 d-flex align-items-center gap-1" 
-              onClick={handlePrintSelected}
-            >
-              <IconPrinter size={16} /> طباعة المحدد ({selectedIds.length})
-            </button>
-          )
-        }
         emptyMessage="لا توجد تحصيلات أقساط مطابقة للمعايير المحددة"
         emptyIcon={IconReceipt}
       />

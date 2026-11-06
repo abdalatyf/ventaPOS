@@ -87,7 +87,7 @@ export default function SubscriptionTab() {
       <MachineIdDisplay machineId={machineId} />
 
       {/* System Update Section */}
-      <div className="card shadow-sm border mb-4 bg-light">
+      <div className="card shadow-sm border-secondary-subtle mb-4">
         <div className="card-body p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
           <div>
             <h4 className="m-0 fw-bold text-dark d-flex align-items-center gap-2">
@@ -111,7 +111,7 @@ export default function SubscriptionTab() {
 
       {/* Alert Box for System Status */}
       {licenseInfo.needs_support && (
-        <div className="alert alert-danger shadow-sm border-0" role="alert">
+        <div className="alert alert-danger shadow-sm border-secondary-subtle" role="alert">
           <div className="d-flex">
             <div><IconX className="me-3" size={24} /></div>
             <div>
@@ -123,7 +123,7 @@ export default function SubscriptionTab() {
       )}
 
       {licenseInfo.is_last_month && !licenseInfo.needs_support && (
-        <div className="alert alert-warning shadow-sm border-0" role="alert">
+        <div className="alert alert-warning shadow-sm border-secondary-subtle" role="alert">
           <div className="d-flex">
             <div><IconCalendarCheck className="me-3" size={24} /></div>
             <div>
@@ -138,11 +138,11 @@ export default function SubscriptionTab() {
       <div className="row mb-4">
         {/* Expiry Card */}
         <div className="col-md-6 mb-3">
-          <div className="card text-white bg-info h-100 shadow-sm border-0">
-            <div className="card-body text-center">
-              <h1 className="display-6"><IconCalendarCheck size={48} /></h1>
-              <h6 className="card-title mt-2 opacity-75">صلاحية النظام</h6>
-              <p className="card-text fw-bold fs-5">
+          <div className="card shadow-sm border-secondary-subtle h-100">
+            <div className="card-body text-center p-4">
+              <div className="text-primary mb-2"><IconCalendarCheck size={44} /></div>
+              <h6 className="card-title text-muted mb-2">صلاحية النظام</h6>
+              <p className="card-text fw-bold fs-3 text-dark mb-2">
                 {!licenseInfo.isValid 
                   ? 'غير محددة' 
                   : licenseInfo.expiryDate 
@@ -150,9 +150,9 @@ export default function SubscriptionTab() {
                     : 'مدى الحياة ∞'}
               </p>
               {licenseInfo.isValid && licenseInfo.expiryDate && (
-                <small className="badge bg-white text-info rounded-pill px-3">
+                <span className="badge bg-primary-subtle text-primary rounded-pill px-3 py-1">
                   {licenseInfo.daysRemaining > 0 ? `متبقي ${licenseInfo.daysRemaining} يوم` : 'منتهي'}
-                </small>
+                </span>
               )}
             </div>
           </div>
@@ -160,17 +160,20 @@ export default function SubscriptionTab() {
 
         {/* Status Card */}
         <div className="col-md-6 mb-3">
-          <div className={`card h-100 shadow-sm border-0 ${
-            licenseInfo.needs_support || !licenseInfo.isValid ? 'bg-danger text-white' : 
-            licenseInfo.is_last_month ? 'bg-warning text-dark' : 'bg-primary text-white'
-          }`}>
-            <div className="card-body text-center">
-              <h1 className="display-6">
-                {licenseInfo.needs_support || !licenseInfo.isValid ? <IconX size={48} /> : 
-                 licenseInfo.is_last_month ? <IconCalendarCheck size={48} /> : <IconCheck size={48} />}
-              </h1>
-              <h6 className="card-title mt-2 opacity-75">حالة النظام</h6>
-              <p className="card-text fw-bold fs-5">
+          <div className="card shadow-sm border-secondary-subtle h-100">
+            <div className="card-body text-center p-4">
+              <div className={`mb-2 ${
+                licenseInfo.needs_support || !licenseInfo.isValid ? 'text-danger' : 
+                licenseInfo.is_last_month ? 'text-warning' : 'text-success'
+              }`}>
+                {licenseInfo.needs_support || !licenseInfo.isValid ? <IconX size={44} /> : 
+                 licenseInfo.is_last_month ? <IconCalendarCheck size={44} /> : <IconCheck size={44} />}
+              </div>
+              <h6 className="card-title text-muted mb-2">حالة النظام</h6>
+              <p className={`card-text fw-bold fs-3 mb-2 ${
+                licenseInfo.needs_support || !licenseInfo.isValid ? 'text-danger' : 
+                licenseInfo.is_last_month ? 'text-warning' : 'text-success'
+              }`}>
                 {licenseInfo.needs_support ? 'يتطلب الدعم' :
                  !licenseInfo.isValid ? (historyRecords.length === 0 ? 'الوضع التجريبي' : 'منتهي / متوقف') :
                  licenseInfo.is_last_month ? 'الشهر الأخير' : 'ساري ويعمل'}
@@ -181,11 +184,11 @@ export default function SubscriptionTab() {
       </div>
 
       {/* Activation Area */}
-      <div className="card shadow border-success mb-4 border-0">
-        <div className="card-header bg-success text-white fw-bold">
+      <div className="card shadow-sm border-secondary-subtle mb-4">
+        <div className="card-header bg-white border-bottom border-secondary-subtle fw-bold text-dark py-3">
           ⚡ منطقة التفعيل الموحدة
         </div>
-        <div className="card-body py-5 bg-light">
+        <div className="card-body py-4">
           <LicenseKeyInput onSubmit={handleActivation} isLoading={isActivating} />
         </div>
       </div>

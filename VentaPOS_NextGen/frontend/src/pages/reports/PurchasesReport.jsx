@@ -103,10 +103,10 @@ export default function PurchasesReport() {
     { label: 'عدد الموردين', value: fmtNum(summary.suppliers_count || 0), color: 'secondary' },
   ];
 
-  const renderFilters = () => (
+  const subFiltersRow1 = () => (
     <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Supplier Dropdown */}
-      <div style={{ width: '150px' }} className="flex-shrink-0">
+      <div style={{ width: '180px' }} className="flex-shrink-0">
         <select
           className="form-select form-select-sm border-secondary-subtle fw-bold"
           value={selectedSupplier}
@@ -120,20 +120,44 @@ export default function PurchasesReport() {
       </div>
 
       {/* Invoice Type */}
-      <div style={{ width: '130px' }} className="flex-shrink-0">
+      <div style={{ width: '140px' }} className="flex-shrink-0">
         <select
-          className="form-select form-select-sm border-secondary-subtle fw-bold"
+          className="form-select form-select-sm border-secondary-subtle fw-bold text-center"
           value={invoiceType}
           onChange={(e) => setInvoiceType(e.target.value)}
         >
-          <option value="ALL">الكل</option>
+          <option value="ALL">جميع الأنواع</option>
           <option value="PURCHASE">شراء فقط</option>
           <option value="RETURN">مرتجع فقط</option>
         </select>
       </div>
 
+      {/* Invoice From/To */}
+      <div style={{ width: '90px' }} className="flex-shrink-0">
+        <input
+          type="number"
+          className="form-control form-control-sm text-center border-secondary-subtle fw-bold px-1"
+          placeholder="من رقم"
+          value={invoiceFrom}
+          onChange={(e) => setInvoiceFrom(e.target.value)}
+        />
+      </div>
+      <div style={{ width: '90px' }} className="flex-shrink-0">
+        <input
+          type="number"
+          className="form-control form-control-sm text-center border-secondary-subtle fw-bold px-1"
+          placeholder="إلى رقم"
+          value={invoiceTo}
+          onChange={(e) => setInvoiceTo(e.target.value)}
+        />
+      </div>
+    </div>
+  );
+
+  const subFiltersRow2 = () => (
+    <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Item Query */}
-      <div className="flex-grow-1" style={{ minWidth: '130px' }}>
+      <div className="flex-grow-1" style={{ minWidth: '180px' }}>
         <DebouncedInput
           type="text"
           className="form-control form-control-sm border-secondary-subtle fw-bold"
@@ -143,25 +167,15 @@ export default function PurchasesReport() {
         />
       </div>
 
-      {/* Invoice From/To */}
-      <div style={{ width: '80px' }} className="flex-shrink-0">
-        <input
-          type="number"
-          className="form-control form-control-sm text-center border-secondary-subtle fw-bold px-1"
-          placeholder="من رقم"
-          value={invoiceFrom}
-          onChange={(e) => setInvoiceFrom(e.target.value)}
-        />
-      </div>
-      <div style={{ width: '80px' }} className="flex-shrink-0">
-        <input
-          type="number"
-          className="form-control form-control-sm text-center border-secondary-subtle fw-bold px-1"
-          placeholder="إلى رقم"
-          value={invoiceTo}
-          onChange={(e) => setInvoiceTo(e.target.value)}
-        />
-      </div>
+      {/* Filter Button */}
+      <button
+        type="button"
+        className="btn btn-sm btn-primary px-3 py-1 flex-shrink-0 border-secondary-subtle d-flex align-items-center gap-1 fw-bold"
+        onClick={fetchPurchases}
+      >
+        <IconFilter size={14} />
+        <span>تصفية</span>
+      </button>
 
       {/* Reset Button */}
       <button
@@ -172,16 +186,6 @@ export default function PurchasesReport() {
       >
         <IconRefresh size={14} />
         <span>إعادة ضبط</span>
-      </button>
-
-      {/* Filter Button */}
-      <button
-        type="button"
-        className="btn btn-sm btn-primary px-3 py-1 flex-shrink-0 border-secondary-subtle d-flex align-items-center gap-1 fw-bold"
-        onClick={fetchPurchases}
-      >
-        <IconFilter size={14} />
-        <span>تصفية</span>
       </button>
     </div>
   );
@@ -266,7 +270,8 @@ export default function PurchasesReport() {
         data={filteredInvoices}
         loading={loading}
         summaryCards={summaryCards}
-        renderFilters={renderFilters}
+        subFiltersRow1={subFiltersRow1}
+        subFiltersRow2={subFiltersRow2}
         sortableColumns={[
           { id: 'invoice_number', label: 'رقم الفاتورة' },
           { id: 'supplier_name', label: 'المورد' },

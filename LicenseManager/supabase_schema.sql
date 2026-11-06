@@ -1,6 +1,6 @@
 -- ==============================================================================
 -- VentaPOS NextGen & LicenseManager — Supabase Cloud Audit Schema
--- Single Source of Truth for Append-Only Cloud License Logging
+-- Single Source of Truth for Append-Only Cloud License Logging & Online Sync
 -- Target Database: PostgreSQL 15+ (Supabase)
 -- ==============================================================================
 
@@ -18,13 +18,17 @@ CREATE TABLE IF NOT EXISTS public.licenses (
     price INTEGER NOT NULL DEFAULT 0,
     start_date DATE NOT NULL,
     expiry_date DATE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    CONSTRAINT uq_licenses_license_code UNIQUE (license_code)
 );
 
 -- 2. Indexes for Performance & Search
 CREATE INDEX IF NOT EXISTS idx_licenses_machine_id ON public.licenses (machine_id);
 CREATE INDEX IF NOT EXISTS idx_licenses_code ON public.licenses (license_code);
 CREATE INDEX IF NOT EXISTS idx_licenses_marketeer ON public.licenses (marketeer_id);
+CREATE INDEX IF NOT EXISTS idx_licenses_client_phone ON public.licenses (client_phone);
+CREATE INDEX IF NOT EXISTS idx_licenses_store_name ON public.licenses (store_name);
+CREATE INDEX IF NOT EXISTS idx_licenses_product_id ON public.licenses (product_id);
 CREATE INDEX IF NOT EXISTS idx_licenses_created_at ON public.licenses (created_at DESC);
 
 -- 3. Row-Level Security (RLS) Configuration
@@ -68,5 +72,10 @@ FOR EACH ROW
 EXECUTE FUNCTION public.prevent_license_tamper();
 
 -- ==============================================================================
--- Schema deployment complete.
+-- 5. Multi-App & Online Integration Architecture Notes:
+-- Future Online Mobile Apps & Multi-Tenant Web Portals can securely validate
+-- licenses and establish foreign-key relationships referencing:
+--   REFERENCES public.licenses(license_code) ON DELETE RESTRICT
+-- Because this table is strictly append-only, license records are immutable and
+-- guaranteed to persist permanently as the central audit source of truth.
 -- ==============================================================================

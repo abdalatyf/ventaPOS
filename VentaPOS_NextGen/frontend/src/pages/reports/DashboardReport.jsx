@@ -11,9 +11,14 @@ export default function DashboardReport() {
   const navigate = useNavigate();
 
   const slotPortals = useStandardTableSlots({
+    row1Extra: (
+      <div className="text-dark fw-bold small d-flex align-items-center gap-2">
+        <span>ملخص الأداء المالي والتشغيلي الشامل للفرع</span>
+      </div>
+    ),
     row2: (
       <div className="text-muted fw-bold small d-flex align-items-center gap-2">
-        <span>ملخص الأداء المالي والتشغيلي الشامل للفرع</span>
+        <span>الفترة المحددة: {year}/{String(month).padStart(2, '0')}</span>
       </div>
     )
   });
@@ -83,7 +88,7 @@ export default function DashboardReport() {
         
         {/* تفاصيل المكسب (P&L Breakdown) */}
         <div className="col-lg-6">
-          <div className="card border-0 h-100 shadow-sm">
+          <div className="card shadow-sm border-secondary-subtle h-100">
             <div className="card-header bg-primary text-white fw-bold py-2 d-flex align-items-center">
               <IconTrendingUp size={20} className="me-2" />
               <span>تفاصيل المكسب</span>
@@ -129,7 +134,7 @@ export default function DashboardReport() {
 
         {/* تفاصيل السيولة (Cash Drawer Breakdown) */}
         <div className="col-lg-6">
-          <div className="card border-0 h-100 shadow-sm">
+          <div className="card shadow-sm border-secondary-subtle h-100">
             <div className="card-header bg-success text-white fw-bold py-2 d-flex align-items-center">
               <IconWallet size={20} className="me-2" />
               <span>تفاصيل السيولة</span>
