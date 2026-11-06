@@ -1,79 +1,105 @@
-import time
 from django.utils import timezone
 from django.http import JsonResponse
-from api.models import ClientLicense
+from api.models import ClientLicense, Receipt
 from api.utils.security_utils import generate_record_signature, get_machine_id
+
+WHITELIST_PREFIXES = [
+    '/admin/',
+    '/static/',
+    '/api/v1/license/',
+    '/api/v1/tools/backup/',
+    '/api/v1/auth/',
+    '/api/v1/frontend-logs/',
+    '/api/v1/system/',
+]
 
 class LicenseEnforcementMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        from django.conf import settings
-        # if getattr(settings, 'DEBUG', False):
-        #     return self.get_response(request)
-            
-        if request.path.startswith('/admin/') or request.path.startswith('/static/'):
-            return self.get_response(request)
-
-        # Ignore activation and status checks
-        excluded_urls = ['/api/v1/license/activate/', '/api/v1/license/status/']
-        if any(request.path.startswith(url) for url in excluded_urls):
-            return self.get_response(request)
-
-        is_saving_receipt = False
-        if request.path.startswith('/api/v1/receipts/') and request.method == 'POST':
-            is_saving_receipt = True
-
-        from django.core.cache import cache
-        
-        cache_key = 'license_check_status'
-        cached_status = cache.get(cache_key)
-        
-        if cached_status == 'valid' and not is_saving_receipt:
+        if any(request.path.startswith(prefix) for prefix in WHITELIST_PREFIXES):
             return self.get_response(request)
 
         try:
+            # Monotonic clock-rollback detection against latest license and receipt
+            latest_lic = ClientLicense.all_objects.exclude(machine_id="DEMO_MACHINE").order_by('-created_at').first()
+            if not latest_lic:
+                # Demo Mode: permit operations, database is ephemeral
+                return self.get_response(request)
+
+            if latest_lic.created_at and timezone.now() < latest_lic.created_at - timezone.timedelta(minutes=5):
+                return JsonResponse({
+                    "error": "clock_rollback",
+                    "message": "تم اكتشاف تلاعب في وقت النظام. يرجى ضبط الساعة والتاريخ الحالي بشكل صحيح."
+                }, status=403)
+
+            latest_receipt = Receipt.all_objects.order_by('-created_at').first()
+            if latest_receipt and latest_receipt.created_at:
+                if timezone.now() < latest_receipt.created_at - timezone.timedelta(minutes=5):
+                    return JsonResponse({
+                        "error": "clock_rollback",
+                        "message": "تم اكتشاف تلاعب في وقت النظام. يرجى ضبط الساعة والتاريخ الحالي بشكل صحيح."
+                    }, status=403)
+
+            from django.core.cache import cache
             machine_id = cache.get('machine_id')
             if not machine_id:
                 machine_id = get_machine_id()
                 cache.set('machine_id', machine_id, 3600 * 24)
 
-            today = timezone.now().date()
-            
-            all_active_licenses = ClientLicense.objects.filter(is_active=True)
-            
+            today = timezone.localdate()
+            all_active_licenses = ClientLicense.objects.filter(is_active=True).exclude(machine_id="DEMO_MACHINE")
             valid_time_license = None
             total_invoices_balance = 0
 
             for lic in all_active_licenses:
                 expected_sig = generate_record_signature(lic.expiry_date, lic.invoices_balance, machine_id, lic.product_id, lic.is_active)
                 if lic.license_code_hash != expected_sig:
-                    if lic.machine_id == "DEMO_MACHINE" and lic.license_code_hash == "DEMO_HASH":
-                        continue
                     ClientLicense.objects.filter(pk=lic.pk).update(is_active=False)
                     continue
 
                 if lic.product_id < 10:
                     if not valid_time_license or (lic.expiry_date and lic.expiry_date > valid_time_license.expiry_date):
                         valid_time_license = lic
-                
+
                 total_invoices_balance += lic.invoices_balance
 
-            if not valid_time_license:
-                # No licenses exist AT ALL -> We are in DEMO MODE.
-                # Allow everything (the startup script will wipe the DB on next restart).
-                pass
-            elif valid_time_license.expiry_date and today > valid_time_license.expiry_date:
-                # License exists but EXPIRED -> READ-ONLY MODE.
-                if request.method in ['POST', 'PUT', 'DELETE', 'PATCH']:
-                    if request.path.startswith('/api/'):
-                        return JsonResponse({"error": "license_expired", "message": "انتهى الاشتراك. التطبيق الآن في وضع القراءة فقط."}, status=402)
-            
-            if is_saving_receipt and total_invoices_balance <= 0 and valid_time_license:
-                return JsonResponse({"error": "license_expired", "message": "Invoice balance exhausted. Please add invoice balance."}, status=403)
+            from api.services.receipt_service import get_license_date_bounds
+            start_date, last_allowed_month, grace_end = get_license_date_bounds(valid_time_license)
 
-            cache.set(cache_key, 'valid', 300) # 5 minutes cache
+            if valid_time_license and valid_time_license.product_id in (2, 3):
+                RESTRICTED_PREFIXES = [
+                    '/api/v1/reports/',
+                    '/api/v1/inventory-items/',
+                    '/api/v1/purchase-invoices/',
+                    '/api/v1/purchase-invoice-items/',
+                    '/api/v1/expenses/',
+                    '/api/v1/suppliers/',
+                    '/api/v1/commission-histories/',
+                    '/api/v1/inventory-adjustments/',
+                ]
+                if any(request.path.startswith(prefix) for prefix in RESTRICTED_PREFIXES):
+                    return JsonResponse({
+                        "error": "print_only_restricted",
+                        "detail": "هذه الميزة غير متاحة في باقة الطباعة فقط."
+                    }, status=403)
+
+            is_expired = (not valid_time_license) or (grace_end and today > grace_end)
+            if is_expired:
+                if request.method in ['POST', 'PUT', 'DELETE', 'PATCH']:
+                    return JsonResponse({
+                        "error": "license_expired",
+                        "message": "انتهى الاشتراك. التطبيق الآن في وضع القراءة فقط."
+                    }, status=403)
+
+            is_saving_receipt = (request.path.startswith('/api/v1/receipts/') and request.method == 'POST')
+            if is_saving_receipt and total_invoices_balance <= 0 and valid_time_license:
+                return JsonResponse({
+                    "error": "license_expired",
+                    "message": "Invoice balance exhausted. Please add invoice balance."
+                }, status=403)
+
             return self.get_response(request)
 
         except Exception as e:

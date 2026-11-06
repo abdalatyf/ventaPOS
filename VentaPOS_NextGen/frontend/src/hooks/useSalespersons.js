@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import api from '../../api';
+import api from '../api';
 
 export const useSalespersons = (branchId) => {
     const [salespersons, setSalespersons] = useState([]);
@@ -16,7 +16,7 @@ export const useSalespersons = (branchId) => {
             setLoading(true);
             setError(null);
             try {
-                const res = await api.get(`/api/v1/salespersons/?branch=${branchId}`);
+                const res = await api.get(`/salespersons/?branch=${branchId}`);
                 if (isMounted) {
                     const data = Array.isArray(res.data) ? res.data : (res.data?.results || []);
                     setSalespersons(data);

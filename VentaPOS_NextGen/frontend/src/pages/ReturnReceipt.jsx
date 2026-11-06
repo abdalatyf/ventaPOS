@@ -79,9 +79,9 @@ export default function ReturnReceipt() {
   
 
   const formatCurrency = val => {
-    if (val === undefined || val === null || val === '') return '0.00 ج.م';
+    if (val === undefined || val === null || val === '') return '0 ج.م';
     const num = parseFloat(val);
-    return isNaN(num) ? '0.00 ج.م' : `${num.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ج.م`;
+    return isNaN(num) ? '0 ج.م' : `${Math.round(num).toLocaleString('en-US')} ج.م`;
   };
 
   // Generate Schedule based on groups
@@ -109,7 +109,7 @@ export default function ReturnReceipt() {
       }
     });
     setSchedule(newSchedule);
-  }, [groups]);
+  }, [groups, returnMonth, returnYear]);
 
   const handleGroupChange = (index, field, value) => {
     const newGroups = [...groups];
@@ -261,13 +261,13 @@ export default function ReturnReceipt() {
       <div className="row">
         {/* Cart selection */}
         <div className="col-lg-7">
-          <div className="card premium-card mb-2" style={{ position: 'relative', zIndex: 30 }}>
+          <div className="card shadow-sm mb-2" style={{ position: 'relative', zIndex: 30 }}>
             <div className="card-header bg-light">
               <h3 className="card-title m-0">تحديد الأصناف المسترجعة</h3>
             </div>
             <div className="card-body p-0">
-              <div className="table-responsive">
-                <table className="table table-vcenter mb-0" style={{ fontSize: '0.95rem' }}>
+              <div className="table-responsive" style={{ minHeight: 200, maxHeight: 'calc(100vh - 380px)', overflowY: 'auto' }}>
+                <table className="table table-vcenter table-hover table-sm text-nowrap tabular-nums mb-0 table-sticky-header" style={{ fontSize: '0.95rem' }}>
                   <thead className="bg-light">
                     <tr>
                       <th>الصنف</th>
@@ -297,7 +297,7 @@ export default function ReturnReceipt() {
                             </div>
                           </td>
                           <td className="text-end px-3 fw-bold text-danger">
-                            {retQty > 0 ? formatCurrency(retQty * price) : '0.00 ج.م'}
+                            {retQty > 0 ? formatCurrency(retQty * price) : '0 ج.م'}
                           </td>
                         </tr>
                       );
@@ -315,7 +315,7 @@ export default function ReturnReceipt() {
 
         {/* Financials & Reschedule */}
         <div className="col-lg-5">
-          <div className="card premium-card mb-2 border-primary" style={{ position: 'relative', zIndex: 30 }}>
+          <div className="card shadow-sm mb-2 border-primary" style={{ position: 'relative', zIndex: 30 }}>
             <div className="card-header bg-primary text-white">
               <h3 className="card-title m-0 text-white">الخلاصة المالية وإعادة الجدولة</h3>
             </div>

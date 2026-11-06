@@ -1,5 +1,6 @@
 import os
 import platform
+from pathlib import Path
 import pdfkit
 from django.conf import settings
 from django.utils import timezone
@@ -16,9 +17,25 @@ def clean_invoices_directory():
     except Exception:
         pass
 
+import re
+from decimal import Decimal, ROUND_HALF_UP
+
 def to_arabic_numerals(text):
     if text is None:
         return ""
+    if isinstance(text, (int, float, Decimal)):
+        d = Decimal(str(text))
+        text = str(int(d.quantize(Decimal('1'), rounding=ROUND_HALF_UP)))
+    elif isinstance(text, str):
+        val_str = text.strip()
+        if re.match(r'^-?\d+\.\d+$', val_str):
+            d = Decimal(val_str)
+            text = str(int(d.quantize(Decimal('1'), rounding=ROUND_HALF_UP)))
+        else:
+            text = val_str
+    else:
+        text = str(text)
+
     arabic_numbers = str.maketrans('0123456789', '٠١٢٣٤٥٦٧٨٩')
     return str(text).translate(arabic_numbers)
 
@@ -46,14 +63,14 @@ def get_wkhtmltopdf_config():
 
 def get_save_directory():
     if getattr(sys, 'frozen', False):
-        base_path = os.path.dirname(sys.executable)
+        base_path = getattr(settings, 'DB_DIR', Path(os.environ.get('APPDATA', Path.home())) / 'VentaPOSTest')
+        invoices_dir = os.path.join(str(base_path), 'الفواتير المطبوعة')
     else:
         base_path = settings.BASE_DIR
-    
-    invoices_dir = os.path.join(base_path, 'media', 'Invoices')
+        invoices_dir = os.path.join(str(base_path), 'media', 'Invoices')
     
     if not os.path.exists(invoices_dir):
-        os.makedirs(invoices_dir)
+        os.makedirs(invoices_dir, exist_ok=True)
         
     return invoices_dir
 

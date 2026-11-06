@@ -1,7 +1,7 @@
-# VentaPOS Codebase Interface Map
+# VentaPOS NextGen — Codebase Interface Map
 
-> **This is a compressed, interface-only representation of the VentaPOS codebase (~10KB).**
-> Agents must read this file instead of navigating the raw 200KB+ source code to prevent context bloat.
+> **This is a compressed, interface-only representation of the VentaPOS NextGen codebase (~10KB).**
+> Agents must read this file instead of navigating raw source files to prevent context bloat.
 
 ## 1. Backend Models (`backend/api/models.py`)
 
@@ -179,6 +179,7 @@
 - `is_confirmed` (BooleanField)
 - `is_synced` (BooleanField)
 - `branch` (ForeignKey)
+- `category` (CharField)
 - `amount` (DecimalField)
 - `description` (CharField)
 - `expense_year` (IntegerField)
@@ -198,7 +199,6 @@
 - `phone1` (CharField)
 - `phone2` (CharField)
 - `footer_text` (CharField)
-- `is_cloud_viewer` (BooleanField)
 - `collection_commission_rate` (DecimalField)
 - `zoom_level` (DecimalField)
 - `is_deleted` (BooleanField)
@@ -215,9 +215,6 @@
 - `machine_id` (CharField)
 - `company_code` (IntegerField)
 - `license_code_hash` (CharField)
-- `is_online_active` (BooleanField)
-- `online_start_date` (DateField)
-- `online_expiry_date` (DateField)
 - `last_checkin` (DateTimeField)
 - `is_deleted` (BooleanField)
 - `created_at` (DateTimeField)
@@ -244,169 +241,275 @@
 - `objects` (ActiveManager)
 - `all_objects` (AllObjectsManager)
 
-### MonthlyInventorySnapshot
-- `item` (ForeignKey)
-- `year` (PositiveIntegerField)
-- `month` (PositiveIntegerField)
-- `closing_stock` (IntegerField)
-- `closing_value` (DecimalField)
-- `created_at` (DateTimeField)
+## 2. Backend Views & ViewSets (`backend/api/views/` & `tools_views.py`)
 
-## 3. Backend API Endpoints (`backend/api/urls.py`)
+### File: `backend\api\views\auth_views.py`
 
-- `/auth/local/` -> `CustomAuthToken.as_view(`
-- `/auth/demo/` -> `DemoAuthToken.as_view(`
-- `/auth/recover/` -> `PasswordRecoveryView.as_view(`
-- `/auth/has-password/` -> `HasPasswordView.as_view(`
-- `/auth/change-password/` -> `ChangePasswordView.as_view(`
-- `/license/status/` -> `LicenseStatusView.as_view(`
-- `/license/activate/` -> `LicenseActivateView.as_view(`
-- `/customer-suggestions/` -> `CustomerSuggestionsView.as_view(`
-- `/product-suggestions/` -> `ProductSuggestionsView.as_view(`
-- `/default-date/` -> `DefaultDateView.as_view(`
-- `/reports/dashboard/summary/` -> `DashboardReportView.as_view(`
-- `/reports/dashboard/` -> `DashboardReportView.as_view(`
-- `/reports/salespersons/` -> `SalespersonPerformanceReportView.as_view(`
-- `/reports/salesperson-performance/` -> `SalespersonPerformanceReportView.as_view(`
-- `/reports/inventory-movement/` -> `InventoryMovementReportView.as_view(`
-- `/reports/sales-pl/` -> `ProfitAndLossReportView.as_view(`
-- `/reports/profit-and-loss/` -> `ProfitAndLossReportView.as_view(`
-- `/reports/cash-drawer-details/` -> `CashDrawerReportView.as_view(`
-- `/reports/cash-drawer/` -> `CashDrawerReportView.as_view(`
-- `/reports/installments/` -> `InstallmentsReportView.as_view(`
-- `/tools/backup/download/` -> `BackupDownloadView.as_view(`
-- `/tools/backup/upload/` -> `BackupUploadView.as_view(`
-- `/tools/sync/export-items/` -> `OfflineExportItemsView.as_view(`
-- `/receipts-history-cursor/` -> `ReceiptHistoryCursorView.as_view(`
-- `/receipts-next-number/` -> `ReceiptNextNumberView.as_view(`
-- `/tools/sync/import-receipts/` -> `OfflineImportReceiptsView.as_view(`
-- `/tools/sync/approve-pending/<int:pk>/` -> `ApprovePendingReceiptView.as_view(`
-- `/` -> `include(router.urls`
+- **`CustomAuthToken`** (`post`)
+- **`DemoAuthToken`** (`post`)
+- **`PasswordRecoveryView`** (`post`)
+- **`HasPasswordView`** (`get`)
+- **`ChangePasswordView`** (`post`)
 
-## 2. Backend Views (`backend/api/views.py`)
+### File: `backend\api\views\base.py`
 
-### SoftDeleteModelViewSet
-- `def destroy(self, request)`
-- `def create(self, request)`
-- `def perform_create(self, serializer)`
+- **`SoftDeleteModelViewSet`** (`destroy, create, get_serializer_context`)
 
-### CustomAuthToken
-- `def post(self, request)`
+### File: `backend\api\views\dimension_views.py`
 
-### DemoAuthToken
-- `def post(self, request)`
+- **`BranchViewSet`** (`destroy`)
+- **`SalespersonViewSet`** (`get_queryset, destroy`)
+- **`SupplierViewSet`** (`destroy`)
+- **`CompanySettingViewSet`**
 
-### PasswordRecoveryView
-- `def post(self, request)`
+### File: `backend\api\views\expense_views.py`
 
-### HasPasswordView
-- `def get(self, request)`
+- **`ExpenseViewSet`** (`get_queryset`)
 
-### ChangePasswordView
-- `def post(self, request)`
+### File: `backend\api\views\inventory_views.py`
 
-### BranchViewSet
-- `def destroy(self, request)`
+- **`InventoryItemViewSet`** (`destroy, get_queryset, list, safe_available_qty, get_safe_available_qty, pos_search, ledger`)
+- **`CommissionHistoryViewSet`** (`create, get_queryset`)
+- **`InventoryAdjustmentViewSet`** (`get_queryset`)
 
-### SalespersonViewSet
-- `def get_queryset(self)`
-- `def destroy(self, request)`
+### File: `backend\api\views\license_views.py`
 
-### InventoryItemViewSet
-- `def destroy(self, request)`
-- `def get_queryset(self)`
-- `def safe_available_qty(self, request, pk)`
-- `def get_safe_available_qty(self, request, pk)`
-- `def pos_search(self, request)`
-- `def ledger(self, request, pk)`
+- **`LicenseHistoryViewSet`**
+- **`LicenseStatusView`** (`get`)
+- **`LicenseActivateView`** (`post`)
 
-### CommissionHistoryViewSet
-- `def get_queryset(self)`
+### File: `backend\api\views\purchase_views.py`
 
-### InventoryAdjustmentViewSet
+- **`PurchaseInvoicePagination`** (`get_paginated_response`)
+- **`PurchaseInvoiceViewSet`** (`get_queryset, destroy, desktop_print`)
+- **`PurchaseInvoiceItemViewSet`**
 
-### SupplierViewSet
-- `def destroy(self, request)`
+### File: `backend\api\views\receipt_views.py`
 
-### PurchaseInvoicePagination
-- `def get_paginated_response(self, data)`
+- **`ReceiptPagination`** (`get_paginated_response`)
+- **`ReceiptViewSet`** (`perform_create, destroy, bulk_delete, return_receipt, printers, desktop_print, _prepare_pdf_context, get_queryset, list`)
+- **`SaleItemViewSet`**
+- **`InstallmentPaymentViewSet`**
+- **`ReceiptNextNumberView`** (`get`)
+- **`ReceiptHistoryCursorView`** (`get`)
 
-### PurchaseInvoiceViewSet
-- `def get_queryset(self)`
-- `def _prepare_pdf_context(self, invoice)`
-- `def desktop_print(self, request)`
+### File: `backend\api\views\report_views.py`
 
-### PurchaseInvoiceItemViewSet
+- **`DefaultDateView`** (`get`)
+- **`DashboardReportView`** (`get`)
+- **`SalespersonPerformanceReportView`** (`get`)
+- **`InventoryMovementReportView`** (`get`)
+- **`ProfitAndLossReportView`** (`get`)
+- **`CashDrawerReportView`** (`get`)
+- **`InstallmentsReportView`** (`get`)
+- **`PurchasesReportView`** (`get`)
+- **`ReportDesktopPrintView`** (`post`)
 
-### ReceiptPagination
-- `def get_paginated_response(self, data)`
+### File: `backend\api\views\suggestion_views.py`
 
-### ReceiptViewSet
-- `def perform_create(self, serializer)`
-- `def bulk_delete(self, request)`
-- `def return_receipt(self, request, pk)`
-- `def printers(self, request)`
-- `def desktop_print(self, request)`
-- `def _prepare_pdf_context(self, receipt, inst, inst_index, total_inst)`
-- `def get_queryset(self)`
-- `def list(self, request)`
+- **`CustomerSuggestionsView`** (`get`)
+- **`ProductSuggestionsView`** (`get`)
 
-### SaleItemViewSet
+### File: `backend\api\views\system_views.py`
 
-### InstallmentPaymentViewSet
+- **`SystemCheckUpdateView`** (`get`)
+- **`SystemApplyUpdateView`** (`post`)
 
-### ExpenseViewSet
-- `def get_queryset(self)`
+### File: `backend\api\tools_views.py`
 
-### CompanySettingViewSet
+- **`ToolsBaseView`** (`dispatch`)
+- **`BackupDownloadView`** (`get`)
+- **`BackupUploadView`** (`post`)
+- **`OfflineExportItemsView`** (`get`)
+- **`OfflineImportReceiptsView`** (`post`)
+- **`PendingReceiptsListView`** (`get`)
+- **`ApprovePendingReceiptView`** (`post`)
 
-### ClientLicenseViewSet
+## 3. Backend Domain Services (`backend/api/services/`)
 
-### UsedLicenseViewSet
+### Service: `backend\api\services\compensation_service.py`
 
-### LicenseHistoryViewSet
+- `def calculate_branch_salespersons_performance(branch_id, month, year, get_cached_comm, coll_rate)`
 
-### LicenseStatusView
-- `def get(self, request)`
+### Service: `backend\api\services\financial_service.py`
 
-### LicenseActivateView
-- `def post(self, request)`
+- `def get_collection_commission_rate()`
+- `def calculate_upfront_credit_reserve(credit_receipts, credit_returns, coll_rate)`
+- `def calculate_cash_drawer_summary(branch_id, month, year, auto_salaries)`
+- `def calculate_deficit_loss(branch_id, month, year, price_resolver)`
 
-### CustomerSuggestionsView
-- `def get(self, request)`
+### Service: `backend\api\services\purchase_service.py`
 
-### ProductSuggestionsView
-- `def get(self, request)`
+- `def validate_items_stock_integrity(items, default_year, default_month)`
+- `def create_purchase_invoice(validated_data, items_data)`
+- `def update_purchase_invoice(instance, validated_data, items_data)`
 
-### DefaultDateView
-- `def get(self, request)`
+### Service: `backend\api\services\receipt_service.py`
 
-### DashboardReportView
-- `def get(self, request)`
+- `def get_next_receipt_number(branch, select_for_update)`
+- `def process_return_receipt(original_receipt, data)`
+- `def get_active_license(select_for_update)`
+- `def get_license_date_bounds(active_lic)`
+- `def create_receipt(validated_data, items_data, installments_data)`
+- `def update_receipt(instance, validated_data, items_data, installments_data)`
 
-### SalespersonPerformanceReportView
-- `def get(self, request)`
+### Service: `backend\api\services\stock_service.py`
 
-### InventoryMovementReportView
-- `def get(self, request)`
+- `def calculate_bulk_stock_timeline(items, target_month, target_year, default_month, default_year)`
+- `def get_bulk_price_resolver(item_ids_or_items)`
+- `def get_bulk_commission_resolver(item_ids_or_items)`
+- `def resolve_price(item, month, year)`
+- `def resolve_commission(item, month, year)`
+- `def make_stock_getter(i_init_y, i_init_m, i_init_qty, i_deltas, i_timeline)`
+- `def get_stock(m, y)`
 
-### ProfitAndLossReportView
-- `def get(self, request)`
+## 4. Backend API Endpoints (`backend/api/urls.py`)
 
-### CashDrawerReportView
-- `def get(self, request)`
+### REST Router ViewSets:
+- `api/v1/company-settings/` -> `CompanySettingViewSet`
+- `api/v1/branches/` -> `BranchViewSet`
+- `api/v1/salespersons/` -> `SalespersonViewSet`
+- `api/v1/inventory-items/` -> `InventoryItemViewSet`
+- `api/v1/commission-histories/` -> `CommissionHistoryViewSet`
+- `api/v1/commission-history/` -> `CommissionHistoryViewSet`
+- `api/v1/inventory-adjustments/` -> `InventoryAdjustmentViewSet`
+- `api/v1/suppliers/` -> `SupplierViewSet`
+- `api/v1/purchase-invoices/` -> `PurchaseInvoiceViewSet`
+- `api/v1/purchase-invoice-items/` -> `PurchaseInvoiceItemViewSet`
+- `api/v1/expenses/` -> `ExpenseViewSet`
+- `api/v1/receipts/` -> `ReceiptViewSet`
+- `api/v1/sale-items/` -> `SaleItemViewSet`
+- `api/v1/installment-payments/` -> `InstallmentPaymentViewSet`
+- `api/v1/license-history/` -> `LicenseHistoryViewSet`
 
-### InstallmentsReportView
-- `def get(self, request)`
+### Direct API Views:
+- `api/v1/auth/local/` -> `CustomAuthToken.as_view(`
+- `api/v1/auth/demo/` -> `DemoAuthToken.as_view(`
+- `api/v1/auth/recover/` -> `PasswordRecoveryView.as_view(`
+- `api/v1/auth/has-password/` -> `HasPasswordView.as_view(`
+- `api/v1/auth/change-password/` -> `ChangePasswordView.as_view(`
+- `api/v1/license/status/` -> `LicenseStatusView.as_view(`
+- `api/v1/license/activate/` -> `LicenseActivateView.as_view(`
+- `api/v1/customer-suggestions/` -> `CustomerSuggestionsView.as_view(`
+- `api/v1/product-suggestions/` -> `ProductSuggestionsView.as_view(`
+- `api/v1/default-date/` -> `DefaultDateView.as_view(`
+- `api/v1/reports/dashboard/summary/` -> `DashboardReportView.as_view(`
+- `api/v1/reports/dashboard/` -> `DashboardReportView.as_view(`
+- `api/v1/reports/salespersons/` -> `SalespersonPerformanceReportView.as_view(`
+- `api/v1/reports/salesperson-performance/` -> `SalespersonPerformanceReportView.as_view(`
+- `api/v1/reports/inventory-movement/` -> `InventoryMovementReportView.as_view(`
+- `api/v1/reports/sales-pl/` -> `ProfitAndLossReportView.as_view(`
+- `api/v1/reports/profit-and-loss/` -> `ProfitAndLossReportView.as_view(`
+- `api/v1/reports/cash-drawer-details/` -> `CashDrawerReportView.as_view(`
+- `api/v1/reports/cash-drawer/` -> `CashDrawerReportView.as_view(`
+- `api/v1/reports/installments/` -> `InstallmentsReportView.as_view(`
+- `api/v1/reports/purchases/` -> `PurchasesReportView.as_view(`
+- `api/v1/reports/desktop_print/` -> `ReportDesktopPrintView.as_view(`
+- `api/v1/tools/backup/download/` -> `BackupDownloadView.as_view(`
+- `api/v1/tools/backup/upload/` -> `BackupUploadView.as_view(`
+- `api/v1/receipts-history-cursor/` -> `ReceiptHistoryCursorView.as_view(`
+- `api/v1/receipts-next-number/` -> `ReceiptNextNumberView.as_view(`
+- `api/v1/tools/sync/export-items/` -> `OfflineExportItemsView.as_view(`
+- `api/v1/tools/sync/import-receipts/` -> `OfflineImportReceiptsView.as_view(`
+- `api/v1/tools/sync/pending-receipts/` -> `PendingReceiptsListView.as_view(`
+- `api/v1/pending-external-receipts/` -> `PendingReceiptsListView.as_view(`
+- `api/v1/tools/sync/approve-pending/<int:pk>/` -> `ApprovePendingReceiptView.as_view(`
+- `api/v1/system/check-update/` -> `SystemCheckUpdateView.as_view(`
+- `api/v1/system/apply-update/` -> `SystemApplyUpdateView.as_view(`
+- `api/v1/frontend-logs/` -> `FrontendLogView.as_view(`
+- `api/v1/` -> `include(router.urls`
 
-### ReceiptNextNumberView
-- `def get(self, request)`
+## 5. Serializers, Middleware & Print Utils
 
-### ReceiptHistoryCursorView
-- `def get(self, request)`
+### `backend/api/serializers.py`
+- Classes: `BranchSerializer, SalespersonSerializer, InventoryItemSerializer, CommissionHistorySerializer, InventoryAdjustmentSerializer, SupplierSerializer, PurchaseInvoiceItemSerializer, PurchaseInvoiceSerializer, SaleItemSerializer, InstallmentPaymentSerializer, ReceiptSerializer, ExpenseSerializer, CompanySettingSerializer, ClientLicenseSerializer, UsedLicenseSerializer, LicenseHistorySerializer, Meta, Meta, Meta, Meta, Meta, Meta, Meta, Meta, Meta, Meta, Meta, Meta, Meta, Meta, Meta, Meta`
+- Functions: `get_current_stock, to_internal_value, validate, create, create, update, to_internal_value, to_internal_value, get_has_returns, to_internal_value, validate, create, update, update, create`
 
-## 4. Frontend Note
-- Use `find_by_name` to locate React components in `frontend/src/`.
-- **Anchor Page:** `frontend/src/pages/POS.jsx`
-- **Reports:** `frontend/src/pages/reports/*.jsx`
-- **Utils:** `frontend/src/utils/formatUtils.js`, `frontend/src/api.js`
+### `backend/api/middleware.py`
+- Classes: `LicenseEnforcementMiddleware`
+
+### `backend/api/print_utils.py`
+- Functions: `clean_invoices_directory, to_arabic_numerals, to_english_numerals, ed2ad, get_wkhtmltopdf_config, get_save_directory, get_num_to_words_ar, generate_and_open_pdf`
+
+## 6. Frontend Architecture (`frontend/src/`)
+
+### Pages (`frontend/src/pages/`):
+- `ActivationSetup.jsx`
+- `BranchSelection.jsx`
+- `Dimensions.jsx`
+- `Expenses.jsx`
+- `Login.jsx`
+- `POS.jsx`
+- `ProductLedger.jsx`
+- `PurchaseEntry.jsx`
+- `reports\AveragesReport.jsx`
+- `reports\DashboardReport.jsx`
+- `reports\ExpensesReport.jsx`
+- `reports\InstallmentsReport.jsx`
+- `reports\InventoryMovementReport.jsx`
+- `reports\ProfitAndLossReport.jsx`
+- `reports\PurchasesReport.jsx`
+- `reports\ReceiptsReport.jsx`
+- `reports\ReportsLayout.jsx`
+- `reports\SalespersonPerformanceReport.jsx`
+- `ReturnReceipt.jsx`
+- `SearchPurchases.jsx`
+- `SearchReceipts.jsx`
+- `settings\SettingsIndex.jsx`
+- `settings\tabs\CompanyTab.jsx`
+- `settings\tabs\SecurityTab.jsx`
+- `settings\tabs\SubscriptionTab.jsx`
+- `tools\BackupTab.jsx`
+- `tools\SyncTab.jsx`
+- `tools\ToolsDashboard.jsx`
+
+### Components (`frontend/src/components/`):
+- `AppShell.jsx`
+- `Autocomplete.jsx`
+- `common\AppAutocomplete.jsx`
+- `common\ConfirmModal.jsx`
+- `common\MonthYearPicker.jsx`
+- `common\PrintModal.jsx`
+- `common\QuickRestoreModal.jsx`
+- `common\StandardTablePageLayout.jsx`
+- `common\UpdateModal.jsx`
+- `common\UserManualModal.jsx`
+- `DebouncedInput.jsx`
+- `DemoBanner.jsx`
+- `GlobalErrorBoundary.jsx`
+- `InventoryTab.jsx`
+- `ledger\LedgerCommissionForm.jsx`
+- `ledger\LedgerDeficitForm.jsx`
+- `ledger\LedgerHeader.jsx`
+- `ledger\LedgerMetricsCards.jsx`
+- `ledger\LedgerTimelineTable.jsx`
+- `Navbar.jsx`
+- `pos\POSCustomerForm.jsx`
+- `pos\POSInstallmentBox.jsx`
+- `pos\POSItemsTable.jsx`
+- `pos\POSTotalsSummary.jsx`
+- `purchases\PurchaseContextMenu.jsx`
+- `purchases\PurchaseFilterToolbar.jsx`
+- `purchases\PurchaseHeader.jsx`
+- `purchases\PurchaseInvoiceRow.jsx`
+- `purchases\PurchaseItemForm.jsx`
+- `purchases\PurchaseItemsTable.jsx`
+- `purchases\PurchaseTable.jsx`
+- `purchases\SuggestionList.jsx`
+- `receipts\ReceiptContextMenu.jsx`
+- `receipts\ReceiptRow.jsx`
+- `receipts\ReceiptsFilterToolbar.jsx`
+- `receipts\ReceiptsTable.jsx`
+- `ReportAutocomplete.jsx`
+- `ReportTable.jsx`
+- `SalespersonsTab.jsx`
+- `settings\LicenseKeyInput.jsx`
+- `settings\MachineIdDisplay.jsx`
+- `SubscriptionWarningBanner.jsx`
+- `SuppliersTab.jsx`
+
+### Custom Hooks (`frontend/src/hooks/`):
+- `useDefaultDate.js`
+- `useSalespersons.js`
+- `useSmartScroll.js`
+

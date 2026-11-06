@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import { IconBuildingStore, IconPlus, IconEdit, IconCheck, IconTrash } from '@tabler/icons-react';
+import { confirmDialog, alertDialog } from '../utils/dialogUtils';
 
 export default function BranchSelection() {
   const [branches, setBranches] = useState([]);
@@ -28,6 +29,10 @@ export default function BranchSelection() {
       // Auto-skip if there is only 1 branch AND no branch is currently selected in localStorage
       if (fetchedBranches.length === 1 && !localStorage.getItem('branchId')) {
         handleSelectBranch(fetchedBranches[0]);
+      } else if (fetchedBranches.length === 0) {
+        localStorage.removeItem('branchId');
+        localStorage.removeItem('branchName');
+        setShowModal(true);
       }
     } catch (err) {
       setError('تعذر جلب الفروع. يرجى المحاولة لاحقاً.');
@@ -57,13 +62,18 @@ export default function BranchSelection() {
       setBranchName('');
       fetchBranches();
     } catch (err) {
-      alert('حدث خطأ أثناء حفظ الفرع.');
+      alertDialog({ title: 'خطأ', text: 'حدث خطأ أثناء حفظ الفرع.', icon: 'error' });
     }
   };
 
   const handleDeleteBranch = async (e, branch) => {
     e.stopPropagation();
-    if (window.confirm(`هل أنت متأكد من حذف فرع "${branch.name}"؟ سيتم حذف جميع الفواتير والمنتجات والمصروفات المتعلقة بهذا الفرع نهائياً ولا يمكن التراجع عن هذه الخطوة!`)) {
+    const confirmed = await confirmDialog({
+      title: 'تأكيد حذف الفرع',
+      text: `هل أنت متأكد من حذف فرع "${branch.name}"؟ سيتم حذف جميع الفواتير والمنتجات والمصروفات المتعلقة بهذا الفرع نهائياً ولا يمكن التراجع عن هذه الخطوة!`,
+      confirmButtonText: 'نعم، احذف الفرع'
+    });
+    if (confirmed) {
       try {
         await api.delete(`/branches/${branch.id}/`);
         fetchBranches();
@@ -72,14 +82,14 @@ export default function BranchSelection() {
           localStorage.removeItem('branchName');
         }
       } catch (err) {
-        alert('حدث خطأ أثناء الحذف.');
+        alertDialog({ title: 'خطأ', text: 'حدث خطأ أثناء الحذف.', icon: 'error' });
       }
     }
   };
 
   const openAddModal = () => {
     if (branches.length >= 10) {
-      alert('تم الوصول للحد الأقصى لعدد الفروع (10).');
+      alertDialog({ title: 'تنبيه', text: 'تم الوصول للحد الأقصى لعدد الفروع (10).', icon: 'warning' });
       return;
     }
     setEditingBranch(null);

@@ -1,55 +1,26 @@
 import os
-import subprocess
 import platform
-import winreg
-import ctypes
+import hashlib
+import hmac
+from .license_validator import LicenseValidator
 
 def get_machine_id():
     """
-    استخراج بصمة الجهاز المجمعة (Motherboard + Registry + MAC)
+    استخراج بصمة الجهاز الثابتة من سجل النظام (Windows Registry MachineGuid)
     """
-    components = []
-    
-    # 1. WMIC Motherboard UUID
+    guid = None
     try:
-        cmd = "wmic csproduct get uuid"
-        startupinfo = subprocess.STARTUPINFO()
-        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        output = subprocess.check_output(cmd, startupinfo=startupinfo).decode()
-        parts = output.split('\n')
-        if len(parts) > 1:
-            mb_uuid = parts[1].strip()
-            if mb_uuid and "FFFFFFFF" not in mb_uuid:
-                components.append(mb_uuid)
-    except:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography")
+        guid, _ = winreg.QueryValueEx(key, "MachineGuid")
+        winreg.CloseKey(key)
+    except Exception:
         pass
 
-    # 2. Registry MachineGuid
-    try:
-        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Cryptography")
-        machine_guid, _ = winreg.QueryValueEx(key, "MachineGuid")
-        if machine_guid:
-            components.append(machine_guid)
-    except:
-        pass
-        
-    # 3. MAC Address
-    try:
-        import uuid as _uuid_lib
-        mac = _uuid_lib.getnode()
-        components.append(str(mac))
-    except:
-        pass
+    if not guid:
+        guid = platform.node() or "UNKNOWN-PC-001"
 
-    if not components:
-        return "UNKNOWN-ID-999"
-        
-    raw_id = "-".join(components)
-    return hashlib.sha256(raw_id.encode()).hexdigest()[:32]
-
-import hmac
-import hashlib
-from .license_validator import LicenseValidator
+    return hashlib.sha256(str(guid).strip().encode('utf-8')).hexdigest()[:32]
 
 # ==========================================
 # 1. دالة الختم السري للتراخيص (الخلطة الشاملة)
@@ -80,10 +51,18 @@ def generate_receipt_signature(receipt_number, total_amount, sale_month, sale_ye
     
     if items_data:
         try:
-            items_str = "-".join([
-                f"{getattr(item, 'inventory_item_id', item.get('inventory_item_id', item.get('inventory_item', '')))}:{getattr(item, 'quantity', item.get('quantity', ''))}"
-                for item in items_data
-            ])
+            formatted_items = []
+            for item in items_data:
+                if isinstance(item, dict):
+                    raw_id = item.get('inventory_item_id', item.get('inventory_item', ''))
+                    qty = item.get('quantity', '')
+                else:
+                    raw_id = getattr(item, 'inventory_item_id', getattr(item, 'inventory_item', ''))
+                    qty = getattr(item, 'quantity', '')
+                item_id = getattr(raw_id, 'id', getattr(raw_id, 'pk', raw_id))
+                formatted_items.append(f"{item_id}:{qty}")
+            formatted_items.sort()
+            items_str = "-".join(formatted_items)
             data_to_sign += f"-ITEMS[{items_str}]"
         except Exception:
             pass

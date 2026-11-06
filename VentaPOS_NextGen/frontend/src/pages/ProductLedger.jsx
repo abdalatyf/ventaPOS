@@ -1,328 +1,295 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { IconPackage } from '@tabler/icons-react';
+import toast from 'react-hot-toast';
 import api from '../api';
-import CommissionModal from '../components/CommissionModal';
+import { useDefaultDate } from '../hooks/useDefaultDate';
+import { parseNumber } from '../utils/formatUtils';
 
-const MOCK_LEDGER = {
-    item: { id: 1, name: 'لاب توب ديل', quantity: 15, purchase_price: 10000 },
-    dashboard: {
-        cash_profit: 15000,
-        installment_profit: 8000,
-        adjustment_impact: -500,
-        total_profit: 22500
-    },
-    movements: [
-        { id: 101, date: '2026-06-01', type: 'IN', desc: 'رصيد افتتاحي', qty: 20 },
-        { id: 102, date: '2026-06-05', type: 'OUT', desc: 'فاتورة مبيعات #1001', qty: 2 },
-        { id: 103, date: '2026-06-10', type: 'OUT', desc: 'فاتورة مبيعات #1005', qty: 3 },
-    ],
-    financials: [
-        { month: 'يونيو 2026', revenue: 60000, cost: 50000, profit: 10000, commission: 500 },
-        { month: 'مايو 2026', revenue: 120000, cost: 100000, profit: 20000, commission: 1000 },
-    ],
-    commissions: [
-        { id: 201, month: '06', year: '2026', amount: 500, status: 'مدفوعة' },
-        { id: 202, month: '05', year: '2026', amount: 1000, status: 'مدفوعة' },
-    ]
-};
+import LedgerHeader from '../components/ledger/LedgerHeader';
+import LedgerMetricsCards from '../components/ledger/LedgerMetricsCards';
+import LedgerCommissionForm from '../components/ledger/LedgerCommissionForm';
+import LedgerDeficitForm from '../components/ledger/LedgerDeficitForm';
+import LedgerTimelineTable from '../components/ledger/LedgerTimelineTable';
 
-const ProductLedger = () => {
-  const { id } = useParams();
-  const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, financial, movement, commission
+export default function ProductLedger() {
+  const { id: paramId } = useParams();
+  const navigate = useNavigate();
+
+  const [allProducts, setAllProducts] = useState([]);
+  const [selectedProductId, setSelectedProductId] = useState(paramId || '');
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const [showCommissionModal, setShowCommissionModal] = useState(false);
+  const currentBranchId = localStorage.getItem('branchId') || 1;
+  const { defaultYear, defaultMonth } = useDefaultDate(currentBranchId);
+
+  // Commission Change Form State
+  const [showCommissionForm, setShowCommissionForm] = useState(false);
+  const [commSubmitting, setCommSubmitting] = useState(false);
+  const [commForm, setCommForm] = useState({
+    amount: '',
+    month: new Date().getMonth() + 1,
+    year: new Date().getFullYear(),
+  });
+
+  // Deficit Registration Form State
+  const [showDeficitForm, setShowDeficitForm] = useState(false);
+  const [deficitSubmitting, setDeficitSubmitting] = useState(false);
+  const [deficitForm, setDeficitForm] = useState({
+    quantity: '',
+    month: new Date().getMonth() + 1,
+    year: new Date().getFullYear(),
+    reason: '',
+  });
+
+  // Keep form dates in sync when defaultDate is loaded
+  useEffect(() => {
+    if (defaultMonth && defaultYear) {
+      setCommForm(prev => ({ ...prev, month: defaultMonth, year: defaultYear }));
+      setDeficitForm(prev => ({ ...prev, month: defaultMonth, year: defaultYear }));
+    }
+  }, [defaultMonth, defaultYear]);
+
+  // Filter state for timeline
+  const [eventFilter, setEventFilter] = useState('ALL');
+
+  // Load all products for the autocomplete selector
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const res = await api.get('/inventory-items/', { params: { branch_id: currentBranchId } });
+        const list = res.data.results || res.data || [];
+        setAllProducts(list);
+        
+        if (paramId) {
+          const found = list.find(p => String(p.id) === String(paramId));
+          if (found) {
+            setProductSearchQuery(found.name);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching products list:', err);
+      }
+    };
+    fetchProducts();
+  }, [paramId, currentBranchId]);
+
+  // Sync state if URL param changes
+  useEffect(() => {
+    if (paramId && paramId !== selectedProductId) {
+      setSelectedProductId(paramId);
+    }
+  }, [paramId]);
+
+  // Fetch product ledger when selectedProductId changes
+  const fetchLedger = async (targetId) => {
+    const idToFetch = targetId || selectedProductId;
+    if (!idToFetch) {
+      setData(null);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await api.get(`/inventory-items/${idToFetch}/ledger/`);
+      setData(res.data);
+      if (res.data?.item) {
+        setProductSearchQuery(res.data.item.name);
+      }
+    } catch (err) {
+      console.error('Error fetching ledger:', err);
+      setError('حدث خطأ أثناء تحميل سجل حياة الصنف. يرجى التأكد من اختيار صنف صالح.');
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-     fetchLedger();
-  }, [id]);
+    if (selectedProductId) {
+      fetchLedger(selectedProductId);
+    } else {
+      setData(null);
+    }
+  }, [selectedProductId]);
 
-  const fetchLedger = async () => {
-     try {
-         setLoading(true);
-         const res = await api.get(`/api/v1/inventory-items/${id}/ledger/`);
-         setData(res.data);
-     } catch (err) {
-         console.warn("Backend not ready, using mock data for ledger.");
-         setData(MOCK_LEDGER);
-     } finally {
-         setLoading(false);
-     }
+  // Product selector handler
+  const handleSelectProduct = (prod) => {
+    if (prod && prod.id) {
+      setSelectedProductId(prod.id);
+      setProductSearchQuery(prod.name);
+      navigate(`/product-ledger/${prod.id}`, { replace: true });
+    } else {
+      setSelectedProductId('');
+      setProductSearchQuery('');
+      setData(null);
+      navigate(`/product-ledger`, { replace: true });
+    }
   };
 
-  const handleSaveCommission = async (newCommission) => {
-     try {
-         // mock post
-         // await api.post(`/api/v1/inventory-items/${id}/commissions/`, newCommission);
-         
-         const newComm = {
-             id: Date.now(),
-             month: newCommission.month,
-             year: newCommission.year,
-             amount: newCommission.amount,
-             status: 'غير مدفوعة'
-         };
-         setData({
-             ...data,
-             commissions: [newComm, ...data.commissions]
-         });
-         setShowCommissionModal(false);
-     } catch (err) {
-         console.error(err);
-     }
+  // Commission update submit
+  const handleCommissionSubmit = async (e) => {
+    e.preventDefault();
+    if (!commForm.amount || !commForm.month || !commForm.year) {
+      toast.error('يرجى إدخال قيمة المندبة والشهر والسنة.');
+      return;
+    }
+
+    const cleanAmount = parseNumber(commForm.amount);
+    if (cleanAmount < 0) {
+      toast.error('قيمة المندبة لا يمكن أن تكون سالبة.');
+      return;
+    }
+
+    try {
+      setCommSubmitting(true);
+      await api.post('/commission-histories/', {
+        item: selectedProductId,
+        commission_amount: cleanAmount,
+        activation_month: Math.round(parseNumber(commForm.month)),
+        activation_year: Math.round(parseNumber(commForm.year)),
+      });
+
+      toast.success('تم تسجيل المندبة الجديدة بنجاح');
+      setShowCommissionForm(false);
+      setCommForm(prev => ({ ...prev, amount: '' }));
+      fetchLedger(selectedProductId);
+    } catch (err) {
+      console.error('Error saving commission:', err);
+      const msg = err.response?.data?.detail || err.response?.data?.error || 'فشل في حفظ المندبة الجديدة.';
+      toast.error(msg);
+    } finally {
+      setCommSubmitting(false);
+    }
   };
 
-  if (loading) return <div className="text-center p-5"><div className="spinner-border text-primary" role="status"></div></div>;
-  if (!data) return <div className="text-center p-5 text-muted">الصنف مش موجود.</div>;
+  // Deficit update submit
+  const handleDeficitSubmit = async (e) => {
+    e.preventDefault();
+    if (!deficitForm.quantity || !deficitForm.month || !deficitForm.year) {
+      toast.error('يرجى إدخال كمية العجز والشهر والسنة.');
+      return;
+    }
+
+    const cleanQty = Math.round(parseNumber(deficitForm.quantity));
+    if (cleanQty <= 0) {
+      toast.error('الكمية يجب أن تكون أكبر من صفر.');
+      return;
+    }
+
+    try {
+      setDeficitSubmitting(true);
+      await api.post('/inventory-adjustments/', {
+        item: selectedProductId,
+        adjustment_type: 'DEFICIT',
+        quantity: cleanQty,
+        month: Math.round(parseNumber(deficitForm.month)),
+        year: Math.round(parseNumber(deficitForm.year)),
+        reason: deficitForm.reason.trim() || 'عجز مخزن',
+      });
+
+      toast.success('تم تسجيل العجز بنجاح وتحديث كارت الصنف');
+      setShowDeficitForm(false);
+      setDeficitForm(prev => ({ ...prev, quantity: '', reason: '' }));
+      fetchLedger(selectedProductId);
+    } catch (err) {
+      console.error('Error recording deficit:', err);
+      const msg = err.response?.data?.detail || err.response?.data?.error || 'فشل في تسجيل العجز.';
+      toast.error(msg);
+    } finally {
+      setDeficitSubmitting(false);
+    }
+  };
+
+  const itemInfo = data?.item || null;
+  const metrics = data?.dashboard_metrics || {};
+  const timeline = data?.timeline || [];
+  const monthlySummary = data?.monthly_summary || [];
+
+  // Filtered timeline
+  const filteredTimeline = useMemo(() => {
+    if (eventFilter === 'ALL') return timeline;
+    return timeline.filter(ev => {
+      if (eventFilter === 'PURCHASES') return ev.type === 'PURCHASE' || ev.type === 'RETURN';
+      if (eventFilter === 'SALES') return ev.type === 'SALE' || ev.type === 'SALE_RETURN';
+      if (eventFilter === 'DEFICITS') return ev.type === 'DEFICIT';
+      if (eventFilter === 'COMMISSIONS') return ev.type === 'COMMISSION_CHANGE';
+      return true;
+    });
+  }, [timeline, eventFilter]);
 
   return (
-      <div className="page-wrapper">
-      <div className="page-header d-print-none">
-        <div className="container-fluid">
-          <div className="row g-2 align-items-center">
-            <div className="col">
-              <h2 className="page-title">
-                كارت الصنف: {data.item.name} (#{data.item.id})
-              </h2>
-              <div className="text-muted mt-1">
-                الرصيد: {data.item.quantity} حتة | سعر الشراء: {data.item.purchase_price}
-              </div>
-            </div>
-            <div className="col-auto ms-auto d-print-none">
-              <Link to="/inventory" className="btn btn-outline-secondary">
-                الرجوع للبضاعة
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div className="page-body">
-        <div className="container-fluid">
-          <div className="card">
-            <div className="card-header">
-              <ul className="nav nav-tabs card-header-tabs" data-bs-toggle="tabs">
-                <li className="nav-item">
-                  <a href="#tabs-dashboard" className={`nav-link ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('dashboard'); }}>
-                    لوحة المعلومات
-                  </a>
-                </li>
-                <li className="nav-item">
-                  <a href="#tabs-financial" className={`nav-link ${activeTab === 'financial' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('financial'); }}>
-                    تحليل مالي
-                  </a>
-                </li>
-                <li className="nav-item">
-                  <a href="#tabs-movement" className={`nav-link ${activeTab === 'movement' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('movement'); }}>
-                    السجل التفصيلي (Timeline)
-                  </a>
-                </li>
-                <li className="nav-item">
-                  <a href="#tabs-commission" className={`nav-link ${activeTab === 'commission' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('commission'); }}>
-                    سجل المندبات
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <div className="card-body">
-              <div className="tab-content">
-                
-                {/* Dashboard Tab */}
-                <div className={`tab-pane ${activeTab === 'dashboard' ? 'active show' : ''}`} id="tabs-dashboard">
-                   <div className="row row-cards">
-                      <div className="col-sm-6 col-lg-3">
-                        <div className="card card-sm">
-                          <div className="card-body">
-                            <div className="row align-items-center">
-                              <div className="col-auto">
-                                <span className="bg-success text-white avatar">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="icon" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M16.7 8a3 3 0 0 0 -2.7 -2h-4a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6h-4a3 3 0 0 1 -2.7 -2" /><path d="M12 3v3m0 12v3" /></svg>
-                                </span>
-                              </div>
-                              <div className="col">
-                                <div className="font-weight-medium">
-                                  أرباح الكاش
-                                </div>
-                                <div className="text-muted">
-                                  {data.dashboard.cash_profit.toLocaleString()}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="col-sm-6 col-lg-3">
-                        <div className="card card-sm">
-                          <div className="card-body">
-                            <div className="row align-items-center">
-                              <div className="col-auto">
-                                <span className="bg-info text-white avatar">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="icon" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" /><path d="M9 7l1 0" /><path d="M9 13l6 0" /><path d="M13 17l2 0" /></svg>
-                                </span>
-                              </div>
-                              <div className="col">
-                                <div className="font-weight-medium">
-                                  أرباح القسط
-                                </div>
-                                <div className="text-muted">
-                                  {data.dashboard.installment_profit.toLocaleString()}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="col-sm-6 col-lg-3">
-                        <div className="card card-sm">
-                          <div className="card-body">
-                            <div className="row align-items-center">
-                              <div className="col-auto">
-                                <span className="bg-danger text-white avatar">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="icon" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M12 9v2m0 4v.01" /></svg>
-                                </span>
-                              </div>
-                              <div className="col">
-                                <div className="font-weight-medium">
-                                  تأثير التسويات
-                                </div>
-                                <div className="text-muted">
-                                  {data.dashboard.adjustment_impact.toLocaleString()}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="col-sm-6 col-lg-3">
-                        <div className="card card-sm">
-                          <div className="card-body">
-                            <div className="row align-items-center">
-                              <div className="col-auto">
-                                <span className="bg-primary text-white avatar">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="icon" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 3v18h18" /><path d="M20 18v3" /><path d="M16 16v5" /><path d="M12 13v8" /><path d="M8 16v5" /><path d="M3 11c6 0 5 -5 9 -5s3 5 9 5" /></svg>
-                                </span>
-                              </div>
-                              <div className="col">
-                                <div className="font-weight-medium">
-                                  إجمالي الأرباح
-                                </div>
-                                <div className="text-muted">
-                                  {data.dashboard.total_profit.toLocaleString()}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                   </div>
-                </div>
-
-                {/* Financial Tab */}
-                <div className={`tab-pane ${activeTab === 'financial' ? 'active show' : ''}`} id="tabs-financial">
-                   <div className="table-responsive">
-                     <table className="table card-table table-vcenter text-nowrap datatable">
-                       <thead>
-                         <tr>
-                           <th>الشهر</th>
-                           <th>إجمالي المبيعات</th>
-                           <th>التكلفة</th>
-                           <th>الربح الصافي</th>
-                           <th>إجمالي المندبات</th>
-                         </tr>
-                       </thead>
-                       <tbody>
-                         {data.financials.map((fin, idx) => (
-                            <tr key={idx}>
-                              <td>{fin.month}</td>
-                              <td>{fin.revenue.toLocaleString()}</td>
-                              <td>{fin.cost.toLocaleString()}</td>
-                              <td><span className="text-success">{fin.profit.toLocaleString()}</span></td>
-                              <td>{fin.commission.toLocaleString()}</td>
-                            </tr>
-                         ))}
-                       </tbody>
-                     </table>
-                   </div>
-                </div>
-
-                {/* Movement Tab */}
-                <div className={`tab-pane ${activeTab === 'movement' ? 'active show' : ''}`} id="tabs-movement">
-                   <ul className="list list-timeline list-timeline-simple">
-                     {data.movements.map(mov => (
-                        <li key={mov.id}>
-                          <div className={`list-timeline-icon ${mov.type === 'IN' ? 'bg-success' : 'bg-danger'}`}>
-                            {mov.type === 'IN' ? 
-                              <svg xmlns="http://www.w3.org/2000/svg" className="icon" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
-                              :
-                              <svg xmlns="http://www.w3.org/2000/svg" className="icon" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M5 12l14 0" /></svg>
-                            }
-                          </div>
-                          <div className="list-timeline-content">
-                            <div className="list-timeline-time">{mov.date}</div>
-                            <p className="list-timeline-title">{mov.desc}</p>
-                            <p className="text-muted">الكمية: {mov.qty} حتة</p>
-                          </div>
-                        </li>
-                     ))}
-                     {data.movements.length === 0 && (
-                        <li><div className="text-muted py-4">مفيش حركة على الصنف ده.</div></li>
-                     )}
-                   </ul>
-                </div>
-
-                {/* Commission Tab */}
-                <div className={`tab-pane ${activeTab === 'commission' ? 'active show' : ''}`} id="tabs-commission">
-                   <div className="mb-3 d-flex justify-content-end">
-                      <button className="btn btn-primary" onClick={() => setShowCommissionModal(true)}>
-                         <svg xmlns="http://www.w3.org/2000/svg" className="icon me-2" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
-                         إضافة مندبة جديدة (آلة الزمن)
-                      </button>
-                   </div>
-                   <div className="table-responsive">
-                     <table className="table card-table table-vcenter text-nowrap datatable">
-                       <thead>
-                         <tr>
-                           <th>الشهر</th>
-                           <th>السنة</th>
-                           <th>قيمة المندبة</th>
-                           <th>الحالة</th>
-                         </tr>
-                       </thead>
-                       <tbody>
-                         {data.commissions.map(comm => (
-                            <tr key={comm.id}>
-                              <td>{comm.month}</td>
-                              <td>{comm.year}</td>
-                              <td>{comm.amount.toLocaleString()}</td>
-                              <td>
-                                 <span className={`badge ${comm.status === 'مدفوعة' ? 'bg-success-lt' : 'bg-warning-lt'}`}>
-                                    {comm.status}
-                                 </span>
-                              </td>
-                            </tr>
-                         ))}
-                       </tbody>
-                     </table>
-                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Commission Modal Component */}
-      <CommissionModal 
-         show={showCommissionModal} 
-         onClose={() => setShowCommissionModal(false)} 
-         onSave={handleSaveCommission} 
+    <div className="container-fluid py-3" dir="rtl">
+      {/* Top Header & Product Selector */}
+      <LedgerHeader
+        allProducts={allProducts}
+        productSearchQuery={productSearchQuery}
+        setProductSearchQuery={setProductSearchQuery}
+        handleSelectProduct={handleSelectProduct}
       />
+
+      {error && <div className="alert alert-danger shadow-sm mb-3">{error}</div>}
+
+      {loading && (
+        <div className="text-center py-5">
+          <div className="spinner-border text-primary" role="status"></div>
+          <div className="text-muted mt-2 fw-semibold">جاري جلب سجل العمليات وأسعار الشراء...</div>
+        </div>
+      )}
+
+      {!loading && !selectedProductId && (
+        <div className="card shadow-sm text-center py-5 border-0">
+          <div className="card-body">
+            <IconPackage size={64} className="text-muted mb-3 opacity-50" />
+            <h3 className="fw-bold text-secondary">اختر صنفاً من الشريط العلوي</h3>
+            <p className="text-muted">لعرض كارت الصنف وسجل الحركات وأسعار الشراء التاريخية وتعديلات المندبة.</p>
+          </div>
+        </div>
+      )}
+
+      {!loading && selectedProductId && itemInfo && (
+        <>
+          {/* Top 6 KPI Summary Cards */}
+          <LedgerMetricsCards itemInfo={itemInfo} metrics={metrics} />
+
+          {/* Action Panels: Change Commission & Record Deficit */}
+          <div className="row g-2 mb-3">
+            <div className="col-lg-6">
+              <LedgerCommissionForm
+                showCommissionForm={showCommissionForm}
+                setShowCommissionForm={setShowCommissionForm}
+                commForm={commForm}
+                setCommForm={setCommForm}
+                handleCommissionSubmit={handleCommissionSubmit}
+                commSubmitting={commSubmitting}
+              />
+            </div>
+            <div className="col-lg-6">
+              <LedgerDeficitForm
+                showDeficitForm={showDeficitForm}
+                setShowDeficitForm={setShowDeficitForm}
+                deficitForm={deficitForm}
+                setDeficitForm={setDeficitForm}
+                handleDeficitSubmit={handleDeficitSubmit}
+                deficitSubmitting={deficitSubmitting}
+              />
+            </div>
+          </div>
+
+          {/* Full Chronological Timeline Table & Monthly Summary */}
+          <LedgerTimelineTable
+            filteredTimeline={filteredTimeline}
+            eventFilter={eventFilter}
+            setEventFilter={setEventFilter}
+            monthlySummary={monthlySummary}
+          />
+        </>
+      )}
     </div>
   );
-};
-
-export default ProductLedger;
+}

@@ -69,7 +69,7 @@ export default function SalespersonsTab() {
   const fetchSalespersons = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/salespersons/');
+      const res = await api.get('/salespersons/', { params: { branch_id: currentBranchId } });
       setSalespersons(res.data.results || res.data);
       setError(null);
     } catch (err) {
@@ -82,7 +82,7 @@ export default function SalespersonsTab() {
 
   useEffect(() => {
     fetchSalespersons();
-  }, []);
+  }, [currentBranchId]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -93,7 +93,7 @@ export default function SalespersonsTab() {
       const payload = {
         name: newName.trim(),
       };
-      if (currentBranchId && currentBranchId !== 1 && currentBranchId !== '1') {
+      if (currentBranchId) {
         payload.branch = currentBranchId;
       }
       

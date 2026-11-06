@@ -11,6 +11,9 @@ class SearchReceiptsTests(TestCase):
 
     def setUp(self):
         self.client = APIClient()
+        from django.contrib.auth.models import User
+        self.admin_user, _ = User.objects.get_or_create(username="admin", defaults={"is_superuser": True})
+        self.client.force_authenticate(user=self.admin_user)
         self.branch1 = Branch.objects.create(
             name="Branch 1")
         self.branch2 = Branch.objects.create(

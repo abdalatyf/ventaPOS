@@ -6,17 +6,19 @@ from .views import (
     CommissionHistoryViewSet, InventoryAdjustmentViewSet, SupplierViewSet,
     PurchaseInvoiceViewSet, PurchaseInvoiceItemViewSet, ReceiptViewSet,
     SaleItemViewSet, InstallmentPaymentViewSet,
-    ClientLicenseViewSet, UsedLicenseViewSet, LicenseHistoryViewSet,
+    LicenseHistoryViewSet,
     LicenseStatusView, LicenseActivateView, CustomAuthToken,
     DemoAuthToken, PasswordRecoveryView, ChangePasswordView, HasPasswordView,
     CustomerSuggestionsView, ProductSuggestionsView,
     DashboardReportView, SalespersonPerformanceReportView, InventoryMovementReportView,
-    ProfitAndLossReportView, CashDrawerReportView, DefaultDateView, InstallmentsReportView
+    ProfitAndLossReportView, CashDrawerReportView, DefaultDateView, InstallmentsReportView,
+    PurchasesReportView, ReportDesktopPrintView,
+    SystemCheckUpdateView, SystemApplyUpdateView
 )
 from .views import ExpenseViewSet
 from .tools_views import (
     BackupDownloadView, BackupUploadView, OfflineExportItemsView,
-    OfflineImportReceiptsView, ApprovePendingReceiptView
+    OfflineImportReceiptsView, ApprovePendingReceiptView, PendingReceiptsListView
 )
 from .logger_views import FrontendLogView
 
@@ -26,6 +28,7 @@ router.register(r'branches', BranchViewSet)
 router.register(r'salespersons', SalespersonViewSet)
 router.register(r'inventory-items', InventoryItemViewSet)
 router.register(r'commission-histories', CommissionHistoryViewSet, basename='commission-histories')
+router.register(r'commission-history', CommissionHistoryViewSet, basename='commission-history')
 router.register(r'inventory-adjustments', InventoryAdjustmentViewSet)
 router.register(r'suppliers', SupplierViewSet)
 router.register(r'purchase-invoices', PurchaseInvoiceViewSet)
@@ -35,8 +38,6 @@ router.register(r'receipts', ReceiptViewSet)
 router.register(r'sale-items', SaleItemViewSet)
 router.register(r'installment-payments', InstallmentPaymentViewSet)
 
-router.register(r'client-licenses', ClientLicenseViewSet)
-router.register(r'used-licenses', UsedLicenseViewSet)
 router.register(r'license-history', LicenseHistoryViewSet)
 
 urlpatterns = [
@@ -61,15 +62,24 @@ urlpatterns = [
     path('reports/cash-drawer-details/', CashDrawerReportView.as_view(), name='report-cash-drawer-details'),
     path('reports/cash-drawer/', CashDrawerReportView.as_view(), name='report-cash-drawer-alias'),
     path('reports/installments/', InstallmentsReportView.as_view(), name='report-installments'),
+    path('reports/purchases/', PurchasesReportView.as_view(), name='report-purchases'),
+    path('reports/desktop_print/', ReportDesktopPrintView.as_view(), name='report-desktop-print'),
     
     # Tools APIs
     path('tools/backup/download/', BackupDownloadView.as_view(), name='backup-download'),
     path('tools/backup/upload/', BackupUploadView.as_view(), name='backup-upload'),
-    path('tools/sync/export-items/', OfflineExportItemsView.as_view(), name='sync-export-items'),
     path('receipts-history-cursor/', ReceiptHistoryCursorView.as_view(), name='receipt-history-cursor'),
     path('receipts-next-number/', ReceiptNextNumberView.as_view(), name='receipt-next-number'),
-    path('tools/sync/import-receipts/', OfflineImportReceiptsView.as_view(), name='sync-import-receipts'),
-    path('tools/sync/approve-pending/<int:pk>/', ApprovePendingReceiptView.as_view(), name='sync-approve-pending'),
+    # USB / External Sync deactivated (dormant mode - P2-4.1)
+    # path('tools/sync/export-items/', OfflineExportItemsView.as_view(), name='sync-export-items'),
+    # path('tools/sync/import-receipts/', OfflineImportReceiptsView.as_view(), name='sync-import-receipts'),
+    # path('tools/sync/pending-receipts/', PendingReceiptsListView.as_view(), name='sync-pending-receipts'),
+    # path('pending-external-receipts/', PendingReceiptsListView.as_view(), name='pending-external-receipts-alias'),
+    # path('tools/sync/approve-pending/<int:pk>/', ApprovePendingReceiptView.as_view(), name='sync-approve-pending'),
+    # System & Auto-updater
+    path('system/check-update/', SystemCheckUpdateView.as_view(), name='system-check-update'),
+    path('system/apply-update/', SystemApplyUpdateView.as_view(), name='system-apply-update'),
+
     path('frontend-logs/', FrontendLogView.as_view(), name='frontend-logs'),
 
     path('', include(router.urls)),

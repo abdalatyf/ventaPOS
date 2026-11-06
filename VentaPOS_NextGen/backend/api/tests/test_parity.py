@@ -149,8 +149,8 @@ def _make_active_license(balance=500, product_id=1, expiry=None, tenant=None):
 # 1. TIME-MACHINE STOCK TESTS (InventoryItem.get_stock_at_date)
 #
 # Source: Desktop/sales/salesapp/models.py lines 152-189
-# Formula: (initial_qty + purchased + surplus) - (sold + returned + deficit)
-#          clamped to max(0, result) in the LEGACY; NOT clamped in NextGen.
+# Formula: (initial_qty + purchased) - (sold + returned + deficit)
+#          clamped to max(0, result). Surplus removed from SSoT (Deficit-Only).
 # =============================================================================
 
 class TimeMachineStockTests(TestCase):
@@ -255,18 +255,8 @@ class TimeMachineStockTests(TestCase):
             "NextGen api/models.py:92 is missing the max(0, ...) clamp — this must be fixed.")
 
     # -------------------------------------------------------------------------
-    # TC-STOCK-07: SURPLUS adjustment increases stock; DEFICIT decreases it
-    # Legacy ref: models.py:180-185
+    # TC-STOCK-07: DEFICIT adjustment decreases stock (SURPLUS is removed from SSoT)
     # -------------------------------------------------------------------------
-    def test_surplus_adjustment_increases_stock(self):
-        item = _make_item(self.branch, initial_qty=10, initial_month=1, initial_year=2025)
-        InventoryAdjustment.objects.create(
-            item=item, adjustment_type="SURPLUS", quantity=25, month=3, year=2025
-        )
-        self.assertEqual(item.get_stock_at_date(3, 2025), 35)
-        self.assertEqual(item.get_stock_at_date(2, 2025), 10,
-            "Surplus in month 3 must NOT appear when querying month 2.")
-
     def test_deficit_adjustment_decreases_stock(self):
         item = _make_item(self.branch, initial_qty=30, initial_month=1, initial_year=2025)
         InventoryAdjustment.objects.create(
@@ -274,6 +264,17 @@ class TimeMachineStockTests(TestCase):
         )
         self.assertEqual(item.get_stock_at_date(4, 2025), 30)
         self.assertEqual(item.get_stock_at_date(5, 2025), 22)
+
+    def test_adjustment_defaults_to_deficit(self):
+        """InventoryAdjustment strictly supports DEFICIT and defaults to it."""
+        item = _make_item(self.branch, initial_qty=20, initial_month=1, initial_year=2025)
+        adj = InventoryAdjustment.objects.create(
+            item=item, quantity=5, month=3, year=2025
+        )
+        self.assertEqual(adj.adjustment_type, "DEFICIT")
+        self.assertEqual(item.get_stock_at_date(3, 2025), 15)
+        self.assertEqual(item.get_stock_at_date(2, 2025), 20,
+            "Deficit in month 3 must NOT appear when querying month 2.")
 
     # -------------------------------------------------------------------------
     # TC-STOCK-08: Factory RETURN (invoice_type='RETURN') reduces stock
@@ -300,14 +301,14 @@ class TimeMachineStockTests(TestCase):
             item=item, adjustment_type="DEFICIT", quantity=10, month=4, year=2025
         )
         InventoryAdjustment.objects.create(
-            item=item, adjustment_type="SURPLUS", quantity=5, month=5, year=2025
+            item=item, adjustment_type="DEFICIT", quantity=5, month=5, year=2025
         )
 
         self.assertEqual(item.get_stock_at_date(1, 2025), 100)
         self.assertEqual(item.get_stock_at_date(2, 2025), 150)
         self.assertEqual(item.get_stock_at_date(3, 2025), 120)
         self.assertEqual(item.get_stock_at_date(4, 2025), 110)
-        self.assertEqual(item.get_stock_at_date(5, 2025), 115)
+        self.assertEqual(item.get_stock_at_date(5, 2025), 105)
 
     # -------------------------------------------------------------------------
     # TC-STOCK-10: Cross-year boundary
@@ -452,101 +453,226 @@ class InvoiceHashTests(TestCase):
 
 class InstallmentScheduleTests(TestCase):
     """
-    Tests for the installment due-date schedule generation rule.
+    Tests for the installment due-date schedule generation and modification rules.
+    Verifies real ReceiptSerializer execution, sequential monthly 25th due dates,
+    multi-box installment structures, and PUT/PATCH schedule updates.
     """
 
-    def _expected_due_dates(self, sale_year, sale_month, num_installments):
-        """Pure Python implementation of the legacy schedule algorithm."""
-        res = []
-        for i in range(num_installments):
-            m = sale_month - 1 + (i + 1)
-            y = sale_year + m // 12
-            m = m % 12 + 1
-            res.append(date(y, m, 25))
-        return res
-
     def setUp(self):
+        from api.serializers import ReceiptSerializer
+        self.ReceiptSerializer = ReceiptSerializer
         self.branch = _make_branch()
+        self.salesperson = Salesperson.objects.create(branch=self.branch, name="مندوب التقسيط")
         self.license = _make_active_license(balance=1000)
+        self.item = _make_item(self.branch, name="صالون كلاسيك", initial_qty=20, initial_month=1, initial_year=2025)
 
-    # -------------------------------------------------------------------------
-    # TC-INST-01: Basic 2-installment schedule (sale in January 2026)
-    # Expected dues: February 25 and March 25
-    # -------------------------------------------------------------------------
-    def test_basic_two_installment_schedule(self):
-        dues = self._expected_due_dates(2026, 1, 2)
-        self.assertEqual(dues[0], date(2026, 2, 25))
-        self.assertEqual(dues[1], date(2026, 3, 25))
+    def test_basic_two_installment_schedule_via_serializer(self):
+        """
+        TC-INST-01: Basic 2-installment schedule (sale in Jan 2026).
+        Expected dues: February 25 and March 25, 2026.
+        """
+        payload = {
+            "branch": self.branch.id,
+            "salesperson": self.salesperson.id,
+            "customer_name": "عميل قسط بسيط",
+            "sale_month": 1,
+            "sale_year": 2026,
+            "is_cash_sale": False,
+            "total_amount": 3000,
+            "down_payment": 1000,
+            "installment_system": "2x1000",
+            "items": [
+                {"inventory_item_id": self.item.id, "quantity": 1, "unit_price": 3000}
+            ],
+            "installments": [
+                {"amount": 1000, "payment_month": 2, "payment_year": 2026},
+                {"amount": 1000, "payment_month": 3, "payment_year": 2026},
+            ],
+        }
+        ser = self.ReceiptSerializer(data=payload)
+        self.assertTrue(ser.is_valid(), ser.errors)
+        receipt = ser.save()
 
-    # -------------------------------------------------------------------------
-    # TC-INST-02: Month wrap: sale in November -> December + January next year
-    # -------------------------------------------------------------------------
-    def test_month_wraps_from_november_to_january(self):
-        dues = self._expected_due_dates(2025, 11, 2)
-        self.assertEqual(dues[0], date(2025, 12, 25),
-            "First installment after November must be December 25.")
-        self.assertEqual(dues[1], date(2026, 1, 25),
-            "Second installment must wrap to January 25 of the following year.")
+        payments = list(receipt.payments.filter(is_deleted=False).order_by("payment_date"))
+        self.assertEqual(len(payments), 2)
+        self.assertEqual(payments[0].payment_date, date(2026, 2, 25))
+        self.assertEqual(payments[0].amount, 1000)
+        self.assertEqual(payments[1].payment_date, date(2026, 3, 25))
+        self.assertEqual(payments[1].amount, 1000)
 
-    # -------------------------------------------------------------------------
-    # TC-INST-03: Month wrap: sale in December -> January + February next year
-    # -------------------------------------------------------------------------
-    def test_month_wraps_from_december_to_january(self):
-        dues = self._expected_due_dates(2025, 12, 3)
-        self.assertEqual(dues[0], date(2026, 1, 25))
-        self.assertEqual(dues[1], date(2026, 2, 25))
-        self.assertEqual(dues[2], date(2026, 3, 25))
+    def test_month_and_year_wrapping_schedule(self):
+        """
+        TC-INST-02 & 03: Sale in November/December wraps across year boundary to January/February.
+        """
+        payload = {
+            "branch": self.branch.id,
+            "salesperson": self.salesperson.id,
+            "customer_name": "عميل التفاف العام",
+            "sale_month": 11,
+            "sale_year": 2025,
+            "is_cash_sale": False,
+            "total_amount": 2500,
+            "down_payment": 500,
+            "installment_system": "2x1000",
+            "items": [
+                {"inventory_item_id": self.item.id, "quantity": 1, "unit_price": 2500}
+            ],
+            "installments": [
+                {"amount": 1000, "payment_month": 12, "payment_year": 2025},
+                {"amount": 1000, "payment_month": 1, "payment_year": 2026},
+            ],
+        }
+        ser = self.ReceiptSerializer(data=payload)
+        self.assertTrue(ser.is_valid(), ser.errors)
+        receipt = ser.save()
 
-    # -------------------------------------------------------------------------
-    # TC-INST-04: Due date is ALWAYS the 25th, regardless of sale day
-    # -------------------------------------------------------------------------
-    def test_installment_day_is_always_25(self):
-        dues = self._expected_due_dates(2025, 6, 5)
-        for i, d in enumerate(dues):
-            self.assertEqual(d.day, 25,
-                f"Installment {i+1} must always fall on the 25th (got {d.day}).")
+        payments = list(receipt.payments.filter(is_deleted=False).order_by("payment_date"))
+        self.assertEqual(len(payments), 2)
+        self.assertEqual(payments[0].payment_date, date(2025, 12, 25))
+        self.assertEqual(payments[1].payment_date, date(2026, 1, 25))
 
-    # -------------------------------------------------------------------------
-    # TC-INST-05: 3-group system — all 3 groups generate correct total count
-    # Example: sys1_count=2, sys2_count=3, sys3_count=1 -> 6 installments
-    # -------------------------------------------------------------------------
-    def test_three_groups_generate_correct_installment_count(self):
-        amounts = [1000, 1000, 500, 500, 500, 2000]  # 2+3+1 groups
-        dues = self._expected_due_dates(2025, 8, len(amounts))
-        self.assertEqual(len(dues), 6)
+    def test_due_day_is_always_25(self):
+        """
+        TC-INST-04: Due date day is ALWAYS the 25th convention for all generated installments.
+        """
+        payload = {
+            "branch": self.branch.id,
+            "salesperson": self.salesperson.id,
+            "customer_name": "عميل يوم 25",
+            "sale_month": 6,
+            "sale_year": 2025,
+            "is_cash_sale": False,
+            "total_amount": 3000,
+            "down_payment": 500,
+            "installment_system": "5x500",
+            "items": [
+                {"inventory_item_id": self.item.id, "quantity": 1, "unit_price": 3000}
+            ],
+            "installments": [
+                {"amount": 500, "payment_month": m, "payment_year": 2025}
+                for m in [7, 8, 9, 10, 11]
+            ],
+        }
+        ser = self.ReceiptSerializer(data=payload)
+        self.assertTrue(ser.is_valid(), ser.errors)
+        receipt = ser.save()
 
-    # -------------------------------------------------------------------------
-    # TC-INST-06: Installment amounts match the group definition
-    # -------------------------------------------------------------------------
-    def test_installment_amounts_match_group_definition(self):
-        expected_amounts = [500, 500, 500, 1200, 1200]  # Group 1: 3x500, Group 2: 2x1200
-        self.assertEqual(len(expected_amounts), 5)
-        self.assertEqual(sum(expected_amounts), 3900)
+        for p in receipt.payments.filter(is_deleted=False):
+            self.assertEqual(p.payment_date.day, 25)
 
-    # -------------------------------------------------------------------------
-    # TC-INST-07: For June 2025 sale, payment_month/year are correct
-    # -------------------------------------------------------------------------
-    def test_installment_month_year_fields_for_june_sale(self):
-        dues = self._expected_due_dates(2025, 6, 3)
-        self.assertEqual(dues[0].month, 7)
-        self.assertEqual(dues[0].year, 2025)
-        self.assertEqual(dues[1].month, 8)
-        self.assertEqual(dues[1].year, 2025)
-        self.assertEqual(dues[2].month, 9)
-        self.assertEqual(dues[2].year, 2025)
+    def test_multi_box_sequential_installment_schedule(self):
+        """
+        TC-INST-05 & 06: Multi-box installment system (Group 1: 3x500, Group 2: 2x1200 -> 3900 financed).
+        Total count: 5 installments with differing amounts sequentially scheduled.
+        """
+        payload = {
+            "branch": self.branch.id,
+            "salesperson": self.salesperson.id,
+            "customer_name": "عميل مجموعات متعددة",
+            "sale_month": 6,
+            "sale_year": 2025,
+            "is_cash_sale": False,
+            "total_amount": 4000,
+            "down_payment": 100,
+            "installment_system": "3x500 + 2x1200",
+            "items": [
+                {"inventory_item_id": self.item.id, "quantity": 1, "unit_price": 4000}
+            ],
+            "installments": [
+                {"amount": 500, "payment_month": 7, "payment_year": 2025},
+                {"amount": 500, "payment_month": 8, "payment_year": 2025},
+                {"amount": 500, "payment_month": 9, "payment_year": 2025},
+                {"amount": 1200, "payment_month": 10, "payment_year": 2025},
+                {"amount": 1200, "payment_month": 11, "payment_year": 2025},
+            ],
+        }
+        ser = self.ReceiptSerializer(data=payload)
+        self.assertTrue(ser.is_valid(), ser.errors)
+        receipt = ser.save()
 
-    # -------------------------------------------------------------------------
-    # TC-INST-08: Year-spanning schedule (Oct 2025, 4 installments)
-    # -------------------------------------------------------------------------
-    def test_year_spanning_installment_schedule(self):
-        dues = self._expected_due_dates(2025, 10, 4)
-        expected = [
-            date(2025, 11, 25),
-            date(2025, 12, 25),
-            date(2026, 1, 25),
-            date(2026, 2, 25),
-        ]
-        self.assertEqual(dues, expected)
+        payments = list(receipt.payments.filter(is_deleted=False).order_by("payment_date"))
+        self.assertEqual(len(payments), 5)
+        self.assertEqual([p.amount for p in payments], [500, 500, 500, 1200, 1200])
+        self.assertEqual(sum(p.amount for p in payments), 3900)
+
+    def test_installment_schedule_update_via_serializer(self):
+        """
+        TC-INST-07: Modifying installment schedule via serializer update (PUT/PATCH).
+        Old installments must be soft-deleted, and new installments created without orphan rows.
+        """
+        initial_payload = {
+            "branch": self.branch.id,
+            "salesperson": self.salesperson.id,
+            "customer_name": "عميل تعديل الأقساط",
+            "sale_month": 1,
+            "sale_year": 2026,
+            "is_cash_sale": False,
+            "total_amount": 2000,
+            "down_payment": 0,
+            "installment_system": "2x1000",
+            "items": [
+                {"inventory_item_id": self.item.id, "quantity": 1, "unit_price": 2000}
+            ],
+            "installments": [
+                {"amount": 1000, "payment_month": 2, "payment_year": 2026},
+                {"amount": 1000, "payment_month": 3, "payment_year": 2026},
+            ],
+        }
+        ser = self.ReceiptSerializer(data=initial_payload)
+        self.assertTrue(ser.is_valid(), ser.errors)
+        receipt = ser.save()
+        old_ids = list(receipt.payments.values_list("id", flat=True))
+
+        # Update to 4 installments of 500
+        update_payload = {
+            "installment_system": "4x500",
+            "installments": [
+                {"amount": 500, "payment_month": 2, "payment_year": 2026},
+                {"amount": 500, "payment_month": 3, "payment_year": 2026},
+                {"amount": 500, "payment_month": 4, "payment_year": 2026},
+                {"amount": 500, "payment_month": 5, "payment_year": 2026},
+            ],
+        }
+        ser_update = self.ReceiptSerializer(receipt, data=update_payload, partial=True)
+        self.assertTrue(ser_update.is_valid(), ser_update.errors)
+        updated_receipt = ser_update.save()
+
+        # Check old payments soft-deleted
+        for old_id in old_ids:
+            self.assertTrue(InstallmentPayment.all_objects.get(id=old_id).is_deleted)
+
+        # Check active payments match new definition
+        active_payments = list(updated_receipt.payments.filter(is_deleted=False).order_by("payment_date"))
+        self.assertEqual(len(active_payments), 4)
+        self.assertEqual([p.amount for p in active_payments], [500, 500, 500, 500])
+
+    def test_installment_financial_balance_validation_rejection(self):
+        """
+        TC-INST-08: When total_amount != down_payment + sum(installments),
+        ReceiptSerializer must raise ValidationError.
+        """
+        invalid_payload = {
+            "branch": self.branch.id,
+            "salesperson": self.salesperson.id,
+            "customer_name": "عميل غير متوازن",
+            "sale_month": 1,
+            "sale_year": 2026,
+            "is_cash_sale": False,
+            "total_amount": 3000,
+            "down_payment": 1000,
+            "installment_system": "خطأ بالحساب",
+            "items": [
+                {"inventory_item_id": self.item.id, "quantity": 1, "unit_price": 3000}
+            ],
+            "installments": [
+                {"amount": 500, "payment_month": 2, "payment_year": 2026},  # Only 1500 total payments vs 3000
+            ],
+        }
+        ser = self.ReceiptSerializer(data=invalid_payload)
+        self.assertTrue(ser.is_valid(), ser.errors)
+        with self.assertRaises(ValidationError) as ctx:
+            ser.save()
+        self.assertIn("لا يتطابق مع إجمالي الفاتورة", str(ctx.exception))
 
 
 # =============================================================================
@@ -849,6 +975,7 @@ class CommissionHistoryTests(TestCase):
         self.assertEqual(item.get_commission_at_date(12, 2025), 35)
 
 
+from django.contrib.auth.models import User
 from rest_framework.test import APIClient
 from api.serializers import ReceiptSerializer
 
@@ -856,6 +983,8 @@ class PosEntryParityTests(TestCase):
 
     def setUp(self):
         self.client = APIClient()
+        self.admin_user, _ = User.objects.get_or_create(username="admin", defaults={"is_superuser": True})
+        self.client.force_authenticate(user=self.admin_user)
         self.branch = Branch.objects.create(name="Main Branch")
         self.license = _make_active_license(balance=100)
 

@@ -5,11 +5,14 @@ import '@tabler/core/dist/js/tabler.min.js'
 import './index.css'
 import setupFileLogger from './utils/fileLogger'
 import App from './App.jsx'
+import GlobalErrorBoundary from './components/GlobalErrorBoundary'
 
 setupFileLogger();
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <GlobalErrorBoundary>
+      <App />
+    </GlobalErrorBoundary>
   </StrictMode>,
 )

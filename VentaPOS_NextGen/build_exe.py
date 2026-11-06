@@ -38,14 +38,22 @@ def build():
     os.environ['PYTHONPATH'] = str(backend_dir)
     sys.path.insert(0, str(backend_dir))
     
-    PyInstaller.__main__.run([
+    args = [
         str(launcher_script),
         '--name=VentaPOS',
         '--windowed',
         '--onedir',
+        '--uac-admin',
         f'--paths={backend_dir}',
         f'--add-data={backend_dir};backend',
         f'--add-data={base_dir / "frontend" / "dist"};frontend/dist',
+    ]
+
+    bin_dir = backend_dir / 'bin'
+    if bin_dir.exists():
+        args.append(f'--add-data={bin_dir};bin')
+
+    args.extend([
         '--hidden-import=django',
         '--hidden-import=django.contrib.admin',
         '--hidden-import=django.contrib.auth',
@@ -80,8 +88,14 @@ def build():
         '--collect-submodules=rest_framework',
         '--collect-submodules=corsheaders',
         '--collect-submodules=whitenoise',
+        '--collect-submodules=api',
+        '--collect-submodules=api.views',
+        '--collect-submodules=api.services',
+        '--collect-submodules=api.utils',
         '--noconfirm'
     ])
+
+    PyInstaller.__main__.run(args)
 
 if __name__ == '__main__':
     build()

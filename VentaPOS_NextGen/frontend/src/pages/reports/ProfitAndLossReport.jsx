@@ -54,7 +54,7 @@ export default function ProfitAndLossReport() {
   }, [year, month, branchId, salespersonId]);
 
   const { items, rawCombined, totals } = useMemo(() => {
-    if (!data) return { items: [], rawCombined: [], totals: { revenue: 0, cost: 0, salesCommission: 0, collCommission: 0, expenses: 0, profit: 0 } };
+    if (!data) return { items: [], rawCombined: [], totals: { revenue: 0, cost: 0, salesCommission: 0, collCommission: 0, expenses: 0, deficitLoss: 0, profit: 0 } };
 
     const cashItems = (data.cash_sales_profitability || []).map(item => ({ ...item, sale_type: 'cash' }));
     const installmentItems = (data.installment_sales_profitability || []).map(item => ({ ...item, sale_type: 'installment' }));
@@ -81,7 +81,8 @@ export default function ProfitAndLossReport() {
     });
     
     const expenses = Number(data.summary?.expenses_total) || 0;
-    const netProfit = grandRev - grandCost - grandSalesComm - grandCollComm - expenses;
+    const deficitLoss = Number(data.summary?.deficit_loss) || 0;
+    const netProfit = grandRev - grandCost - grandSalesComm - grandCollComm - expenses - deficitLoss;
 
     return {
       items: filtered,
@@ -92,6 +93,7 @@ export default function ProfitAndLossReport() {
         salesCommission: grandSalesComm,
         collCommission: grandCollComm,
         expenses: expenses,
+        deficitLoss: deficitLoss,
         profit: netProfit
       }
     };
@@ -170,6 +172,7 @@ export default function ProfitAndLossReport() {
     { label: 'المندبة (-)', value: fmtNum(totals.salesCommission), color: 'warning' },
     { label: 'عمولة التحصيل (-)', value: fmtNum(totals.collCommission), color: 'warning' },
     { label: 'المصروفات (-)', value: fmtNum(totals.expenses), color: 'danger' },
+    { label: 'خسائر العجز (-)', value: fmtNum(totals.deficitLoss), color: 'danger' },
     { label: 'صافي الربح', value: fmtNum(totals.profit), color: totals.profit >= 0 ? 'success' : 'danger' }
   ];
 
@@ -178,6 +181,8 @@ export default function ProfitAndLossReport() {
       {error && <div className="alert alert-danger mb-3">{error}</div>}
       
       <ReportTable
+        reportTitle="تقرير الأرباح والخسائر"
+        periodLabel={year && month ? `${year}/${String(month).padStart(2, '0')}` : undefined}
         columns={columns}
         data={items}
         loading={loading}

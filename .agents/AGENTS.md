@@ -16,7 +16,7 @@ VentaPOS NextGen is **NOT** a point-of-sale terminal. It is a **back-office desk
 - **Multi-Branch Isolation**: The manager manages multiple branches/warehouses from a single interface. Each branch maintains completely independent inventory. There are **zero** transfers between branches.
 - **No Barcode / SKU**: Products are identified purely by Arabic text name via searchable autocomplete.
 - **No Fixed Selling Price on Product**: There is no `selling_price` column on products. The manager enters the sale price per unit directly onto each receipt.
-- **Selective Printing**: Physical printing is strictly reserved for **Installment Schedules**. Standard cash receipts are not printed.
+- **Selective Desktop Printing**: Retail cash sales receipts do not have thermal POS printouts, and data entry screens (`POS.jsx` and `PurchaseEntry.jsx`) have **strictly NO printing**. Desktop printing (`PrintModal.jsx`) is supported exclusively inside search and report screens (`SearchReceipts.jsx`, `SearchPurchases.jsx`, `InstallmentsReport.jsx`, and `ReportsLayout.jsx`) for: (1) **Installment Schedules** (جداول إيصالات الأقساط), (2) **Purchase & Supplier Return Invoices** (`pdf_purchase_content.html`), and (3) **Analytical & Administrative Reports** (`pdf_report_content.html`).
 
 ---
 
@@ -28,9 +28,9 @@ Before analyzing or writing ANY code, you MUST use `view_file` to read ONLY thes
 
 1. **`GEMINI.md` / `.agents/AGENTS.md`**: Architecture, desktop runtime rules, red lines, and developer protocols.
 2. **`.agents/CODEBASE_MAP.md`**: Compressed interface map (~10KB) covering backend models, viewsets, and frontend structures.
-3. **`VentaPOS_NextGen/requirements.md`**: Confirmed 17 data models, business rules, stock formulas, and active API catalog.
+3. **`VentaPOS_NextGen/requirements.md`**: Confirmed 16 data models, business rules, stock formulas, and active API catalog.
 4. **`VentaPOS_NextGen/UI_UX_RULES.md`**: Visual identity, design tokens, native sticky table guidelines, and verified Arabic report specifications.
-5. **`VentaPOS_NextGen/TODO.md`**: Master task and bug tracker containing **Priority 0: Critical Backend Bug Fixes** and roadmap items.
+5. **`VentaPOS_NextGen/TODO.md`**: Master task and bug tracker containing the v1.0.0 Master Roadmap.
 
 *Violation of this protocol (inventing schemas or using old documents) is considered a critical failure.*
 
@@ -52,7 +52,7 @@ The application packages a Django REST Framework backend and a built React front
   ```python
   if getattr(sys, 'frozen', False):
       BASE_DIR = Path(sys._MEIPASS)
-      DATA_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'VentaPOS'
+      DATA_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'VentaPOSTest'
   else:
       BASE_DIR = Path(__file__).resolve().parent.parent
       DATA_DIR = BASE_DIR
@@ -64,7 +64,7 @@ The application packages a Django REST Framework backend and a built React front
       }
   }
   ```
-- **Static Assets**: React's production build (`frontend/dist/`) is served directly by Django via `whitenoise.middleware.WhiteNoiseMiddleware`.
+- **Static Assets**: React's production build (`frontend/dist/`) is served directly by Django via `whitenoise.middleware.WhiteNoiseMiddleware` (`WHITENOISE_USE_FINDERS = True`).
 
 ---
 
@@ -72,16 +72,16 @@ The application packages a Django REST Framework backend and a built React front
 
 You are strictly forbidden from implementing or proposing the following:
 
-1. **NO Multi-Tenancy & NO Cloud**: The application is strictly an offline-first single-tenant desktop app. Never generate `Tenant` models, cloud sync protocols, or multi-tenant database routers.
+1. **NO Multi-Tenancy & NO Cloud in Desktop App**: The desktop application is strictly an offline-first single-tenant desktop app. Never generate `Tenant` models, cloud sync protocols, or multi-tenant database routers inside `VentaPOS_NextGen`.
 2. **NO Hard Deletes**: Never call `obj.delete()`. All models use soft deletes via `is_deleted = True` and an `ActiveManager`.
 3. **NO UUID Primary Keys**: Do not use `UUIDField` for database PKs. Use Django's default auto-incrementing integer `AutoField` or `BigAutoField`.
 4. **NO Direct Python Execution**: Never run `.py` files directly in Windows terminal (e.g. `.\script.py`). Always prepend the Python executable (e.g. `python script.py`).
-5. **NO Unstyled Tables**: Raw HTML tables are banned. All tables must implement the Native Window Sticky Scroll architecture.
+5. **NO Unstyled Tables & NO Broken Sticky Headers**: Raw HTML tables are banned. All tables must implement the Standardized Table Architecture (Window-Level Sticky or Report Container Sticky) with `tabular-nums` and proper sticky top offsets.
 6. **NO Customer Model**: Customers are implicit text fields on receipts (`customer_name`, `phone_number`, `address`, `area`) with historical autocomplete. Never create a `Customer` model or account balances.
 7. **NO Selling Price on Product**: `InventoryItem` does NOT have a `selling_price` field. The manager enters the price per sale on each receipt.
-8. **NO Smart Import**: Excel import has been permanently removed from scope.
+8. **NO Smart Import in UI**: In-app Excel import has been permanently removed from scope (raw data conversion is handled externally via the dedicated AI Backup Generator skill).
 9. **NO Action Logs**: The `ActionLog` model has been permanently removed. Do not recreate it.
-10. **NO Expense Categories**: Expenses have free-text descriptions only. Never add category foreign keys or enums.
+10. **NO Glassmorphism & NO Custom Premium Cards**: All cards across the application must use clean, standard Tabler/Bootstrap `.card` classes. Glassmorphism, backdrop filters, and `.premium-card` styles are permanently banned. (Deficit registration and commission changes live exclusively in `ProductLedger.jsx`).
 
 ---
 
@@ -103,17 +103,27 @@ You are strictly forbidden from implementing or proposing the following:
   $$\text{Salary} = \sum(\text{مندبة} \times \text{units sold}) + (\text{collection\_rate} \times \text{monthly collections})$$
   Salespeople are 100% commission-based; there is no base salary.
 
-### 4.4 Date System & Digits Convention
+### 4.4 Date System & Digits / Number Formatting Convention
 - **Monthly-Based Accounting**: Storage and filtering operate on integer `month` and `year` fields, not daily timestamps. `DefaultDate` returns the active business month.
 - **Display Format**: `YYYY/MM` (e.g. `2026/08` — 4-digit year, slash, 2-digit month with leading zero).
 - **Date Inputs**: In forms and filter toolbars, dates must be entered using **two separate numeric inputs** (`month` and `year`), never browser-native `<input type="date">` or `<input type="month">`.
-- **Digits Convention**: Western ASCII digits (`0-9`) are used universally for display, inputs, and APIs. Arabic-Indic digits (٠١٢٣٤٥٦٧٨٩) are banned to prevent parsing failures and split-brain state bugs.
+- **In App UI (English/Western Whole Integers `0-9`)**: All numbers and monetary amounts across the React UI, inputs, tables, and KPI cards must be rendered as **Western ASCII whole integers (`0-9`, `int` only, NO `.00` decimals)**.
+- **In Printing / PDFs (Arabic-Indic Whole Integers `٠١٢٣٤٥٦٧٨٩`)**: All numbers on printed installment schedules, purchase invoices, and printed reports must be formatted as **Arabic-Indic numerals (`٠١٢٣٤٥٦٧٨٩`)** as whole integers via `ed2ad` / `to_arabic_numerals`.
 
 ### 4.5 Inventory Stock Calculation (Time-Machine Method)
 - Stock is calculated dynamically across time:
-  $$\text{Stock} = \max(0, \text{initial\_qty} + \text{purchases} + \text{surplus} + \text{sales\_returns} - \text{sales} - \text{purchase\_returns} - \text{deficit})$$
+  $$\text{Stock} = \max(0, \text{initial\_qty} + \text{purchases} + \text{sales\_returns} - \text{sales} - \text{purchase\_returns} - \text{deficit})$$
 - `Receipt` records with `receipt_type='RETURN'` restore inventory, while `receipt_type='SALE'` deduct inventory.
 - Stock is clamped to `max(0, ...)` — physical inventory can never be negative.
+
+### 4.6 Old / Pre-License External Data Rules
+- Old receipts imported or entered from external sources dated **before the active license start month (`sale_date < lic_start_month`)** have **no `SaleItem` records** (they store `products_text` only and manual `total_amount`).
+- They are **Print & Edit Only** (no stock deduction, and exempt from deducting `ClientLicense.invoices_balance`).
+- They are **excluded from all financial and inventory reports EXCEPT the Installments Report (`InstallmentsReport`) and Salesperson Collection Commission (`عمولة التحصيل`)** (and cash drawer collection inflows when their scheduled installments fall due).
+
+### 4.7 Print-Only Basic Plan (`product_id` 2 & 3)
+- Licenses with `product_id = 2` (`طباعة فقط - سنة واحدة`) or `product_id = 3` (`طباعة فقط - مدى الحياة`) operate in **Print-Only Basic Mode**.
+- Basic Mode restricts the application strictly to **Receipt CRUD & Printing** (`POS.jsx` using free-text `products_text` + manual total amount, `SearchReceipts.jsx`, printing installment schedules, basic branch/salesperson setup, Backup/Restore, and Settings). All inventory, purchases, expenses, and analytical reports are blocked.
 
 ---
 
@@ -168,7 +178,7 @@ flowchart LR
 5. **Phase 5: VERIFY**:
    - Backend tests: `cd VentaPOS_NextGen\backend && D:\Projects\VentaPOS\VentaPOS_NextGen\venv\Scripts\python.exe manage.py test api.tests -v 2`
    - Frontend build: `cd VentaPOS_NextGen\frontend && npm run build`
-   - **Never modify existing tests to force them to pass.**
+   - **Test Modification Rule**: Existing tests were generated by earlier AI passes; when business rules or API contracts intentionally change, update the corresponding tests to match the new confirmed business logic.
 
 ---
 
@@ -180,6 +190,12 @@ flowchart LR
 
 ### 8.2 Machine Signatures (Anti-Patterns to Avoid)
 1. **Modular Mirage**: Moving code to another file without high semantic cohesion is not refactoring.
-2. **Test Mutation**: Modifying tests to match broken implementation is strictly forbidden.
+2. **Test Mutation**: Modifying tests to match broken implementation is strictly forbidden. However, updating tests to reflect intentional, approved business rule updates is expected.
 3. **Terminal Tool Abuse**: Never use `cat`, `ls`, or `grep` terminal commands to inspect files. Use native Antigravity read tools (`view_file`, `run_command` with PowerShell).
 4. **Context Degradation**: Always maintain the Context Checkpoint protocol after completing tasks.
+
+### 8.3 Strict English-Only Agent Communication Rule
+- **NEVER use Arabic when communicating, thinking, planning, or chatting with the user or between agents/subagents.**
+- All AI agents and subagents MUST write all thoughts, plans, architectural discussions, status reports, and chat responses strictly in **English**.
+- Arabic is strictly reserved for in-app UI strings, print templates, and end-user Arabic manuals as required by application specifications.
+

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <title>{{ title|default:"تقرير النظام" }}</title>
+    <style>
+        @page {
+            size: A4 {% if orientation == 'landscape' %}landscape{% else %}portrait{% endif %};
+            margin: 10mm;
+        }
+        body {
+            font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif;
+            direction: rtl;
+            text-align: right;
+            margin: 0;
+            padding: 0;
+            color: #1e293b;
+            font-size: 12px;
+            background-color: #ffffff;
+            line-height: 1.4;
+        }
+        .header-table {
+            width: 100%;
+            border-bottom: 2px solid #123F68;
+            padding-bottom: 6px;
+            margin-bottom: 10px;
+        }
+        .company-title {
+            color: #123F68;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 0;
+        }
+        .report-title {
+            color: #0f172a;
+            font-size: 15px;
+            font-weight: bold;
+            margin: 3px 0 0 0;
+        }
+        .meta-text {
+            font-size: 11px;
+            color: #64748b;
+        }
+        .filters-bar {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 4px 8px;
+            margin-bottom: 10px;
+            font-size: 11px;
+        }
+        .filter-tag {
+            display: inline-block;
+            background-color: #e2e8f0;
+            color: #334155;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-left: 6px;
+            font-weight: 600;
+        }
+        .kpi-table {
+            width: 100%;
+            margin-bottom: 12px;
+            border-collapse: separate;
+            border-spacing: 6px;
+        }
+        .kpi-cell {
+            background-color: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            padding: 6px 8px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .kpi-label {
+            font-size: 10px;
+            color: #64748b;
+            margin-bottom: 2px;
+        }
+        .kpi-value {
+            font-size: 14px;
+            font-weight: bold;
+            color: #123F68;
+        }
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+            font-size: 11px;
+        }
+        .report-table thead {
+            display: table-header-group;
+        }
+        .report-table tr {
+            page-break-inside: avoid;
+        }
+        .report-table th {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            border: 1px solid #cbd5e1;
+            padding: 6px 8px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .report-table td {
+            border: 1px solid #cbd5e1;
+            padding: 5px 8px;
+            vertical-align: middle;
+        }
+        .report-table tbody tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+        .report-table tfoot td {
+            background-color: #f1f5f9;
+            font-weight: bold;
+            border-top: 2px solid #94a3b8;
+        }
+        .footer-note {
+            border-top: 1px solid #e2e8f0;
+            padding-top: 6px;
+            margin-top: 12px;
+            font-size: 10px;
+            color: #94a3b8;
+            text-align: center;
+        }
+        .text-center { text-align: center; }
+        .text-start { text-align: right; }
+        .text-end { text-align: left; }
+        .fw-bold { font-weight: bold; }
+        .text-success { color: #15803d; }
+        .text-danger { color: #b91c1c; }
+        .text-primary { color: #1d4ed8; }
+        .text-warning { color: #b45309; }
+    </style>
+</head>
+<body>
+
+    <!-- Header Table -->
+    <table class="header-table">
+        <tr>
+            <td style="width: 50%; vertical-align: top;">
+                <h1 class="company-title">{{ company_name|default:"VentaPOS NextGen" }}</h1>
+                <div class="meta-text" style="margin-top: 3px;">
+                    الفرع: <strong>{{ branch_name|default:"الفرع الرئيسي" }}</strong>
+                </div>
+            </td>
+            <td style="width: 50%; vertical-align: top; text-align: left;">
+                <h2 class="report-title">{{ title }}</h2>
+                <div class="meta-text" style="margin-top: 3px;">
+                    الفترة: <strong>{{ period_label|default:"-" }}</strong> | استخراج: <strong>{{ printed_at_ar }}</strong>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Active Filters (if any) -->
+    {% if filters_summary and filters_summary|length > 0 %}
+    <div class="filters-bar">
+        <span class="fw-bold">الفلاتر المطبقة:</span>
+        {% for f in filters_summary %}
+            <span class="filter-tag">{{ f.label }}: {{ f.value }}</span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- KPI Summary Cards (if any) -->
+    {% if kpis and kpis|length > 0 %}
+    <table class="kpi-table">
+        <tr>
+            {% for kpi in kpis %}
+            <td class="kpi-cell">
+                <div class="kpi-label">{{ kpi.label }}</div>
+                <div class="kpi-value {% if kpi.color == 'success' %}text-success{% elif kpi.color == 'danger' %}text-danger{% elif kpi.color == 'warning' %}text-warning{% endif %}">
+                    {{ kpi.value_ar|default:kpi.value }}
+                </div>
+            </td>
+            {% endfor %}
+        </tr>
+    </table>
+    {% endif %}
+
+    <!-- Data Table -->
+    <table class="report-table">
+        <thead>
+            <tr>
+                {% for col in columns %}
+                <th style="{% if col.width %}width: {{ col.width }};{% endif %}" class="text-{{ col.align|default:'center' }}">
+                    {{ col.label }}
+                </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                {% for cell in row.cells %}
+                <td class="text-{{ cell.align|default:'center' }} {% if cell.is_bold %}fw-bold{% endif %} {% if cell.color %}text-{{ cell.color }}{% endif %}">
+                    {{ cell.value_ar|default:cell.value }}
+                </td>
+                {% endfor %}
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="{{ columns|length }}" class="text-center py-4 text-muted">
+                    لا توجد بيانات مطابقة لهذا التقرير
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        {% if footer_row %}
+        <tfoot>
+            <tr>
+                {% for fcell in footer_row %}
+                <td class="text-{{ fcell.align|default:'center' }} fw-bold" {% if fcell.colspan %}colspan="{{ fcell.colspan }}"{% endif %}>
+                    {{ fcell.value_ar|default:fcell.value }}
+                </td>
+                {% endfor %}
+            </tr>
+        </tfoot>
+        {% endif %}
+    </table>
+
+    <!-- Footer Note -->
+    <div class="footer-note">
+        {{ footer_text|default:"تم استخراج هذا التقرير آلياً بواسطة نظام VentaPOS NextGen لإدارة الأثاث والأجهزة المنزلية" }}
+    </div>
+
+</body>
+</html>

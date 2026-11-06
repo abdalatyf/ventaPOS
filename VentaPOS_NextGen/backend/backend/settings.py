@@ -12,12 +12,13 @@ import sys
 if getattr(sys, 'frozen', False):
     # Running in a PyInstaller bundle
     BUNDLE_DIR = Path(sys._MEIPASS)
-    # The database stays next to the executable, not in a temp folder
-    DB_DIR = Path(sys.executable).parent
+    DB_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'VentaPOSTest'
 else:
     # Running in a normal Python environment
     BUNDLE_DIR = Path(__file__).resolve().parent.parent.parent
     DB_DIR = Path(__file__).resolve().parent.parent
+
+DB_DIR.mkdir(parents=True, exist_ok=True)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -25,7 +26,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-6p9soc+u5%7)+9-c+p+7c2n!i9kxrc%&gu02y_76wd%mvk+qz3'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = not getattr(sys, 'frozen', False)
 
 ALLOWED_HOSTS = ['*']
 
@@ -146,11 +147,20 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [os.path.join(BUNDLE_DIR, 'frontend', 'dist')]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+WHITENOISE_USE_FINDERS = True
+
+# Application Release & Update Configuration
+APP_VERSION = "1.0.0"
+RELEASES_REPO = "venta-pos/releases"
+RELEASES_MANIFEST_URL = "https://raw.githubusercontent.com/venta-pos/releases/main/version.json"
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
     ],
 }
 

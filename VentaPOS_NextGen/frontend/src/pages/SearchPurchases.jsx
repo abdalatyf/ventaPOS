@@ -1,77 +1,20 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import api from '../api';
-import Autocomplete from '../components/Autocomplete';
-import {
-  IconSearch, IconRefresh, IconPlus, IconEye, IconReceipt, IconPrinter, IconFilter,
-  IconTrash, IconDotsVertical, IconPencil
-} from '@tabler/icons-react';
-
-const InvoiceRow = React.memo(({
-  r, index, isSelected, toggleSelect, handleContextMenu, formatCurrency, getSupplierName, innerRef
-}) => {
-  const rowKey = r.id || r.local_id || index;
-  const rNum = r.invoice_number || r.local_id || r.id;
-  const typeText = r.invoice_type === 'PURCHASE' ? 'شراء' : 'مرتجع';
-  const supplierName = getSupplierName(r.supplier);
-  const piecesCount = r.items ? r.items.reduce((acc, item) => acc + Number(item.quantity || 0), 0) : 0;
-  const totalAmount = r.items ? r.items.reduce((acc, item) => acc + (item.quantity * item.purchase_price), 0) : 0;
-
-  return (
-    <tr ref={innerRef} onContextMenu={(e) => handleContextMenu(e, r.id, rNum)}>
-      <td className="text-center align-middle border-secondary-subtle">
-        <input 
-          type="checkbox" 
-          className="form-check-input border-secondary-subtle" 
-          checked={isSelected}
-          onChange={() => toggleSelect(r.id)}
-        />
-      </td>
-      <td className="text-center align-middle border-secondary-subtle">
-        <button 
-          className="btn btn-sm btn-icon btn-light border-secondary-subtle"
-          onClick={(e) => handleContextMenu(e, r.id, rNum)}
-        >
-          <IconDotsVertical size={16} />
-        </button>
-      </td>
-      <td className="text-center align-middle border-secondary-subtle fw-bold" dir="ltr">{rNum}</td>
-      <td className="text-center align-middle border-secondary-subtle">
-        <span className={`badge ${r.invoice_type === 'PURCHASE' ? 'bg-success' : 'bg-danger'} text-white`}>{typeText}</span>
-      </td>
-      <td className="text-center align-middle border-secondary-subtle fw-bold text-muted" dir="ltr">{`${r.invoice_month}/${r.invoice_year}`}</td>
-      <td className="text-center px-2 align-middle border-secondary-subtle fw-bold text-primary">
-        {supplierName}
-      </td>
-      <td className="text-center px-2 align-middle border-secondary-subtle fw-bold">
-        {piecesCount} قطعة
-      </td>
-      <td className="text-center px-2 align-middle border-secondary-subtle fw-bold text-danger">
-        {formatCurrency(totalAmount)}
-      </td>
-    </tr>
-  );
-}, (prevProps, nextProps) => {
-  return prevProps.isSelected === nextProps.isSelected && prevProps.r === nextProps.r;
-});
+import { IconReceipt, IconPlus, IconFilter } from '@tabler/icons-react';
+import PurchaseFilterToolbar from '../components/purchases/PurchaseFilterToolbar';
+import PurchaseTable from '../components/purchases/PurchaseTable';
+import PurchaseContextMenu from '../components/purchases/PurchaseContextMenu';
+import PrintModal from '../components/common/PrintModal';
+import StandardTablePageLayout from '../components/common/StandardTablePageLayout';
+import { fetchSuppliersList, fetchProductsMap } from '../components/purchases/purchaseUtils';
 
 export default function SearchPurchases() {
-  const navigate = useNavigate();
-
-  
-
   const formatCurrency = (val) => {
     if (val === undefined || val === null || val === '') return '0';
-    return Math.round(Number(val)).toString();
-  };
-
-  const getSupplierName = (sp) => {
-    if (!sp) return 'غير محدد';
-    if (typeof sp === 'object') return sp.name || 'غير محدد';
-    const found = suppliers.find(s => s.id === Number(sp) || s.local_id === Number(sp) || s.id === sp);
-    return found ? found.name : `مورد #${sp}`;
+    return Math.round(Number(val) || 0).toLocaleString('en-US');
   };
 
   const initialFilters = {
@@ -96,7 +39,10 @@ export default function SearchPurchases() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [globalAllIds, setGlobalAllIds] = useState([]);
 
-  // Intersection Observer for Infinite Scroll
+  const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [printModalIds, setPrintModalIds] = useState([]);
+
+  // Infinite Scroll Observer
   const observer = useRef();
   const lastRowElementRef = useCallback(node => {
     if (loadingMore) return;
@@ -112,8 +58,8 @@ export default function SearchPurchases() {
   }, [loadingMore, nextPageUrl]);
 
   useEffect(() => {
-    fetchSuppliers();
-    fetchInventory();
+    fetchSuppliersList().then(setSuppliers);
+    fetchProductsMap().then(setProductsMap);
     fetchInvoices(initialFilters);
 
     const handleClick = () => setContextMenu(null);
@@ -124,31 +70,11 @@ export default function SearchPurchases() {
     };
   }, []);
 
-  const fetchSuppliers = async () => {
-    try {
-      const res = await api.get('/suppliers/');
-      if (res.data && res.data.results) {
-        setSuppliers(res.data.results);
-      } else if (Array.isArray(res.data)) {
-        setSuppliers(res.data);
-      }
-    } catch (error) {
-      console.error('Error fetching suppliers:', error);
-    }
-  };
-
-  const fetchInventory = async () => {
-    try {
-      const res = await api.get('/inventory-items/?limit=1000');
-      const data = res.data?.results || res.data;
-      if (Array.isArray(data)) {
-        const pMap = {};
-        data.forEach(p => pMap[p.id] = p.name);
-        setProductsMap(pMap);
-      }
-    } catch (error) {
-      console.error('Error fetching inventory:', error);
-    }
+  const getSupplierName = (sp) => {
+    if (!sp) return 'غير محدد';
+    if (typeof sp === 'object') return sp.name || 'غير محدد';
+    const found = suppliers.find(s => s.id === Number(sp) || s.local_id === Number(sp) || s.id === sp);
+    return found ? found.name : `مورد #${sp}`;
   };
 
   const fetchInvoices = async (currentFilters) => {
@@ -157,6 +83,8 @@ export default function SearchPurchases() {
     setSelectedIds([]);
     try {
       const params = new URLSearchParams();
+      const currentBranchId = localStorage.getItem('branchId');
+      if (currentBranchId) params.append('branch_id', currentBranchId);
       if (currentFilters.month) params.append('month', currentFilters.month);
       if (currentFilters.year) params.append('year', currentFilters.year);
       if (currentFilters.supplier_id) params.append('supplier', currentFilters.supplier_id);
@@ -230,9 +158,7 @@ export default function SearchPurchases() {
     setFilters(prev => {
       const newFilters = { ...prev, [name]: enVal };
       if (filterTimeout.current) clearTimeout(filterTimeout.current);
-      filterTimeout.current = setTimeout(() => {
-        fetchInvoices(newFilters);
-      }, 300);
+      filterTimeout.current = setTimeout(() => { fetchInvoices(newFilters); }, 300);
       return newFilters;
     });
   };
@@ -242,9 +168,7 @@ export default function SearchPurchases() {
     setFilters(prev => {
       const newFilters = { ...prev, [name]: value };
       if (filterTimeout.current) clearTimeout(filterTimeout.current);
-      filterTimeout.current = setTimeout(() => {
-        fetchInvoices(newFilters);
-      }, 300);
+      filterTimeout.current = setTimeout(() => { fetchInvoices(newFilters); }, 300);
       return newFilters;
     });
   };
@@ -254,12 +178,9 @@ export default function SearchPurchases() {
     try {
       const res = await api.get(`/suppliers/?search=${encodeURIComponent(query)}`);
       const results = res.data?.results || res.data;
-      if (Array.isArray(results) && results.length > 0) {
-        return results;
-      }
+      if (Array.isArray(results) && results.length > 0) return results;
       return suppliers.filter(s => s.name && s.name.toLowerCase().includes(query.toLowerCase()));
     } catch (error) {
-      console.error('Error fetching supplier suggestions:', error);
       return suppliers.filter(s => s.name && s.name.toLowerCase().includes(query.toLowerCase()));
     }
   };
@@ -270,9 +191,7 @@ export default function SearchPurchases() {
       setFilters(prev => {
         const newFilters = { ...prev, supplier_id: '' };
         if (filterTimeout.current) clearTimeout(filterTimeout.current);
-        filterTimeout.current = setTimeout(() => {
-          fetchInvoices(newFilters);
-        }, 300);
+        filterTimeout.current = setTimeout(() => { fetchInvoices(newFilters); }, 300);
         return newFilters;
       });
     }
@@ -284,9 +203,7 @@ export default function SearchPurchases() {
     setFilters(prev => {
       const newFilters = { ...prev, supplier_id: item.id };
       if (filterTimeout.current) clearTimeout(filterTimeout.current);
-      filterTimeout.current = setTimeout(() => {
-        fetchInvoices(newFilters);
-      }, 300);
+      filterTimeout.current = setTimeout(() => { fetchInvoices(newFilters); }, 300);
       return newFilters;
     });
   };
@@ -317,27 +234,6 @@ export default function SearchPurchases() {
     }
   };
 
-  const handlePrint = async (ids, action = "print") => {
-    if (ids.length === 0) return;
-    try {
-      const res = await api.post('/purchase-invoices/desktop_print/', { invoice_ids: ids, action });
-      if (res.data && res.data.message) {
-        console.log(res.data.message);
-      }
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      toast.error('حدث خطأ أثناء إنشاء الـ PDF.');
-    }
-  };
-
-  const handlePrintSingle = (id, num) => {
-    handlePrint([id], "print");
-  };
-
-  const handleViewSingle = (id, num) => {
-    handlePrint([id], "view");
-  };
-
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
     const result = await Swal.fire({
@@ -359,7 +255,6 @@ export default function SearchPurchases() {
         toast.success('تم حذف الفواتير بنجاح.');
         fetchInvoices(filters);
       } catch (error) {
-        console.error('Error deleting invoices:', error);
         toast.error('حدث خطأ أثناء الحذف.');
       }
     }
@@ -383,10 +278,24 @@ export default function SearchPurchases() {
         toast.success('تم حذف الفاتورة بنجاح.');
         fetchInvoices(filters);
       } catch (error) {
-        console.error('Error deleting invoice:', error);
         toast.error('حدث خطأ أثناء الحذف.');
       }
     }
+  };
+
+  const handleOpenPrintModal = (ids) => {
+    if (!ids || ids.length === 0) return;
+    setPrintModalIds(ids);
+    setPrintModalOpen(true);
+  };
+
+  const executeChunkPurchases = async (chunk, { action, targetPrinter }) => {
+    const payload = {
+      invoice_ids: chunk,
+      action,
+      target_printer: targetPrinter || null
+    };
+    await api.post('/purchase-invoices/desktop_print/', payload);
   };
 
   const handleContextMenu = (e, rId, rNum) => {
@@ -395,15 +304,11 @@ export default function SearchPurchases() {
   };
 
   return (
-    <div className="px-3 pt-3 fs-3 native-page-scroll" dir="rtl" style={{ fontSize: '1.02rem' }}>
-      
-      {/* ── Page Header ── */}
-      <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom border-secondary-subtle" style={{ borderColor: '#dee2e6 !important' }}>
-        <h2 className="fw-bold text-dark m-0 fs-2 d-flex align-items-center gap-2">
-          <IconReceipt size={28} className="text-primary" />
-          دفتر فواتير الشراء ومرتجع المصنع
-        </h2>
-        <div className="d-flex align-items-center gap-2">
+    <StandardTablePageLayout
+      title="دفتر فواتير الشراء ومرتجع المصنع"
+      icon={IconReceipt}
+      headerActions={
+        <>
           <button 
             className={`btn ${showFilters ? 'btn-secondary' : 'btn-outline-secondary'} d-flex align-items-center gap-1 fw-bold fs-4 py-2`}
             onClick={() => setShowFilters(!showFilters)}
@@ -416,216 +321,60 @@ export default function SearchPurchases() {
             <IconPlus size={20} />
             <span>إضافة فاتورة جديدة</span>
           </Link>
-        </div>
-      </div>
-      
+        </>
+      }
+      toolbar={
+        <PurchaseFilterToolbar
+          showFilters={showFilters}
+          filters={filters}
+          handleFilterChange={handleFilterChange}
+          handleSelectChange={handleSelectChange}
+          supplierSearchQuery={supplierSearchQuery}
+          handleSupplierQueryChange={handleSupplierQueryChange}
+          handleSupplierSelect={handleSupplierSelect}
+          fetchSupplierSuggestions={fetchSupplierSuggestions}
+          handleSearchSubmit={handleSearchSubmit}
+          handleResetFilters={handleResetFilters}
+          loading={loading}
+        />
+      }
+      modals={
+        <>
+          <PurchaseContextMenu 
+            contextMenu={contextMenu} 
+            handleDeleteSingle={handleDeleteSingle} 
+            handlePrintSingle={(id) => handleOpenPrintModal([id])}
+            onClose={() => setContextMenu(null)} 
+          />
 
-
-      {/* ── Search Filters Panel ── */}
-      {showFilters && (
-      <div className="premium-card shadow-sm border-0 mb-3 rounded bg-white">
-        <div className="card-body p-3">
-          <form onSubmit={handleSearchSubmit}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '0.75rem', alignItems: 'center' }}>
-              
-              {/* ── Row 1 ── */}
-              <div style={{ gridColumn: 'span 2' }}>
-                <div className="input-group input-group-sm">
-                  <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle" style={{ width: '80px' }}>نوع الفاتورة</span>
-                  <select className="form-select fw-bold border-secondary-subtle" name="invoice_type" value={filters.invoice_type} onChange={handleSelectChange}>
-                    <option value="ALL">الكل</option>
-                    <option value="PURCHASE">فاتورة شراء</option>
-                    <option value="RETURN">مرتجع للمورد</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ gridColumn: 'span 2' }}>
-                <div className="input-group input-group-sm">
-                  <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle" style={{ width: '70px' }}>رقم الفاتورة</span>
-                  <input type="text" className="form-control fw-bold border-secondary-subtle text-center" dir="ltr" name="invoice_number" value={filters.invoice_number} onChange={handleFilterChange} />
-                </div>
-              </div>
-
-              <div style={{ gridColumn: 'span 1' }}>
-                <div className="input-group input-group-sm">
-                  <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">الشهر</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="12"
-                    className="form-control fw-bold border-secondary-subtle text-center px-1"
-                    name="month"
-                    placeholder="الكل"
-                    value={filters.month}
-                    onChange={handleFilterChange}
-                  />
-                </div>
-              </div>
-
-              <div style={{ gridColumn: 'span 1' }}>
-                <div className="input-group input-group-sm">
-                  <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">السنة</span>
-                  <input
-                    type="number"
-                    min="2000"
-                    max="2100"
-                    className="form-control fw-bold border-secondary-subtle text-center px-1"
-                    name="year"
-                    placeholder="الكل"
-                    value={filters.year}
-                    onChange={handleFilterChange}
-                  />
-                </div>
-              </div>
-
-              <div style={{ gridColumn: 'span 2' }}>
-                <div className="input-group input-group-sm flex-nowrap">
-                  <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle" style={{ width: '70px' }}>المورد</span>
-                  <Autocomplete
-                    value={supplierSearchQuery}
-                    onChange={handleSupplierQueryChange}
-                    onSelect={handleSupplierSelect}
-                    fetchSuggestions={fetchSupplierSuggestions}
-                    placeholder="جميع الموردين"
-                    className="form-control form-control-sm fw-bold border-secondary-subtle"
-                  />
-                </div>
-              </div>
-
-              <div style={{ gridColumn: 'span 8' }} className="d-flex align-items-center gap-2 justify-content-end mt-2">
-                <button type="button" className="btn btn-outline-secondary px-4 fw-bold fs-4 py-1" onClick={handleResetFilters} disabled={loading} style={{ border: '1px solid #adb5bd' }}>
-                  <IconRefresh size={16} className="me-1" />
-                  إعادة ضبط
-                </button>
-                <button type="submit" className="btn btn-primary px-5 fw-bold fs-4 py-1 border-secondary-subtle" disabled={loading} style={{ border: '1px solid #adb5bd' }}>
-                  <IconSearch size={16} className="me-1" />
-                  {loading ? 'جاري البحث...' : 'بحث'}
-                </button>
-              </div>
-
-            </div>
-          </form>
-        </div>
-      </div>
-      )}
-
-      {/* ── Results Table ── */}
-      <div className="premium-card shadow-sm border-0 rounded bg-white mt-3">
-        <div className="card-header bg-light d-flex flex-wrap justify-content-between align-items-center py-2 gap-2 rounded-top border-bottom border-secondary-subtle sticky-toolbar">
-          <div className="d-flex align-items-center gap-3">
-            <div className="text-dark fw-bold fs-3 d-flex align-items-center gap-2">
-              نتائج البحث
-              <span className="badge bg-primary text-white rounded-pill px-2 py-1">{totalInvoicesCount} فاتورة</span>
-            </div>
-            
-            {invoices.length > 0 && (
-              <div className="d-flex align-items-center gap-2 border-start border-secondary-subtle ps-3 ms-1">
-                {selectedIds.length > 0 ? (
-                  <>
-                    <span className="fw-bold me-2">تم تحديد {selectedIds.length}</span>
-                    <button className="btn btn-outline-danger btn-sm fw-bold py-1 px-2 border-secondary-subtle" onClick={handleBulkDelete}>
-                      <IconTrash size={16} className="me-1" /> حذف محددة
-                    </button>
-                  </>
-                ) : (
-                  <span className="text-muted small">حدد فواتير للإجراءات الجماعية</span>
-                )}
-              </div>
-            )}
-          </div>
-
-          {invoices.length > 0 && (
-            <div className="text-dark fw-bold fs-4 border px-3 py-1 bg-white rounded shadow-sm" style={{ borderColor: '#adb5bd !important' }}>
-              إجمالي فواتير الشراء:{' '}
-              <span className="text-danger fw-bolder fs-4">{formatCurrency(totalAmountSum)}</span>
-            </div>
-          )}
-        </div>
-
-        {loading ? (
-          <div className="card-body text-center py-5">
-            <div className="spinner-border text-primary mb-3"></div>
-            <div className="text-secondary fw-bold fs-3">جاري تحميل الفواتير...</div>
-          </div>
-        ) : invoices.length === 0 ? (
-          <div className="card-body text-center py-5">
-            <IconReceipt size={48} className="text-muted mb-2 opacity-50" />
-            <h4 className="text-muted fw-bold">لا توجد فواتير مطابقة لمعايير البحث</h4>
-          </div>
-        ) : (
-          <div>
-            <table className="table table-sm table-bordered table-vcenter table-hover table-sticky-header mb-0">
-              <thead>
-                <tr>
-                  <th className="text-center w-1">
-                    <input 
-                      type="checkbox" 
-                      className="form-check-input" 
-                      checked={invoices.length > 0 && selectedIds.length === (globalAllIds.length > 0 ? globalAllIds.length : invoices.length)} 
-                      onChange={toggleSelectAll} 
-                    />
-                  </th>
-                  <th className="text-center w-1"></th>
-                  <th className="text-center">رقم الفاتورة</th>
-                  <th className="text-center">النوع</th>
-                  <th className="text-center">التاريخ</th>
-                  <th className="text-center">المورد</th>
-                  <th className="text-center px-2">إجمالي القطع</th>
-                  <th className="text-center">الإجمالي</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((r, index) => {
-                  const isLast = index === invoices.length - 1;
-                  return (
-                    <InvoiceRow 
-                      key={r.id || r.local_id || index}
-                      r={r}
-                      index={index}
-                      isSelected={selectedIds.includes(r.id)}
-                      toggleSelect={toggleSelect}
-                      handleContextMenu={handleContextMenu}
-                      
-                      formatCurrency={formatCurrency}
-                      getSupplierName={getSupplierName}
-                      innerRef={isLast ? lastRowElementRef : null}
-                    />
-                  );
-                })}
-              </tbody>
-            </table>
-            {loadingMore && (
-              <div className="text-center py-3">
-               <div className="spinner-border text-primary"></div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── Context Menu ── */}
-      {contextMenu && (
-        <div 
-          className="dropdown-menu show shadow" 
-          style={{ position: 'fixed', top: contextMenu.mouseY, left: contextMenu.mouseX, zIndex: 9999, border: '1px solid #dee2e6' }}
-        >
-          <Link className="dropdown-item d-flex align-items-center gap-2 py-2 fw-bold" to={`/purchases/edit/${contextMenu.invoiceId}`}>
-            <IconPencil size={18} className="text-primary" /> تعديل
-          </Link>
-          <button className="dropdown-item d-flex align-items-center gap-2 py-2 fw-bold" onClick={() => { handlePrintSingle(contextMenu.invoiceId, contextMenu.invoiceNum); setContextMenu(null); }}>
-            <IconPrinter size={18} className="text-success" /> طباعة
-          </button>
-          <button className="dropdown-item d-flex align-items-center gap-2 py-2 fw-bold" onClick={() => { handleViewSingle(contextMenu.invoiceId, contextMenu.invoiceNum); setContextMenu(null); }}>
-            <IconEye size={18} className="text-info" /> معاينة PDF
-          </button>
-          <div className="dropdown-divider"></div>
-          <button className="dropdown-item d-flex align-items-center gap-2 py-2 text-danger fw-bold" onClick={() => { handleDeleteSingle(contextMenu.invoiceId, contextMenu.invoiceNum); setContextMenu(null); }}>
-            <IconTrash size={18} /> حذف
-          </button>
-        </div>
-      )}
-
-    </div>
+          <PrintModal
+            isOpen={printModalOpen}
+            onClose={() => setPrintModalOpen(false)}
+            title="طباعة فواتير الشراء / المرتجع"
+            items={printModalIds}
+            itemLabel="فاتورة شراء"
+            executeChunk={executeChunkPurchases}
+          />
+        </>
+      }
+    >
+      <PurchaseTable
+        invoices={invoices}
+        loading={loading}
+        totalInvoicesCount={totalInvoicesCount}
+        totalAmountSum={totalAmountSum}
+        selectedIds={selectedIds}
+        globalAllIds={globalAllIds}
+        toggleSelect={toggleSelect}
+        toggleSelectAll={toggleSelectAll}
+        handleBulkDelete={handleBulkDelete}
+        handleContextMenu={handleContextMenu}
+        handleOpenPrintModal={handleOpenPrintModal}
+        formatCurrency={formatCurrency}
+        getSupplierName={getSupplierName}
+        lastRowElementRef={lastRowElementRef}
+        loadingMore={loadingMore}
+      />
+    </StandardTablePageLayout>
   );
 }

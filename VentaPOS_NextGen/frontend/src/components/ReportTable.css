@@ -4,8 +4,9 @@
   border: 1px solid var(--tblr-border-color, #dee2e6);
 }
 
+/* Sleek 6px Desktop Scrollbar */
 .report-table-container.hide-vertical-scroll::-webkit-scrollbar {
-  width: 0px; 
+  width: 6px; 
   height: 8px; 
 }
 .report-table-container.hide-vertical-scroll::-webkit-scrollbar-track { 
@@ -16,7 +17,7 @@
   border-radius: 4px; 
 }
 .report-table-container.hide-vertical-scroll::-webkit-scrollbar-thumb:hover { 
-  background: #a8a8a8; 
+  background: #94a3b8; 
 }
 .report-table-container.hide-vertical-scroll { 
   scrollbar-width: thin; 
@@ -26,6 +27,7 @@
   margin-bottom: 0;
 }
 
+/* Sticky Header Level 1 (Sticks to top: 0 inside report container) */
 .report-sticky-header th {
   position: sticky !important;
   top: 0 !important;
@@ -34,9 +36,21 @@
   box-shadow: inset 0 -1px 0 var(--tblr-border-color, #dee2e6);
 }
 
-.report-sticky-header.level-2 th {
-  top: 40px !important;
+/* Direct Click-to-Sort Header Affordance */
+.report-sticky-header th.sortable-th {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
 }
+.report-sticky-header th.sortable-th:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* Dynamic Multi-level Grouped Header (Measured via ResizeObserver) */
+.report-sticky-header.level-2 th {
+  top: var(--header-row-1-height, 38px) !important;
+}
+
 
 .report-summary-card {
   border-color: #adb5bd !important;

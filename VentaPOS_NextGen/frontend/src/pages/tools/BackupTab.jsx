@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
 import { IconDatabaseExport, IconDatabaseImport, IconShieldCheck, IconAlertCircle } from '@tabler/icons-react';
-import axios from 'axios';
+import Swal from 'sweetalert2';
+import api from '../../api';
 
 const BackupTab = () => {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [result, setResult] = useState(null);
 
   const handleDownload = async () => {
+    setDownloading(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get('http://127.0.0.1:8000/api/v1/tools/backup/download/', {
-        headers: { Authorization: `Token ${token}` },
+      const res = await api.get('/tools/backup/download/', {
         responseType: 'blob'
       });
       
@@ -30,49 +31,99 @@ const BackupTab = () => {
       link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
+      link.remove();
     } catch (err) {
-      alert("فشل تنزيل النسخة الاحتياطية");
+      console.error(err);
+      Swal.fire({
+        icon: 'error',
+        title: 'خطأ',
+        text: 'فشل تنزيل النسخة الاحتياطية. يرجى مراجعة إعدادات الخادم.'
+      });
+    } finally {
+      setDownloading(false);
     }
   };
 
   const handleUpload = async (e) => {
     e.preventDefault();
     if (!file) return;
-    setUploading(true);
-    setResult(null);
 
-    const formData = new FormData();
-    formData.append('backup_file', file);
+    Swal.fire({
+      title: 'تحذير هام: استعادة قاعدة البيانات',
+      text: 'استعادة النسخة الاحتياطية ستستبدل البيانات الحالية بالكامل ببيانات الملف المرفوع. هل أنت متأكد من رغبتك في المتابعة؟',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'نعم، استعد البيانات الآن',
+      cancelButtonText: 'إلغاء'
+    }).then(async (swalResult) => {
+      if (swalResult.isConfirmed) {
+        setUploading(true);
+        setResult(null);
 
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.post('http://127.0.0.1:8000/api/v1/tools/backup/upload/', formData, {
-        headers: { Authorization: `Token ${token}`, 'Content-Type': 'multipart/form-data' }
-      });
-      setResult({ type: 'success', message: res.data.message });
-      setFile(null);
-    } catch (err) {
-      setResult({ type: 'error', message: err.response?.data?.error || 'حدث خطأ غير متوقع' });
-    } finally {
-      setUploading(false);
-    }
+        const formData = new FormData();
+        formData.append('backup_file', file);
+
+        try {
+          const res = await api.post('/tools/backup/upload/', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          setResult({ type: 'success', message: res.data.message });
+          setFile(null);
+          
+          if (res.data?.status === 'pending_restart') {
+            Swal.fire({
+              icon: 'warning',
+              title: 'إعادة تشغيل البرنامج مطلوبة',
+              text: res.data.message,
+              confirmButtonText: 'حسناً، فهمت',
+              confirmButtonColor: '#123F68'
+            });
+          } else {
+            Swal.fire({
+              icon: 'success',
+              title: 'تمت الاستعادة بنجاح',
+              text: res.data.message,
+              confirmButtonText: 'تحديث البرنامج الآن'
+            }).then(() => {
+              window.location.reload();
+            });
+          }
+        } catch (err) {
+          const errorMsg = err.response?.data?.error || 'حدث خطأ غير متوقع أثناء استعادة النسخة';
+          setResult({ type: 'error', message: errorMsg });
+          Swal.fire({
+            icon: 'error',
+            title: 'فشل الاستعادة',
+            text: errorMsg
+          });
+        } finally {
+          setUploading(false);
+        }
+      }
+    });
   };
 
   return (
-    <div className="row g-4">
+    <div className="row g-4" dir="rtl">
       {/* Download Backup */}
       <div className="col-md-6">
-        <div className="card h-100 border-0 shadow-sm rounded-4 text-center p-4 hover-shadow transition-all">
+        <div className="card h-100 shadow-sm border border-secondary-subtle text-center p-4">
           <div className="card-body">
             <div className="avatar avatar-xl bg-success-lt rounded-circle mb-4 mx-auto">
               <IconDatabaseExport size={36} className="text-success" />
             </div>
             <h3 className="fw-bold text-dark mb-2">تنزيل نسخة احتياطية</h3>
             <p className="text-muted small mb-4 px-3">
-              قم بحفظ نسخة احتياطية (Hot Backup) من كافة بيانات النظام الحالية لتأمينها والاحتفاظ بها محلياً.
+              قم بحفظ نسخة احتياطية فورية (Hot Backup) من كافة بيانات النظام الحالية لتأمينها والاحتفاظ بها محلياً.
             </p>
-            <button className="btn btn-success btn-lg rounded-pill px-5 fw-bold" onClick={handleDownload}>
-              تنزيل الآن
+            <button 
+              className="btn btn-success btn-lg px-5 fw-bold" 
+              onClick={handleDownload}
+              disabled={downloading}
+            >
+              {downloading ? 'جاري تجهيز النسخة...' : 'تنزيل الآن'}
             </button>
           </div>
         </div>
@@ -80,21 +131,21 @@ const BackupTab = () => {
 
       {/* Restore Backup */}
       <div className="col-md-6">
-        <div className="card h-100 border-0 shadow-sm rounded-4 p-4 text-center hover-shadow transition-all">
+        <div className="card h-100 shadow-sm border border-secondary-subtle p-4 text-center">
           <div className="card-body">
             <div className="avatar avatar-xl bg-danger-lt rounded-circle mb-4 mx-auto">
               <IconDatabaseImport size={36} className="text-danger" />
             </div>
             <h3 className="fw-bold text-dark mb-2">استعادة النظام</h3>
             <p className="text-muted small mb-4 px-3">
-              ارفع ملف نسخة سابقة. سيقوم النظام بفحص الملف آلياً (Integrity Check) وتطبيقه بأمان عند إعادة التشغيل.
+              ارفع ملف نسخة سابقة (.sqlite3 أو .db). سيقوم النظام بفحص الملف آلياً وتطبيقه بأمان فوراً.
             </p>
             
             <form onSubmit={handleUpload}>
               <div className="input-group mb-3 px-4">
                 <input 
                   type="file" 
-                  className="form-control" 
+                  className="form-control border-secondary-subtle" 
                   accept=".sqlite3,.db" 
                   onChange={(e) => setFile(e.target.files[0])}
                   disabled={uploading}
@@ -103,10 +154,10 @@ const BackupTab = () => {
               </div>
               <button 
                 type="submit" 
-                className="btn btn-danger btn-lg rounded-pill px-5 fw-bold"
+                className="btn btn-danger btn-lg px-5 fw-bold"
                 disabled={!file || uploading}
               >
-                {uploading ? 'جاري فحص ورفع النسخة...' : 'استعادة النظام'}
+                {uploading ? 'جاري فحص وتطبيق النسخة...' : 'استعادة النظام'}
               </button>
             </form>
 

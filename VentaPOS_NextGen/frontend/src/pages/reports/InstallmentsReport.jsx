@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useContext, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { IconFilter, IconReceipt, IconPrinter, IconSearch, IconRefresh, IconCalendarEvent } from '@tabler/icons-react';
+import toast from 'react-hot-toast';
 import api from '../../api';
 import { ReportsContext } from './ReportsLayout';
 import ReportTable from '../../components/ReportTable';
 import ReportAutocomplete from '../../components/ReportAutocomplete';
 import DebouncedInput from '../../components/DebouncedInput';
+import PrintModal from '../../components/common/PrintModal';
 import { fmtNum, toEnglish, formatMMYYYY } from '../../utils/formatUtils';
 
 export default function InstallmentsReport() {
@@ -31,6 +33,8 @@ export default function InstallmentsReport() {
   const [data, setData] = useState({ total_installments_amount: 0, installments_count: 0, installments: [] });
 
   const [selectedIds, setSelectedIds] = useState([]);
+  const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [printReceiptIds, setPrintReceiptIds] = useState([]);
 
   useEffect(() => {
     const spId = searchParams.get('salesperson_id');
@@ -94,7 +98,7 @@ export default function InstallmentsReport() {
   };
 
   useEffect(() => {
-    if (year && month && branchId) {
+    if (branchId) {
       fetchData();
     }
   }, [year, month, branchId, salespersonId, saleFromMonth, saleFromYear, saleToMonth, saleToYear, customerName, phone, area]);
@@ -118,7 +122,23 @@ export default function InstallmentsReport() {
 
   const handlePrintSelected = () => {
     if (selectedIds.length === 0) return;
-    alert(`سيتم طباعة إيصالات الأقساط المحددة (${selectedIds.length})`);
+    const selectedRows = (data.installments || []).filter(inst => selectedIds.includes(inst.payment_id));
+    const receiptIds = [...new Set(selectedRows.map(r => r.receipt_id).filter(Boolean))];
+    if (receiptIds.length === 0) {
+      toast.error('لم يتم العثور على فواتير صالحة للطباعة');
+      return;
+    }
+    setPrintReceiptIds(receiptIds);
+    setPrintModalOpen(true);
+  };
+
+  const executeChunkReceipts = async (chunk, { action, targetPrinter }) => {
+    const payload = {
+      receipt_ids: chunk,
+      action,
+      target_printer: targetPrinter || null
+    };
+    await api.post('/receipts/desktop_print/', payload);
   };
 
   // Helper for displaying sale_date in MM/YYYY format
@@ -405,6 +425,8 @@ export default function InstallmentsReport() {
       {renderFiltersGrid()}
 
       <ReportTable
+        reportTitle="تقرير تحصيلات الأقساط"
+        periodLabel={year && month ? `${year}/${String(month).padStart(2, '0')}` : undefined}
         columns={columns}
         data={data.installments || []}
         loading={loading}
@@ -427,6 +449,15 @@ export default function InstallmentsReport() {
         }
         emptyMessage="لا توجد تحصيلات أقساط مطابقة للمعايير المحددة"
         emptyIcon={IconReceipt}
+      />
+
+      <PrintModal
+        isOpen={printModalOpen}
+        onClose={() => setPrintModalOpen(false)}
+        title="طباعة جداول الأقساط"
+        items={printReceiptIds}
+        itemLabel="جدول قسط"
+        executeChunk={executeChunkReceipts}
       />
     </div>
   );

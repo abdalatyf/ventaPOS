@@ -6,6 +6,9 @@ import { useRef, useCallback, useEffect } from 'react';
  * By perfectly calculating the table's maxHeight, the window naturally stops scrolling
  * at the exact millisecond the toolbar touches the navbar, at which point the table's
  * scrollbar appears (without layout shifts thanks to scrollbar-gutter).
+ *
+ * Uses lightweight ResizeObserver on the toolbar and table container (never a body-wide MutationObserver)
+ * and dynamically calculates --header-row-1-height for pixel-perfect 2-row sticky headers.
  */
 export default function useSmartScroll() {
   const tableContainerRef = useRef(null);
@@ -26,21 +29,27 @@ export default function useSmartScroll() {
       const offset = 56 + toolbarHeight + 16;
       
       tableContainerRef.current.style.maxHeight = `calc((100vh / ${currentZoom}) - ${offset}px)`;
+
+      // Measure row 1 of multi-level headers dynamically
+      const headerRow1 = tableContainerRef.current.querySelector('thead > tr:first-child');
+      if (headerRow1) {
+        tableContainerRef.current.style.setProperty('--header-row-1-height', `${headerRow1.offsetHeight}px`);
+      }
     };
 
     const handleScroll = () => {
       if (!tableContainerRef.current) return;
       
       // We use absolute distance to bottom to toggle the scrollbar.
-      // This is mathematically flawless regardless of zoom or screen size.
       const scrollHeight = document.documentElement.scrollHeight;
       const clientHeight = window.innerHeight;
       const scrollTop = window.scrollY || document.documentElement.scrollTop;
       
-      // If we are at the absolute bottom of the page (within 5 pixels for rounding)
+      const currentZoom = parseFloat(document.body.style.zoom) || 1.0;
+      const tolerance = Math.max(8, 12 / currentZoom);
       const distanceToBottom = scrollHeight - clientHeight - scrollTop;
       
-      if (distanceToBottom <= 5) {
+      if (distanceToBottom <= tolerance) {
         // Window hit the bottom (Toolbar is touching Navbar). Enable table scrolling!
         if (tableContainerRef.current.style.overflowY !== 'auto') {
           tableContainerRef.current.style.overflowY = 'auto';
@@ -58,19 +67,25 @@ export default function useSmartScroll() {
     handleScroll();
 
     window.addEventListener('resize', adjustHeight);
+    window.addEventListener('app-zoom-changed', adjustHeight);
     window.addEventListener('scroll', handleScroll, { passive: true });
     
-    // Re-run if DOM mutations happen
-    const observer = new MutationObserver(() => {
-      adjustHeight();
-      handleScroll();
-    });
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+    // High-performance ResizeObserver observing only relevant elements
+    let resizeObserver = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        adjustHeight();
+      });
+      const toolbar = document.querySelector('.sticky-toolbar');
+      if (toolbar) resizeObserver.observe(toolbar);
+      if (tableContainerRef.current) resizeObserver.observe(tableContainerRef.current);
+    }
     
     return () => {
       window.removeEventListener('resize', adjustHeight);
+      window.removeEventListener('app-zoom-changed', adjustHeight);
       window.removeEventListener('scroll', handleScroll);
-      observer.disconnect();
+      if (resizeObserver) resizeObserver.disconnect();
     };
   }, []);
 

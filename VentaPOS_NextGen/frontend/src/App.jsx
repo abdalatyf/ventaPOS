@@ -5,7 +5,6 @@ import './App.css';
 
 // استيراد الشاشات الأساسية
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
 import POS from './pages/POS';
 import Dimensions from './pages/Dimensions';
 import ActivationSetup from './pages/ActivationSetup';
@@ -29,12 +28,12 @@ import SalespersonPerformanceReport from './pages/reports/SalespersonPerformance
 import InventoryMovementReport from './pages/reports/InventoryMovementReport';
 import ProfitAndLossReport from './pages/reports/ProfitAndLossReport';
 import AveragesReport from './pages/reports/AveragesReport';
-import ReportsIndex from './pages/reports/ReportsIndex';
 import InstallmentsReport from './pages/reports/InstallmentsReport';
 import ToolsDashboard from './pages/tools/ToolsDashboard';
 import ReportsLayout from './pages/reports/ReportsLayout';
 import ReceiptsReport from './pages/reports/ReceiptsReport';
 import ExpensesReport from './pages/reports/ExpensesReport';
+import PurchasesReport from './pages/reports/PurchasesReport';
 import SettingsIndex from './pages/settings/SettingsIndex';
 
 // مكون حماية المسارات (Gatekeeper)
@@ -58,6 +57,26 @@ const TokenRoute = ({ children }) => {
   const token = localStorage.getItem('token');
   if (!token) {
     return <Navigate to="/login" replace />;
+  }
+  return children;
+};
+
+const PrintOnlyGate = ({ children }) => {
+  const [isPrintOnly, setIsPrintOnly] = useState(false);
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    api.get('/license/status/').then(res => {
+      if (res.data?.is_print_only) {
+        setIsPrintOnly(true);
+      }
+      setChecked(true);
+    }).catch(() => setChecked(true));
+  }, []);
+
+  if (!checked) return null;
+  if (isPrintOnly) {
+    return <Navigate to="/receipts" replace />;
   }
   return children;
 };
@@ -104,7 +123,7 @@ function App() {
         {/* المسارات المحمية داخل الـ AppShell */}
         <Route path="/" element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
           <Route index element={<Navigate to="/receipts" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="dashboard" element={<Navigate to="/reports/dashboard" replace />} />
           <Route path="pos" element={<POS />} />
           
           {/* التأسيس والإعدادات */}
@@ -115,17 +134,19 @@ function App() {
           <Route path="receipts/return/:id" element={<ReturnReceipt />} />
           
           {/* مسارات المخزون */}
-          <Route path="product-ledger/:id" element={<ProductLedger />} />
-          <Route path="search-purchases" element={<SearchPurchases />} />
-          <Route path="purchases/new" element={<PurchaseEntry />} />
-          <Route path="purchases/edit/:id" element={<PurchaseEntry />} />
-          <Route path="expenses" element={<Expenses />} />
+          <Route path="product-ledger" element={<PrintOnlyGate><ProductLedger /></PrintOnlyGate>} />
+          <Route path="product-ledger/:id" element={<PrintOnlyGate><ProductLedger /></PrintOnlyGate>} />
+          <Route path="search-purchases" element={<PrintOnlyGate><SearchPurchases /></PrintOnlyGate>} />
+          <Route path="purchases/new" element={<PrintOnlyGate><PurchaseEntry /></PrintOnlyGate>} />
+          <Route path="purchases/edit/:id" element={<PrintOnlyGate><PurchaseEntry /></PrintOnlyGate>} />
+          <Route path="expenses" element={<PrintOnlyGate><Expenses /></PrintOnlyGate>} />
           
           {/* مسارات التقارير */}
-          <Route path="reports" element={<ReportsLayout />}>
+          <Route path="reports" element={<PrintOnlyGate><ReportsLayout /></PrintOnlyGate>}>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<DashboardReport />} />
             <Route path="receipts" element={<ReceiptsReport />} />
+            <Route path="purchases" element={<PurchasesReport />} />
             <Route path="expenses" element={<ExpensesReport />} />
             <Route path="salesperson" element={<SalespersonPerformanceReport />} />
             <Route path="inventory" element={<InventoryMovementReport />} />

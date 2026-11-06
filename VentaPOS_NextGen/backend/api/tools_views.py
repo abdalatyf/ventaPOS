@@ -2,13 +2,12 @@ import os
 import sqlite3
 import tempfile
 import json
-import pandas as pd
 from datetime import datetime
 from django.conf import settings
 from django.http import FileResponse, JsonResponse
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework import status
 from django.db import transaction
@@ -24,7 +23,15 @@ class ToolsBaseView(APIView):
     
     def dispatch(self, request, *args, **kwargs):
         from .models import Branch
-        branch = Branch.objects.filter(is_deleted=False).first()
+        branch_id = request.headers.get('X-Branch-ID') or request.GET.get('branch_id')
+        branch = None
+        if branch_id:
+            try:
+                branch = Branch.objects.filter(id=int(branch_id), is_deleted=False).first()
+            except (ValueError, TypeError):
+                pass
+        if not branch:
+            branch = Branch.objects.filter(is_deleted=False).first()
         request.branch = branch
         return super().dispatch(request, *args, **kwargs)
 
@@ -40,61 +47,168 @@ class BackupDownloadView(ToolsBaseView):
             temp_dir = tempfile.gettempdir()
             temp_backup_path = os.path.join(temp_dir, filename)
 
-            # Hot backup
-            source_conn = sqlite3.connect(db_path, timeout=20)
+            # Flush WAL changes to main database before backup
+            try:
+                checkpoint_conn = sqlite3.connect(db_path, timeout=30)
+                checkpoint_conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+                checkpoint_conn.close()
+            except Exception as cp_err:
+                print(f"Warning during WAL checkpoint: {cp_err}")
+
+            # Hot backup using sqlite3 backup API
+            source_conn = sqlite3.connect(db_path, timeout=30)
             dest_conn = sqlite3.connect(temp_backup_path)
             with dest_conn:
                 source_conn.backup(dest_conn, pages=100, sleep=0.01)
             dest_conn.close()
             source_conn.close()
 
-            return FileResponse(open(temp_backup_path, 'rb'), as_attachment=True, filename=filename)
+            file_handle = open(temp_backup_path, 'rb')
+            response = FileResponse(file_handle, as_attachment=True, filename=filename)
+            orig_close = response.close
+            def _cleanup():
+                orig_close()
+                try:
+                    if os.path.exists(temp_backup_path):
+                        os.unlink(temp_backup_path)
+                except OSError:
+                    pass
+            response.close = _cleanup
+            return response
         except Exception as e:
             return Response({"error": f"فشل النسخ الاحتياطي: {str(e)}"}, status=500)
 
 class BackupUploadView(ToolsBaseView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
+        import shutil
+        from pathlib import Path
+        from django.db import connections
+
         file_obj = request.FILES.get('backup_file')
         if not file_obj:
             return Response({"error": "يرجى اختيار ملف النسخة الاحتياطية"}, status=400)
         
-        if not file_obj.name.endswith(('.sqlite3', '.db')):
-            return Response({"error": "امتداد الملف غير مدعوم"}, status=400)
+        safe_filename = os.path.basename(file_obj.name)
+        if not safe_filename.endswith(('.sqlite3', '.db')):
+            return Response({"error": "امتداد الملف غير مدعوم، يرجى اختيار ملف .sqlite3 أو .db"}, status=400)
 
-        temp_file_path = os.path.join(tempfile.gettempdir(), file_obj.name)
+        temp_file_path = os.path.join(tempfile.gettempdir(), safe_filename)
         with open(temp_file_path, 'wb+') as dest:
             for chunk in file_obj.chunks():
                 dest.write(chunk)
 
-        # Integrity Check
+        # 1. Integrity Check & Table Schema Validation
         try:
             conn = sqlite3.connect(temp_file_path)
             cursor = conn.cursor()
             cursor.execute("PRAGMA integrity_check;")
             result = cursor.fetchone()
-            conn.close()
-            if result[0] != "ok":
+            if not result or result[0] != "ok":
+                conn.close()
                 return Response({"error": "ملف قاعدة البيانات تالف أو غير صالح للاستعادة"}, status=400)
+            
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = {row[0] for row in cursor.fetchall()}
+            conn.close()
+
+            required_tables = {
+                'salesapp_receipt', 'salesapp_saleitem', 'salesapp_inventoryitem',
+                'salesapp_purchaseinvoice', 'salesapp_branch', 'salesapp_salesperson',
+                'salesapp_companysetting', 'salesapp_clientlicense'
+            }
+            if not required_tables.issubset(tables):
+                return Response({"error": "ملف قاعدة البيانات غير متوافق مع نظام VentaPOS (جداول مفقودة)"}, status=400)
         except Exception as e:
             return Response({"error": f"فشل فحص النسخة: {str(e)}"}, status=400)
 
-        # Stage for restore
+        # 2. Perform Immediate Live Restore with Fallback Staging
+        db_path = Path(settings.DATABASES['default']['NAME'])
+        pending_path = db_path.parent / 'restore_pending.bin'
+
+        # Stage fallback copy first
         try:
-            local_app_data = os.environ.get('LOCALAPPDATA') or os.path.join(os.path.expanduser('~'), 'AppData', 'Local')
-            db_dir = os.path.join(local_app_data, 'VentaPOS')
-            os.makedirs(db_dir, exist_ok=True)
-            pending_path = os.path.join(db_dir, 'restore_pending.bin')
-            
-            with open(pending_path, 'wb') as dest:
-                with open(temp_file_path, 'rb') as src:
-                    dest.write(src.read())
-            
-            return Response({"message": "تم رفع وفحص النسخة بنجاح. سيتم تطبيقها عند إعادة تشغيل البرنامج."}, status=200)
-        except Exception as e:
-            return Response({"error": f"فشل حفظ النسخة المعلقة: {str(e)}"}, status=500)
+            shutil.copy2(temp_file_path, pending_path)
+        except Exception as stage_err:
+            print(f"Warning staging restore file: {stage_err}")
+
+        try:
+            # Close existing active Django DB connections to release locks on Windows
+            connections.close_all()
+
+            # Automatic pre-restore snapshot
+            backups_dir = db_path.parent / 'backups'
+            backups_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            pre_restore_file = backups_dir / f"pre_restore_{timestamp}.sqlite3"
+            if db_path.exists() and db_path.stat().st_size > 0:
+                try:
+                    src_conn = sqlite3.connect(str(db_path))
+                    dst_conn = sqlite3.connect(str(pre_restore_file))
+                    with dst_conn:
+                        src_conn.backup(dst_conn)
+                    dst_conn.close()
+                    src_conn.close()
+                except Exception as pre_err:
+                    print(f"Warning creating pre-restore backup: {pre_err}")
+
+            # Live overwrite of the primary database file FIRST (before deleting wal/shm)
+            # If copy2 fails (e.g. PermissionError on Windows), live WAL/SHM are preserved intact!
+            shutil.copy2(temp_file_path, db_path)
+
+            # Remove stale WAL and SHM files to prevent replaying old transactions
+            wal_file = Path(str(db_path) + '-wal')
+            shm_file = Path(str(db_path) + '-shm')
+            if wal_file.exists():
+                wal_file.unlink(missing_ok=True)
+            if shm_file.exists():
+                shm_file.unlink(missing_ok=True)
+
+            # Re-initialize WAL and truncate on the new file
+            verify_conn = sqlite3.connect(str(db_path), timeout=30)
+            verify_conn.execute("PRAGMA journal_mode=WAL;")
+            verify_conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            cur = verify_conn.cursor()
+            cur.execute("PRAGMA integrity_check;")
+            res = cur.fetchone()
+            verify_conn.close()
+
+            connections.close_all()
+
+            # Run migrations to automatically upgrade older backup schemas
+            from django.core.management import call_command
+            try:
+                call_command('migrate', interactive=False)
+            except Exception as mig_err:
+                # If migration fails, rollback to pre-restore snapshot
+                if pre_restore_file.exists():
+                    shutil.copy2(pre_restore_file, db_path)
+                    if wal_file.exists():
+                        wal_file.unlink(missing_ok=True)
+                    if shm_file.exists():
+                        shm_file.unlink(missing_ok=True)
+                connections.close_all()
+                return Response({"error": f"فشل ترقية مخطط قاعدة البيانات المستعادة: {str(mig_err)}"}, status=400)
+
+            connections.close_all()
+
+            # Clean up pending file since live restore succeeded
+            if pending_path.exists():
+                pending_path.unlink(missing_ok=True)
+
+            return Response({
+                "status": "success",
+                "message": "تم استعادة قاعدة البيانات بنجاح. جاري تحديث بيانات البرنامج..."
+            }, status=200)
+
+        except Exception as swap_err:
+            # Staged file remains in pending_path for launcher.py startup recovery
+            return Response({
+                "status": "pending_restart",
+                "message": f"تم فحص النسخة واعتمادها بنجاح. تعذر التبديل الحي بسبب قفل النظام ({str(swap_err)}). يرجى إعادة تشغيل البرنامج لتطبيق الاستعادة."
+            }, status=200)
 
 class OfflineExportItemsView(ToolsBaseView):
     permission_classes = [IsAuthenticated]
@@ -151,12 +265,26 @@ class OfflineImportReceiptsView(ToolsBaseView):
                 
                 serializer = ReceiptSerializer(data=rcpt_data)
                 if serializer.is_valid():
-                    serializer.save()
+                    serializer.save(is_confirmed=False)
                     created_count += 1
                 else:
                     return Response({"error": f"بيانات فاتورة غير صالحة: {serializer.errors}"}, status=400)
 
         return Response({"message": f"تم استقبال {created_count} فاتورة بنجاح وبانتظار الاعتماد"}, status=200)
+
+class PendingReceiptsListView(ToolsBaseView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .models import Receipt
+        from .serializers import ReceiptSerializer
+        branch = getattr(request, 'branch', None)
+        pending = Receipt.objects.filter(is_confirmed=False, is_deleted=False)
+        if branch:
+            pending = pending.filter(branch=branch)
+        pending = pending.order_by("-created_at")
+        serializer = ReceiptSerializer(pending, many=True)
+        return Response(serializer.data, status=200)
 
 class ApprovePendingReceiptView(ToolsBaseView):
     permission_classes = [IsAuthenticated]
@@ -164,7 +292,12 @@ class ApprovePendingReceiptView(ToolsBaseView):
     def post(self, request, pk):
         from .models import Receipt
         try:
-            receipt = Receipt.objects.get(pk=pk, branch=request.branch)
+            branch = getattr(request, 'branch', None)
+            receipt = None
+            if branch:
+                receipt = Receipt.objects.filter(pk=pk, branch=branch).first()
+            if not receipt:
+                receipt = Receipt.objects.get(pk=pk)
         except Receipt.DoesNotExist:
             return Response({"error": "الفاتورة غير موجودة"}, status=404)
 
@@ -174,20 +307,19 @@ class ApprovePendingReceiptView(ToolsBaseView):
         from dateutil.relativedelta import relativedelta
         from datetime import date
         from .models import ClientLicense
-        from api.utils import generate_record_signature, generate_receipt_signature
+        from api.utils.security_utils import generate_record_signature, generate_receipt_signature
         from django.db.models import Max
         from api.views import get_default_date
 
         try:
             with transaction.atomic():
                 # 1. License Check & Deduction
-                active_lic = (
-                    ClientLicense.objects
-                    .select_for_update()
-                    .filter(is_deleted=False, invoices_balance__gt=0)
-                    .first()
-                )
+                from api.services.receipt_service import get_active_license, get_license_date_bounds
+                active_lic = get_active_license(select_for_update=True)
                 if not active_lic:
+                    return Response({"error": "لا توجد رخصة نشطة للنظام."}, status=400)
+                
+                if active_lic.invoices_balance is not None and active_lic.invoices_balance <= 0:
                     return Response({"error": "لا يمكن الاعتماد، رصيد الفواتير للرخصة قد نفد. يرجى الشحن أولاً."}, status=400)
                 
                 try:
@@ -195,21 +327,19 @@ class ApprovePendingReceiptView(ToolsBaseView):
                 except Exception:
                     return Response({"error": "تاريخ الفاتورة غير صحيح."}, status=400)
                     
-                lic_start_month = active_lic.start_date.replace(day=1)
-                if invoice_date < lic_start_month:
-                    return Response({"error": "التاريخ يسبق بداية الاشتراك."}, status=400)
+                start_date, last_allowed_month, grace_end = get_license_date_bounds(active_lic)
+                if start_date:
+                    lic_start_month = start_date.replace(day=1)
+                    if invoice_date < lic_start_month:
+                        return Response({"error": "التاريخ يسبق بداية الاشتراك."}, status=400)
                     
-                if active_lic.expiry_date:
-                    last_allowed_month = (active_lic.expiry_date - relativedelta(months=2)).replace(day=1)
-                    if invoice_date > last_allowed_month:
-                        return Response({"error": "التاريخ بعد انتهاء الاشتراك."}, status=400)
-                    grace_end = active_lic.expiry_date + relativedelta(days=25)
-                    if date.today() > grace_end:
-                        return Response({"error": "انتهت فترة الاشتراك."}, status=400)
+                if last_allowed_month and invoice_date > last_allowed_month:
+                    return Response({"error": "التاريخ بعد انتهاء الاشتراك."}, status=400)
+                if grace_end and date.today() > grace_end:
+                    return Response({"error": "انتهت فترة الاشتراك."}, status=400)
 
                 # 2. Assign receipt_number
-                last = Receipt.objects.select_for_update().filter(branch=receipt.branch, receipt_number__isnull=False).aggregate(m=Max('receipt_number'))['m']
-                receipt.receipt_number = (last + 1) if last else 1
+                receipt.receipt_number = Receipt.get_next_receipt_number(receipt.branch)
 
                 # 3. Stock Validation
                 default_year, default_month = get_default_date()

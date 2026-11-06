@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../api';
 import logo from '../assets/venta.png';
+import QuickRestoreModal from '../components/common/QuickRestoreModal';
 
 export default function Login() {
   const [password, setPassword] = useState('');
@@ -9,6 +10,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [checkingInit, setCheckingInit] = useState(true);
   const [companyName, setCompanyName] = useState('Venta POS');
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -19,6 +21,8 @@ export default function Login() {
   const [recoveryError, setRecoveryError] = useState('');
   const [recoverySuccess, setRecoverySuccess] = useState('');
 
+  const [hasPassword, setHasPassword] = useState(true);
+
   useEffect(() => {
     // Attempt Auto-Login for Demo Mode
     api.post('/auth/demo/').then(demoRes => {
@@ -27,9 +31,29 @@ export default function Login() {
       localStorage.setItem('company_name', demoRes.data.company_name);
       navigate('/select-branch', { replace: true });
     }).catch(err => {
-      // If it fails, it means the system is ACTIVATED. We must stay on Login screen.
-      setCheckingInit(false);
-      
+      // If it fails, system is ACTIVATED. Check password & license status
+      api.get('/license/status/').then(async (licRes) => {
+        const lic = licRes.data || {};
+        if (lic.company_name) setCompanyName(lic.company_name);
+        if (lic.has_password === false) {
+          setHasPassword(false);
+          if (!lic.is_expired) {
+            try {
+              const autoLoginRes = await api.post('/auth/local/', { password: '' });
+              localStorage.setItem('token', autoLoginRes.data.token);
+              localStorage.setItem('company_name', autoLoginRes.data.company_name);
+              navigate('/select-branch', { replace: true });
+              return;
+            } catch (loginErr) {
+              // Fallback to manual form if auto login fails
+            }
+          }
+        }
+        setCheckingInit(false);
+      }).catch(() => {
+        setCheckingInit(false);
+      });
+
       // Try to get the real company name for display
       api.get('/company-settings/').then(res => {
         if (res.data.name) setCompanyName(res.data.name);
@@ -132,10 +156,10 @@ export default function Login() {
                     <input 
                       type="password" 
                       className="form-control form-control-lg" 
-                      placeholder="أدخل كلمة سر النظام" 
+                      placeholder={hasPassword ? "أدخل كلمة سر النظام" : "النظام بدون كلمة سر (اضغط دخول)"} 
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      required 
+                      required={hasPassword} 
                     />
                   </div>
                   <div className="form-footer mt-4">
@@ -144,8 +168,9 @@ export default function Login() {
                     </button>
                   </div>
                 </form>
-                <div className="text-center text-muted mt-3">
+                <div className="text-center text-muted mt-3 d-flex justify-content-between align-items-center">
                   <a href="#" onClick={(e) => { e.preventDefault(); setShowRecovery(true); }}>نسيت كلمة المرور؟</a>
+                  <a href="#" className="text-primary fw-bold" onClick={(e) => { e.preventDefault(); setShowRestoreModal(true); }}>استعادة نسخة احتياطية</a>
                 </div>
               </>
             ) : (
@@ -191,6 +216,7 @@ export default function Login() {
           </div>
         </div>
       </div>
+      <QuickRestoreModal isOpen={showRestoreModal} onClose={() => setShowRestoreModal(false)} />
     </div>
   );
 }

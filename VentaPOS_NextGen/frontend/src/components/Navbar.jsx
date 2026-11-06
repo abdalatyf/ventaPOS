@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import api from '../api';
 import logo from '../assets/venta.png';
+import QuickRestoreModal from './common/QuickRestoreModal';
+import UpdateModal from './common/UpdateModal';
+import UserManualModal from './common/UserManualModal';
 import { 
   IconReceipt, 
   IconPackage, 
@@ -12,7 +15,10 @@ import {
   IconLogout,
   IconPlus,
   IconMinus,
-  IconCash
+  IconCash,
+  IconDatabase,
+  IconCloudDownload,
+  IconBook
 } from '@tabler/icons-react';
 
 export default function Navbar() {
@@ -27,6 +33,21 @@ export default function Navbar() {
   
   const [zoomLevel, setZoomLevel] = useState(parseFloat(localStorage.getItem('appZoomLevel')) || 1.0);
   const [companySettingId, setCompanySettingId] = useState(null);
+  const [isPrintOnly, setIsPrintOnly] = useState(false);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showManualModal, setShowManualModal] = useState(false);
+
+  useEffect(() => {
+    const checkLicense = () => {
+      api.get('/license/status/').then(res => {
+        setIsPrintOnly(Boolean(res.data?.is_print_only));
+      }).catch(err => console.error(err));
+    };
+    checkLicense();
+    window.addEventListener('license_updated', checkLicense);
+    return () => window.removeEventListener('license_updated', checkLicense);
+  }, []);
 
   useEffect(() => {
     // Fetch initial zoom from DB
@@ -37,11 +58,13 @@ export default function Navbar() {
           const setting = res.data.results[0];
           setCompanySettingId(setting.id);
           if (setting.zoom_level) {
-            const level = parseFloat(setting.zoom_level);
+            const level = Math.max(0.70, Math.min(1.50, Math.round(parseFloat(setting.zoom_level) * 100) / 100));
             document.body.style.zoom = level;
             document.documentElement.style.setProperty('--app-zoom', level);
             localStorage.setItem('appZoomLevel', level);
             setZoomLevel(level);
+            window.dispatchEvent(new CustomEvent('app-zoom-changed', { detail: { zoom: level } }));
+            window.dispatchEvent(new Event('resize'));
           }
         }
       } catch (err) {
@@ -51,14 +74,17 @@ export default function Navbar() {
     fetchZoom();
 
     window.applyZoom = async (level) => {
-      document.body.style.zoom = level;
-      document.documentElement.style.setProperty('--app-zoom', level);
-      localStorage.setItem('appZoomLevel', level);
-      setZoomLevel(level);
+      const roundedLevel = Math.max(0.70, Math.min(1.50, Math.round(level * 100) / 100));
+      document.body.style.zoom = roundedLevel;
+      document.documentElement.style.setProperty('--app-zoom', roundedLevel);
+      localStorage.setItem('appZoomLevel', roundedLevel);
+      setZoomLevel(roundedLevel);
+      
+      window.dispatchEvent(new CustomEvent('app-zoom-changed', { detail: { zoom: roundedLevel } }));
+      window.dispatchEvent(new Event('resize'));
       
       // Save to DB
       try {
-        // If we don't have ID yet, try to fetch it first or rely on the previous fetch
         let id = companySettingId;
         if (!id) {
             const res = await api.get('/company-settings/');
@@ -68,7 +94,7 @@ export default function Navbar() {
             }
         }
         if (id) {
-          await api.patch(`/company-settings/${id}/`, { zoom_level: level });
+          await api.patch(`/company-settings/${id}/`, { zoom_level: roundedLevel });
         }
       } catch (err) {
         console.error('Failed to save zoom level', err);
@@ -76,20 +102,21 @@ export default function Navbar() {
     };
     window.zoomIn = () => {
       const currentZoom = parseFloat(localStorage.getItem('appZoomLevel')) || 1.0;
-      if (currentZoom < 3.0) window.applyZoom(currentZoom + 0.1);
+      if (currentZoom < 1.50) window.applyZoom(Math.round((currentZoom + 0.05) * 100) / 100);
     };
     window.zoomOut = () => {
       const currentZoom = parseFloat(localStorage.getItem('appZoomLevel')) || 1.0;
-      if (currentZoom > 0.5) window.applyZoom(currentZoom - 0.1);
+      if (currentZoom > 0.70) window.applyZoom(Math.round((currentZoom - 0.05) * 100) / 100);
     };
     window.resetZoom = () => {
       window.applyZoom(1.0);
     };
 
     // Apply initial zoom from local storage immediately to prevent flicker
-    const initialZoom = parseFloat(localStorage.getItem('appZoomLevel')) || 1.0;
+    const initialZoom = Math.max(0.70, Math.min(1.50, Math.round((parseFloat(localStorage.getItem('appZoomLevel')) || 1.0) * 100) / 100));
     document.body.style.zoom = initialZoom;
     document.documentElement.style.setProperty('--app-zoom', initialZoom);
+    setZoomLevel(initialZoom);
 
     // Keyboard shortcuts
     const handleKeyDown = (e) => {
@@ -155,12 +182,43 @@ export default function Navbar() {
         </h1>
         
         <div className="navbar-nav flex-row order-md-last align-items-center">
-          <div className="d-flex align-items-center me-3 bg-light rounded px-2 py-1 border d-none d-md-flex">
-            <button className="btn btn-sm btn-link text-dark text-decoration-none px-2" onClick={() => window.zoomOut()} title="تصغير (Ctrl + -)">
-              <IconMinus size={18} />
+          <button 
+            type="button" 
+            className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1 me-2"
+            onClick={() => setShowManualModal(true)}
+            title="دليل تشغيل البرنامج (دليل التاجر والمدير)"
+          >
+            <IconBook size={16} />
+            <span className="d-none d-sm-inline fw-bold">دليل المستخدم</span>
+          </button>
+
+          <div className="btn-group btn-group-sm me-3 bg-light rounded border align-items-center" role="group" aria-label="Zoom Controls">
+            <button 
+              type="button"
+              className="btn btn-sm btn-link text-dark text-decoration-none px-2 py-1" 
+              onClick={() => window.zoomOut()} 
+              title="تصغير (Ctrl + -)"
+              disabled={zoomLevel <= 0.70}
+            >
+              <IconMinus size={16} />
             </button>
-            <button className="btn btn-sm btn-link text-dark text-decoration-none px-2" onClick={() => window.zoomIn()} title="تكبير (Ctrl + +)">
-              <IconPlus size={18} />
+            <span 
+              role="button"
+              className="badge bg-white text-dark border px-2 py-1 mx-1 fw-bold cursor-pointer"
+              onClick={() => window.resetZoom()}
+              title="إعادة التعيين إلى 100% (Ctrl + 0)"
+              style={{ minWidth: '46px', textAlign: 'center', userSelect: 'none' }}
+            >
+              {Math.round(zoomLevel * 100)}%
+            </span>
+            <button 
+              type="button"
+              className="btn btn-sm btn-link text-dark text-decoration-none px-2 py-1" 
+              onClick={() => window.zoomIn()} 
+              title="تكبير (Ctrl + +)"
+              disabled={zoomLevel >= 1.50}
+            >
+              <IconPlus size={16} />
             </button>
           </div>
           
@@ -176,6 +234,18 @@ export default function Navbar() {
                 <IconBuildingStore className="icon me-2 text-primary" stroke={1.5} />
                 تغيير الفرع
               </Link>
+              <a href="#" className="dropdown-item text-primary" onClick={(e) => { e.preventDefault(); setOpenDropdown(null); setShowRestoreModal(true); }}>
+                <IconDatabase className="icon me-2 text-primary" stroke={1.5} />
+                استعادة نسخة احتياطية
+              </a>
+              <a href="#" className="dropdown-item text-primary fw-bold" onClick={(e) => { e.preventDefault(); setOpenDropdown(null); setShowManualModal(true); }}>
+                <IconBook className="icon me-2 text-primary" stroke={1.5} />
+                دليل المستخدم
+              </a>
+              <a href="#" className="dropdown-item text-success fw-bold" onClick={(e) => { e.preventDefault(); setOpenDropdown(null); setShowUpdateModal(true); }}>
+                <IconCloudDownload className="icon me-2 text-success" stroke={1.5} />
+                تحديث البرنامج
+              </a>
               <div className="dropdown-divider"></div>
               <a href="#" className="dropdown-item text-danger" onClick={(e) => { e.preventDefault(); handleLogout(); }}>
                 <IconLogout className="icon me-2 text-danger" stroke={1.5} />
@@ -207,32 +277,38 @@ export default function Navbar() {
                 </Link>
               </li>
 
-              <li className={`nav-item ${location.pathname.startsWith('/search-purchases') || location.pathname.startsWith('/purchases') ? 'active' : ''}`}>
-                <Link className="nav-link text-info" to="/search-purchases" onClick={() => setOpenDropdown(null)}>
-                  <span className="nav-link-icon d-md-none d-lg-inline-block">
-                    <IconPackage stroke={1.5} />
-                  </span>
-                  <span className="nav-link-title">المشتريات</span>
-                </Link>
-              </li>
+              {!isPrintOnly && (
+                <li className={`nav-item ${location.pathname.startsWith('/search-purchases') || location.pathname.startsWith('/purchases') ? 'active' : ''}`}>
+                  <Link className="nav-link text-info" to="/search-purchases" onClick={() => setOpenDropdown(null)}>
+                    <span className="nav-link-icon d-md-none d-lg-inline-block">
+                      <IconPackage stroke={1.5} />
+                    </span>
+                    <span className="nav-link-title">المشتريات</span>
+                  </Link>
+                </li>
+              )}
 
-              <li className={`nav-item ${location.pathname.startsWith('/expenses') ? 'active' : ''}`}>
-                <Link className="nav-link text-danger" to="/expenses" onClick={() => setOpenDropdown(null)}>
-                  <span className="nav-link-icon d-md-none d-lg-inline-block">
-                    <IconCash stroke={1.5} />
-                  </span>
-                  <span className="nav-link-title">المصروفات</span>
-                </Link>
-              </li>
+              {!isPrintOnly && (
+                <li className={`nav-item ${location.pathname.startsWith('/expenses') ? 'active' : ''}`}>
+                  <Link className="nav-link text-danger" to="/expenses" onClick={() => setOpenDropdown(null)}>
+                    <span className="nav-link-icon d-md-none d-lg-inline-block">
+                      <IconCash stroke={1.5} />
+                    </span>
+                    <span className="nav-link-title">المصروفات</span>
+                  </Link>
+                </li>
+              )}
 
-              <li className={`nav-item ${location.pathname.startsWith('/reports') ? 'active' : ''}`}>
-                <Link className="nav-link text-warning" to="/reports" onClick={() => setOpenDropdown(null)}>
-                  <span className="nav-link-icon d-md-none d-lg-inline-block">
-                    <IconChartBar stroke={1.5} />
-                  </span>
-                  <span className="nav-link-title">التقارير</span>
-                </Link>
-              </li>
+              {!isPrintOnly && (
+                <li className={`nav-item ${location.pathname.startsWith('/reports') ? 'active' : ''}`}>
+                  <Link className="nav-link text-warning" to="/reports" onClick={() => setOpenDropdown(null)}>
+                    <span className="nav-link-icon d-md-none d-lg-inline-block">
+                      <IconChartBar stroke={1.5} />
+                    </span>
+                    <span className="nav-link-title">التقارير</span>
+                  </Link>
+                </li>
+              )}
 
               <li className={`nav-item ${location.pathname.startsWith('/tools') ? 'active' : ''}`}>
                 <Link className="nav-link text-secondary" to="/tools" onClick={() => setOpenDropdown(null)}>
@@ -256,6 +332,9 @@ export default function Navbar() {
           </div>
         </div>
       </div>
+      <QuickRestoreModal isOpen={showRestoreModal} onClose={() => setShowRestoreModal(false)} />
+      <UpdateModal isOpen={showUpdateModal} onClose={() => setShowUpdateModal(false)} />
+      <UserManualModal isOpen={showManualModal} onClose={() => setShowManualModal(false)} />
     </header>
   );
 }

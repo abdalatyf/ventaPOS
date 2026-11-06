@@ -59,7 +59,6 @@ def collect_files(root: Path):
         root / "VentaPOS_NextGen" / "backend" / "backend" / "urls.py",
         root / "VentaPOS_NextGen" / "backend" / "api" / "models.py",
         root / "VentaPOS_NextGen" / "backend" / "api" / "serializers.py",
-        root / "VentaPOS_NextGen" / "backend" / "api" / "views.py",
         root / "VentaPOS_NextGen" / "backend" / "api" / "tools_views.py",
         root / "VentaPOS_NextGen" / "backend" / "api" / "logger_views.py",
         root / "VentaPOS_NextGen" / "backend" / "api" / "urls.py",
@@ -70,11 +69,12 @@ def collect_files(root: Path):
         if p.is_file():
             target_files.append(p)
 
-    backend_utils = root / "VentaPOS_NextGen" / "backend" / "api" / "utils"
-    if backend_utils.is_dir():
-        for p in sorted(backend_utils.glob("*.py")):
-            if p.is_file():
-                target_files.append(p)
+    for subdir in ("views", "services", "utils"):
+        backend_sub = root / "VentaPOS_NextGen" / "backend" / "api" / subdir
+        if backend_sub.is_dir():
+            for p in sorted(backend_sub.glob("*.py")):
+                if p.is_file() and p.name != "__pycache__":
+                    target_files.append(p)
 
     # 4. React Frontend Core
     frontend_explicit = [

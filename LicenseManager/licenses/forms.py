@@ -1,0 +1,43 @@
+import re
+from django import forms
+from .models import Client, License
+
+# تصميم موحد لكل الحقول
+class BootstrapFormMixin:
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.update({'class': 'form-control form-control-lg'})
+
+class ClientForm(BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = Client
+        fields = ['name', 'phone', 'store_name', 'machine_id', 'is_banned']
+        widgets = {
+            'is_banned': forms.CheckboxInput(attrs={'class': 'form-check-input', 'style': 'width: 25px; height: 25px;'}),
+        }
+
+    def clean_machine_id(self):
+        machine_id = self.cleaned_data.get('machine_id', '').strip().lower()
+        if not re.match(r'^[a-f0-9]{32}$', machine_id):
+            raise forms.ValidationError(
+                'بصمة الجهاز (Machine ID) غير صحيحة. يجب أن تتكون من 32 حرفاً ورقماً بالنظام الست عشري (Hexadecimal).'
+            )
+        return machine_id
+
+class LicenseForm(BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = License
+        fields = ['client', 'product_id', 'price', 'start_date', 'notes']
+        widgets = {
+            'start_date': forms.DateInput(attrs={'type': 'date'}), # يظهر تقويم لاختيار التاريخ
+            'notes': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    # ترتيب العملاء من الأحدث للأقدم لتسهيل الاختيار
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['client'].queryset = Client.objects.order_by('-created_at')
+        self.fields['product_id'].choices = [
+            c for c in License.PRODUCT_CHOICES if c[0] not in (8, 9)
+        ]

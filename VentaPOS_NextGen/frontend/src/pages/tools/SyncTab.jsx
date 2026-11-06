@@ -1,98 +1,138 @@
 import React, { useState, useEffect } from 'react';
-import { IconDeviceMobile, IconCloudUpload, IconDownload, IconCheck, IconAlertTriangle, IconRefresh, IconUsb, IconCloudDataConnection } from '@tabler/icons-react';
-import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+import { 
+  IconDeviceMobile, IconCloudUpload, IconDownload, IconCheck, 
+  IconRefresh, IconUsb, IconChecklist, IconPencil, IconTrash
+} from '@tabler/icons-react';
+import Swal from 'sweetalert2';
+import api from '../../api';
+import AppAutocomplete from '../../components/common/AppAutocomplete';
+import { alertDialog } from '../../utils/dialogUtils';
 
 const SyncTab = () => {
-  const [isOnlineEnabled, setIsOnlineEnabled] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
   const [pendingReceipts, setPendingReceipts] = useState([]);
   const [salespeople, setSalespeople] = useState([]);
   const [selectedSalesperson, setSelectedSalesperson] = useState('');
-  const [syncing, setSyncing] = useState(false);
+  const [salespersonText, setSalespersonText] = useState('');
 
   useEffect(() => {
-    fetchLicenseStatus();
     fetchPendingReceipts();
     fetchSalespeople();
   }, []);
 
-  const fetchLicenseStatus = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get('http://127.0.0.1:8000/api/v1/license/status/', {
-        headers: { Authorization: `Token ${token}` }
-      });
-      // Assuming response has is_online or similar. We default to true if it succeeds for now
-      setIsOnlineEnabled(res.data.is_active && res.data.is_pro);
-    } catch (err) {
-      console.error("Failed to fetch license", err);
-      // Fallback
-      setIsOnlineEnabled(false);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const fetchPendingReceipts = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get('http://127.0.0.1:8000/api/v1/pending-external-receipts/', {
-        headers: { Authorization: `Token ${token}` }
-      });
+      const res = await api.get('/tools/sync/pending-receipts/');
       setPendingReceipts(Array.isArray(res.data) ? res.data : (res.data?.results || []));
     } catch (err) {
-      console.error(err);
+      console.error('Failed to fetch pending receipts:', err);
     }
   };
 
   const fetchSalespeople = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get('http://127.0.0.1:8000/api/v1/salespersons/', {
-        headers: { Authorization: `Token ${token}` }
-      });
+      const branchId = localStorage.getItem('branchId');
+      const params = branchId ? { branch_id: branchId } : {};
+      const res = await api.get('/salespersons/', { params });
       setSalespeople(Array.isArray(res.data) ? res.data : (res.data?.results || []));
     } catch (err) {
-      console.error(err);
+      console.error('Failed to fetch salespersons:', err);
     }
   };
 
   const toggleDevice = async (id, currentStatus) => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.patch(`http://127.0.0.1:8000/api/v1/salespersons/${id}/`, {
+      await api.patch(`/salespersons/${id}/`, {
         is_device_active: !currentStatus
-      }, {
-        headers: { Authorization: `Token ${token}` }
       });
       fetchSalespeople();
+      Swal.fire({
+        icon: 'success',
+        title: !currentStatus ? 'تم تفعيل الجهاز' : 'تم إيقاف الجهاز',
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 2000
+      });
     } catch (err) {
-      alert("فشل تغيير حالة الجهاز");
+      Swal.fire({
+        icon: 'error',
+        title: 'خطأ',
+        text: 'فشل تغيير حالة الجهاز'
+      });
     }
   };
 
   const handleApprove = async (id) => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.post(`http://127.0.0.1:8000/api/v1/tools/sync/approve-pending/${id}/`, {}, {
-        headers: { Authorization: `Token ${token}` }
-      });
+      await api.post(`/tools/sync/approve-pending/${id}/`);
       fetchPendingReceipts();
-      alert('تم الاعتماد بنجاح!');
+      Swal.fire({
+        icon: 'success',
+        title: 'تم اعتماد الفاتورة وتحديث المخزون بنجاح',
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000
+      });
     } catch (err) {
-      alert(err.response?.data?.error || 'حدث خطأ');
+      Swal.fire({
+        icon: 'error',
+        title: 'فشل الاعتماد',
+        text: err.response?.data?.error || 'حدث خطأ أثناء اعتماد الفاتورة'
+      });
     }
+  };
+
+  const handleEditPending = (id) => {
+    navigate(`/pos?edit=${id}`);
+  };
+
+  const handleDeletePending = (id) => {
+    Swal.fire({
+      title: 'هل أنت متأكد؟',
+      text: 'هل تريد حذف هذه الفاتورة المعلقة؟',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'نعم، احذف',
+      cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          await api.delete(`/receipts/${id}/`);
+          fetchPendingReceipts();
+          Swal.fire({
+            icon: 'success',
+            title: 'تم حذف الفاتورة بنجاح',
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 2000
+          });
+        } catch (err) {
+          Swal.fire({
+            icon: 'error',
+            title: 'خطأ',
+            text: err.response?.data?.error || 'فشل حذف الفاتورة المعلقة'
+          });
+        }
+      }
+    });
   };
 
   const downloadJson = async () => {
     if (!selectedSalesperson) {
-      alert("يرجى اختيار المندوب من القائمة أولاً لتخصيص ملف الموبايل");
+      Swal.fire({
+        icon: 'info',
+        title: 'يرجى اختيار المندوب',
+        text: 'يرجى اختيار المندوب من القائمة أولاً لتخصيص ملف الموبايل.'
+      });
       return;
     }
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(`http://127.0.0.1:8000/api/v1/tools/sync/export-items/?salesperson_id=${selectedSalesperson}`, {
-        headers: { Authorization: `Token ${token}` },
+      const res = await api.get(`/tools/sync/export-items/?salesperson_id=${selectedSalesperson}`, {
         responseType: 'blob'
       });
       const url = window.URL.createObjectURL(new Blob([res.data]));
@@ -101,8 +141,13 @@ const SyncTab = () => {
       link.setAttribute('download', 'mobile_config.json');
       document.body.appendChild(link);
       link.click();
+      link.remove();
     } catch (err) {
-      alert(err.response?.data?.error || "فشل تنزيل ملف الإعدادات");
+      Swal.fire({
+        icon: 'error',
+        title: 'خطأ',
+        text: err.response?.data?.error || 'فشل تنزيل ملف الإعدادات'
+      });
     }
   };
 
@@ -112,174 +157,183 @@ const SyncTab = () => {
     const formData = new FormData();
     formData.append('receipts_file', file);
     try {
-      const token = localStorage.getItem('token');
-      await axios.post('http://127.0.0.1:8000/api/v1/tools/sync/import-receipts/', formData, {
-        headers: { Authorization: `Token ${token}`, 'Content-Type': 'multipart/form-data' }
+      const res = await api.post('/tools/sync/import-receipts/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
-      alert('تم رفع الفواتير بنجاح للمعالجة');
+      Swal.fire({
+        icon: 'success',
+        title: 'تم الاستيراد',
+        text: res.data?.message || 'تم رفع الفواتير بنجاح للمعالجة والاعتماد'
+      });
       fetchPendingReceipts();
     } catch (err) {
-      alert(err.response?.data?.error || 'حدث خطأ');
+      Swal.fire({
+        icon: 'error',
+        title: 'فشل الاستيراد',
+        text: err.response?.data?.error || 'حدث خطأ أثناء استيراد الفواتير'
+      });
+    } finally {
+      e.target.value = '';
     }
   };
 
-  if (loading) return <div className="text-center p-5"><div className="spinner-border text-primary" /></div>;
+  if (loading) {
+    return (
+      <div className="text-center p-5">
+        <div className="spinner-border text-primary" />
+      </div>
+    );
+  }
 
   return (
-    <div>
+    <div dir="rtl">
       <div className="row g-4">
-        {/* Offline Section */}
-        <div className="col-md-6">
-          <div className="card h-100 border-0 shadow-sm rounded-4">
+        {/* Offline Section (USB & JSON File Sync) */}
+        <div className="col-12">
+          <div className="card shadow-sm border border-secondary-subtle">
             <div className="card-header bg-white border-bottom-0 pt-4 pb-2 px-4">
               <h3 className="card-title fw-bold text-dark d-flex align-items-center">
-                <IconDeviceMobile className="me-2 text-primary" /> الموبايل المحلّي (Offline)
+                <IconDeviceMobile className="me-2 text-primary" /> المزامنة اليدوية للموبايل عبر USB أو ملفات JSON
               </h3>
             </div>
             <div className="card-body px-4">
               <p className="text-muted small mb-4">
-                تُستخدم هذه الأدوات لنقل الأصناف واستقبال الفواتير من أجهزة الموبايل التي تعمل بدون إنترنت.
+                تُستخدم هذه الأدوات لتصدير الأصناف والعملاء إلى أجهزة الموبايل الميدانية واستيراد الفواتير بدون إنترنت per Red Line #1.
               </p>
               
-              <div className="mb-4">
-                <h5 className="fw-bold text-secondary mb-3">1. ملف تهيئة الموبايل</h5>
-                <p className="text-muted small mb-2">يرجى اختيار المندوب لتخصيص ملف الإعدادات الخاص به:</p>
-                <div className="mb-3">
-                  <select 
-                    className="form-select border-primary" 
-                    value={selectedSalesperson} 
-                    onChange={e => setSelectedSalesperson(e.target.value)}
-                  >
-                    <option value="">-- اختر المندوب --</option>
-                    {(salespeople || []).map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
+              <div className="row g-4">
+                <div className="col-md-6 border-start">
+                  <h5 className="fw-bold text-secondary mb-3">1. ملف تهيئة الموبايل</h5>
+                  <p className="text-muted small mb-2">يرجى اختيار المندوب لتخصيص ملف الإعدادات الخاص به:</p>
+                  <div className="mb-3">
+                    <AppAutocomplete
+                      items={salespeople}
+                      value={salespersonText}
+                      onChange={(text) => {
+                        setSalespersonText(text);
+                        if (!text) setSelectedSalesperson('');
+                      }}
+                      onSelect={(item) => {
+                        setSelectedSalesperson(item ? item.id : '');
+                        setSalespersonText(item ? item.name : '');
+                      }}
+                      placeholder="-- ابحث عن المندوب أو اختر من القائمة --"
+                      className="form-control border-secondary-subtle"
+                    />
+                  </div>
+                  <div className="d-flex gap-2">
+                    <button onClick={downloadJson} className="btn btn-outline-primary w-100">
+                      <IconDownload className="me-2" /> تنزيل ملف الإعدادات
+                    </button>
+                    <button 
+                      className="btn btn-outline-secondary w-100" 
+                      onClick={() => alertDialog({ title: 'نقل عبر كابل USB', text: 'سيتم نقل الإعدادات مباشرة إلى جهاز الموبايل المتصل.' })}
+                    >
+                      <IconUsb className="me-2" /> نقل عبر USB
+                    </button>
+                  </div>
                 </div>
-                <div className="d-flex gap-2">
-                  <button onClick={downloadJson} className="btn btn-outline-primary w-100 rounded-3">
-                    <IconDownload className="me-2" /> تنزيل ملف الإعدادات
-                  </button>
-                  <button className="btn btn-outline-secondary w-100 rounded-3" onClick={() => alert("سيتم نقل الإعدادات مباشرة عبر الكابل")}>
-                    <IconUsb className="me-2" /> نقل عبر USB
-                  </button>
-                </div>
-              </div>
 
-              <div>
-                <h5 className="fw-bold text-secondary mb-3">2. استيراد الفواتير من الموبايل</h5>
-                <div className="d-flex gap-2">
-                  <label className="btn btn-primary w-100 rounded-3 cursor-pointer">
-                    <IconCloudUpload className="me-2" /> رفع ملف JSON
-                    <input type="file" accept=".json" className="d-none" onChange={uploadJson} />
-                  </label>
-                  <button className="btn btn-secondary w-100 rounded-3" onClick={() => alert("سيتم قراءة الفواتير من الجهاز المتصل")}>
-                    <IconUsb className="me-2" /> سحب عبر USB
-                  </button>
+                <div className="col-md-6">
+                  <h5 className="fw-bold text-secondary mb-3">2. استيراد الفواتير من الموبايل</h5>
+                  <p className="text-muted small mb-2">رفع ملف الفواتير المستخرجة من جهاز المندوب الميداني:</p>
+                  <div className="d-flex gap-2 mt-4">
+                    <label className="btn btn-primary w-100 cursor-pointer">
+                      <IconCloudUpload className="me-2" /> رفع ملف JSON
+                      <input type="file" accept=".json" className="d-none" onChange={uploadJson} />
+                    </label>
+                    <button 
+                      className="btn btn-secondary w-100" 
+                      onClick={() => alertDialog({ title: 'سحب عبر كابل USB', text: 'سيتم قراءة الفواتير مباشرة من جهاز الموبايل المتصل.' })}
+                    >
+                      <IconUsb className="me-2" /> سحب عبر USB
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Online Section */}
-        <div className="col-md-6">
-          <div className="card h-100 border-0 shadow-sm rounded-4 position-relative overflow-hidden">
-            {!isOnlineEnabled && (
-              <div className="position-absolute w-100 h-100 d-flex flex-column align-items-center justify-content-center" style={{ background: 'rgba(255,255,255,0.85)', zIndex: 10, backdropFilter: 'blur(3px)' }}>
-                <IconAlertTriangle size={48} className="text-warning mb-3" />
-                <h3 className="fw-bold text-dark">غير متاح في باقتك</h3>
-                <p className="text-muted text-center px-4">ميزة الربط السحابي والأجهزة المساعدة الأونلاين تتطلب اشتراك باقة الأونلاين (برو).</p>
-                <button className="btn btn-warning rounded-pill px-4 mt-2">تفعيل أو ترقية الباقة</button>
-              </div>
+      {/* Pending Receipts Table */}
+      <div className="card shadow-sm border border-secondary-subtle mt-4">
+        <div className="card-header bg-white d-flex justify-content-between align-items-center py-3 px-4">
+          <h4 className="fw-bold text-dark m-0 d-flex align-items-center gap-2">
+            <IconChecklist className="text-primary" />
+            الفواتير المعلقة بانتظار الاعتماد
+            {pendingReceipts.length > 0 && (
+              <span className="badge bg-warning text-dark rounded-pill px-2">
+                {pendingReceipts.length}
+              </span>
             )}
-            <div className="card-header bg-white border-bottom-0 pt-4 pb-2 px-4 d-flex justify-content-between align-items-center">
-              <h3 className="card-title fw-bold text-dark d-flex align-items-center mb-0">
-                <IconCloudDataConnection className="me-2 text-success" /> الربط السحابي (Online)
-                <span className={`badge ms-3 ${isOnlineEnabled ? 'bg-success' : 'bg-secondary'}`}>
-                  {isOnlineEnabled ? 'متصل' : 'غير متصل'}
-                </span>
-              </h3>
-              <button className="btn btn-sm btn-outline-success rounded-pill" onClick={() => { fetchPendingReceipts(); fetchSalespeople(); }}>
-                <IconRefresh size={16} className="me-1" /> تحديث
-              </button>
+          </h4>
+          <button className="btn btn-sm btn-outline-secondary" onClick={fetchPendingReceipts}>
+            <IconRefresh size={16} className="me-1" /> تحديث الفواتير
+          </button>
+        </div>
+        <div className="card-body p-0">
+          {pendingReceipts.length === 0 ? (
+            <div className="p-4 text-center text-muted">
+              <IconCheck className="text-success me-2" />
+              لا توجد فواتير معلقة حالياً بانتظار الاعتماد.
             </div>
-            <div className="card-body px-4">
-              <p className="text-muted small mb-4">
-                إدارة الأجهزة المساعدة واعتماد الفواتير القادمة عبر الإنترنت.
-              </p>
-              
-              <h5 className="fw-bold text-secondary mb-3">إدارة الأجهزة (الموبايلات)</h5>
-              <div className="table-responsive mb-4">
-                <table className="table table-vcenter table-sm">
-                  <thead>
-                    <tr>
-                      <th>اسم المندوب / الجهاز</th>
-                      <th>حالة الاتصال</th>
-                      <th>إجراء</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(salespeople || []).map(s => (
-                      <tr key={s.id}>
-                        <td>{s.name}</td>
-                        <td>
-                          {s.is_device_active ? (
-                            <span className="badge bg-success-lt">نشط</span>
-                          ) : (
-                            <span className="badge bg-danger-lt">موقوف</span>
-                          )}
-                        </td>
-                        <td>
+          ) : (
+            <div className="table-responsive">
+              <table className="table table-bordered table-vcenter table-hover table-sm text-nowrap tabular-nums mb-0">
+                <thead className="bg-light">
+                  <tr>
+                    <th className="border-secondary-subtle text-center">#</th>
+                    <th className="border-secondary-subtle text-start px-3">العميل</th>
+                    <th className="border-secondary-subtle text-center">المبلغ</th>
+                    <th className="border-secondary-subtle text-center">المصدر</th>
+                    <th className="border-secondary-subtle text-center">التاريخ</th>
+                    <th className="border-secondary-subtle text-center">الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingReceipts.map((p, idx) => (
+                    <tr key={p.id}>
+                      <td className="text-center">{idx + 1}</td>
+                      <td className="text-start px-3 fw-bold">{p.customer_name || 'عميل نقدي'}</td>
+                      <td className="text-center text-primary fw-bold">{Math.round(Number(p.total_amount || 0))} ج.م</td>
+                      <td className="text-center">
+                        <span className="badge bg-secondary-lt">{p.source || 'USB'}</span>
+                      </td>
+                      <td className="text-center text-muted small">
+                        {p.created_at ? new Date(p.created_at).toLocaleString('en-US') : '—'}
+                      </td>
+                      <td className="text-center">
+                        <div className="d-flex align-items-center justify-content-center gap-2">
                           <button 
-                            className={`btn btn-sm ${s.is_device_active ? 'btn-outline-danger' : 'btn-outline-success'} rounded-3`}
-                            onClick={() => toggleDevice(s.id, s.is_device_active)}
+                            className="btn btn-sm btn-success d-flex align-items-center gap-1"
+                            onClick={() => handleApprove(p.id)}
+                            title="اعتماد الفاتورة وتطبيقها على المخزون"
                           >
-                            {s.is_device_active ? 'إيقاف' : 'تفعيل'}
+                            <IconCheck size={14} /> اعتماد
                           </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {salespeople?.length === 0 && (
-                      <tr><td colSpan="3" className="text-center text-muted">لا توجد أجهزة مسجلة</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <h5 className="fw-bold text-secondary mb-3 mt-4">الفواتير المعلقة بانتظار الاعتماد</h5>
-              {pendingReceipts?.length === 0 ? (
-                <div className="alert alert-success d-flex align-items-center border-0 rounded-3 bg-success-lt">
-                  <IconCheck className="me-2" /> لا توجد فواتير معلقة حالياً.
-                </div>
-              ) : (
-                <div className="table-responsive">
-                  <table className="table table-vcenter table-hover card-table">
-                    <thead>
-                      <tr>
-                        <th>المصدر</th>
-                        <th>التاريخ</th>
-                        <th>الإجراء</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(pendingReceipts || []).map(p => (
-                        <tr key={p.id}>
-                          <td>{p.source}</td>
-                          <td>{new Date(p.created_at).toLocaleString('ar-EG')}</td>
-                          <td>
-                            <button className="btn btn-sm btn-success rounded-3" onClick={() => handleApprove(p.id)}>
-                              اعتماد
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                          <button 
+                            className="btn btn-sm btn-primary d-flex align-items-center gap-1"
+                            onClick={() => handleEditPending(p.id)}
+                            title="مراجعة وتعديل بيانات الفاتورة في نقطة البيع"
+                          >
+                            <IconPencil size={14} /> تعديل
+                          </button>
+                          <button 
+                            className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1"
+                            onClick={() => handleDeletePending(p.id)}
+                            title="حذف الفاتورة المعلقة"
+                          >
+                            <IconTrash size={14} /> حذف
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

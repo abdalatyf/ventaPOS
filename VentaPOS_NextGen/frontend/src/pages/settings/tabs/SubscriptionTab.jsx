@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { IconCalendarCheck, IconCheck, IconX, IconCloudCheck } from '@tabler/icons-react';
+import { IconCalendarCheck, IconCheck, IconX, IconCloudDownload } from '@tabler/icons-react';
 import MachineIdDisplay from '../../../components/settings/MachineIdDisplay';
 import LicenseKeyInput from '../../../components/settings/LicenseKeyInput';
+import UpdateModal from '../../../components/common/UpdateModal';
 import api from '../../../api';
 
 export default function SubscriptionTab() {
@@ -19,6 +20,7 @@ export default function SubscriptionTab() {
   });
   const [historyRecords, setHistoryRecords] = useState([]);
   const [isActivating, setIsActivating] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
 
   const fetchLicenseStatus = async () => {
     try {
@@ -62,8 +64,16 @@ export default function SubscriptionTab() {
     setIsActivating(true);
     try {
       const response = await api.post('/license/activate/', { license_code: code });
-      alert(response.data?.message || 'تم التفعيل بنجاح! جاري تحويلك لصفحة التهيئة.');
-      navigate('/activation-setup', { replace: true });
+      window.dispatchEvent(new CustomEvent('license_updated'));
+      if (response.data?.wiped_demo) {
+        localStorage.removeItem('branchId');
+        localStorage.removeItem('branchName');
+        alert(response.data?.message || 'تم التفعيل بنجاح! جاري تحويلك لصفحة التهيئة.');
+        navigate('/activation-setup', { replace: true });
+      } else {
+        alert(response.data?.message || 'تم تفعيل الترخيص بنجاح.');
+        fetchLicenseStatus();
+      }
     } catch (error) {
       alert(error.response?.data?.error || 'حدث خطأ أثناء التفعيل');
     } finally {
@@ -75,6 +85,29 @@ export default function SubscriptionTab() {
     <div className="animate__animated animate__fadeIn">
       {/* Machine ID */}
       <MachineIdDisplay machineId={machineId} />
+
+      {/* System Update Section */}
+      <div className="card shadow-sm border mb-4 bg-light">
+        <div className="card-body p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div>
+            <h4 className="m-0 fw-bold text-dark d-flex align-items-center gap-2">
+              <IconCloudDownload size={20} className="text-primary" />
+              تحديثات النظام وتثبيت الإصدارات الجديدة
+            </h4>
+            <div className="text-muted small mt-1">
+              التحقق من وجود تحديثات رسمية عبر مستودع VentaPOS Releases وتثبيتها بنقرة واحدة.
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary d-flex align-items-center gap-1 fw-bold px-3 py-2"
+            onClick={() => setShowUpdateModal(true)}
+          >
+            <IconCloudDownload size={18} />
+            <span>التحقق من وجود تحديثات</span>
+          </button>
+        </div>
+      </div>
 
       {/* Alert Box for System Status */}
       {licenseInfo.needs_support && (
@@ -104,7 +137,7 @@ export default function SubscriptionTab() {
       {/* Subscription Cards */}
       <div className="row mb-4">
         {/* Expiry Card */}
-        <div className="col-md-4 mb-3">
+        <div className="col-md-6 mb-3">
           <div className="card text-white bg-info h-100 shadow-sm border-0">
             <div className="card-body text-center">
               <h1 className="display-6"><IconCalendarCheck size={48} /></h1>
@@ -126,7 +159,7 @@ export default function SubscriptionTab() {
         </div>
 
         {/* Status Card */}
-        <div className="col-md-4 mb-3">
+        <div className="col-md-6 mb-3">
           <div className={`card h-100 shadow-sm border-0 ${
             licenseInfo.needs_support || !licenseInfo.isValid ? 'bg-danger text-white' : 
             licenseInfo.is_last_month ? 'bg-warning text-dark' : 'bg-primary text-white'
@@ -145,24 +178,6 @@ export default function SubscriptionTab() {
             </div>
           </div>
         </div>
-
-        {/* Online Services Card */}
-        <div className="col-md-4 mb-3">
-          <div className={`card text-white ${licenseInfo.isOnlineActive ? 'bg-success' : 'bg-secondary'} h-100 shadow-sm border-0`}>
-            <div className="card-body text-center">
-              <h1 className="display-6"><IconCloudCheck size={48} /></h1>
-              <h6 className="card-title mt-2 opacity-75">خدمات الأونلاين</h6>
-              <p className="card-text fw-bold fs-5">
-                {licenseInfo.isOnlineActive ? 'نشطة' : 'غير مفعلة'}
-              </p>
-              {licenseInfo.isOnlineActive && (
-                <small className="badge bg-white text-success rounded-pill px-3">
-                  تنتهي: {licenseInfo.onlineExpiryDate}
-                </small>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Activation Area */}
@@ -176,18 +191,18 @@ export default function SubscriptionTab() {
       </div>
 
       {/* History Table */}
-      <div className="card shadow-sm border-0 mb-4">
+      <div className="card shadow-sm border-secondary-subtle mb-4">
         <div className="card-header bg-white fw-bold text-muted border-bottom-0">
           سجل العمليات السابقة
         </div>
-        <div className="table-responsive">
-          <table className="table table-striped table-hover mb-0 text-center align-middle">
-            <thead className="table-light">
+        <div className="table-responsive" style={{ overflow: 'visible' }}>
+          <table className="table table-bordered table-vcenter table-hover table-sticky-header text-nowrap tabular-nums mb-0 text-center align-middle">
+            <thead className="bg-light">
               <tr>
-                <th className="py-3">الرقم</th>
-                <th>كود التفعيل</th>
-                <th>التاريخ</th>
-                <th>ملاحظات</th>
+                <th className="py-2 border-secondary-subtle">الرقم</th>
+                <th className="border-secondary-subtle">كود التفعيل</th>
+                <th className="border-secondary-subtle">التاريخ</th>
+                <th className="border-secondary-subtle">ملاحظات</th>
               </tr>
             </thead>
             <tbody>
@@ -200,7 +215,7 @@ export default function SubscriptionTab() {
                   <tr key={record.id}>
                     <td className="fw-bold">{record.id}</td>
                     <td>{record.license_code || '---'}</td>
-                    <td>{new Date(record.created_at).toLocaleString('ar-EG')}</td>
+                    <td>{new Date(record.created_at).toLocaleString('en-US')}</td>
                     <td>
                       <span className="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">
                         ناجح
@@ -213,6 +228,7 @@ export default function SubscriptionTab() {
           </table>
         </div>
       </div>
+      <UpdateModal isOpen={showUpdateModal} onClose={() => setShowUpdateModal(false)} />
     </div>
   );
 }

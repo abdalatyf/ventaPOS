@@ -80,7 +80,7 @@ export default function InventoryMovementReport() {
     return processedItems.reduce((acc, curr) => {
       const opening = Number(curr.opening_stock) || 0;
       const purchases = Number(curr.purchases) || 0;
-      const sales_returns = Number(curr.sales_returns || curr.surplus) || 0;
+      const sales_returns = Number(curr.sales_returns) || 0;
       const sales = Number(curr.sales) || 0;
       const purchase_returns = Number(curr.purchase_returns || curr.returns) || 0;
       const deficit = Number(curr.deficit) || 0;
@@ -135,7 +135,7 @@ export default function InventoryMovementReport() {
       label: 'مرتجع مبيعات (+)', 
       align: 'center', 
       className: 'text-success fw-bold', 
-      render: (row) => `+${row.sales_returns || row.surplus || 0}` 
+      render: (row) => `+${row.sales_returns || 0}` 
     },
     { 
       key: 'sales', 

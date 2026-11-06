@@ -217,28 +217,98 @@ export default function SalespersonPerformanceReport() {
     }
   ];
 
-  const renderHeader = () => (
-    <>
-      <tr>
-        <th rowSpan="2" className="text-start px-3 align-middle bg-light">اسم المندوب</th>
-        <th rowSpan="2" className="text-center align-middle bg-light">عدد الفواتير</th>
-        <th colSpan="4" className="text-center bg-light">أداء المبيعات</th>
-        <th rowSpan="2" className="text-center text-success border-start border-end align-middle bg-light" style={{ minWidth: '110px' }}>
-          تحصيل {month}/{year}
-        </th>
-        <th colSpan="3" className="text-center table-primary">تفاصيل المرتب</th>
-      </tr>
-      <tr className="report-sticky-header level-2">
-        <th className="text-center small text-muted">كاش</th>
-        <th className="text-center small text-muted">قسط</th>
-        <th className="text-center small text-muted">المقدمات</th>
-        <th className="text-center small fw-bold text-primary bg-light">إجمالي المبيعات</th>
-        <th className="text-center small text-primary table-primary">المندبة</th>
-        <th className="text-center small text-primary table-primary">عمولة تحصيل</th>
-        <th className="text-center small fw-bold text-dark bg-light-subtle">المرتب المستحق</th>
-      </tr>
-    </>
-  );
+  const renderHeader = ({ toggleSort, getColSortDir } = {}) => {
+    const getSortArrow = (colKey) => {
+      if (!getColSortDir) return null;
+      const dir = getColSortDir(colKey);
+      return dir === 'asc' ? ' ↑' : dir === 'desc' ? ' ↓' : '';
+    };
+
+    return (
+      <>
+        <tr>
+          <th 
+            rowSpan="2" 
+            className="text-start px-3 align-middle bg-light sortable-th"
+            onClick={() => toggleSort && toggleSort('name')}
+            title="انقر للترتيب"
+          >
+            اسم المندوب{getSortArrow('name')}
+          </th>
+          <th 
+            rowSpan="2" 
+            className="text-center align-middle bg-light sortable-th"
+            onClick={() => toggleSort && toggleSort('receipts_count')}
+            title="انقر للترتيب"
+          >
+            عدد الفواتير{getSortArrow('receipts_count')}
+          </th>
+          <th colSpan="4" className="text-center bg-light">أداء المبيعات</th>
+          <th 
+            rowSpan="2" 
+            className="text-center text-success border-start border-end align-middle bg-light sortable-th" 
+            style={{ minWidth: '110px' }}
+            onClick={() => toggleSort && toggleSort('collected')}
+            title="انقر للترتيب"
+          >
+            تحصيل {month}/{year}{getSortArrow('collected')}
+          </th>
+          <th colSpan="3" className="text-center table-primary">تفاصيل المرتب</th>
+        </tr>
+        <tr className="report-sticky-header level-2">
+          <th 
+            className="text-center small text-muted sortable-th"
+            onClick={() => toggleSort && toggleSort('cash_sales')}
+            title="انقر للترتيب"
+          >
+            كاش{getSortArrow('cash_sales')}
+          </th>
+          <th 
+            className="text-center small text-muted sortable-th"
+            onClick={() => toggleSort && toggleSort('credit_sales')}
+            title="انقر للترتيب"
+          >
+            قسط{getSortArrow('credit_sales')}
+          </th>
+          <th 
+            className="text-center small text-muted sortable-th"
+            onClick={() => toggleSort && toggleSort('down_payments')}
+            title="انقر للترتيب"
+          >
+            المقدمات{getSortArrow('down_payments')}
+          </th>
+          <th 
+            className="text-center small fw-bold text-primary bg-light sortable-th"
+            onClick={() => toggleSort && toggleSort('total_sales_val')}
+            title="انقر للترتيب"
+          >
+            إجمالي المبيعات{getSortArrow('total_sales_val')}
+          </th>
+          <th 
+            className="text-center small text-primary table-primary sortable-th"
+            onClick={() => toggleSort && toggleSort('comm_sales')}
+            title="انقر للترتيب"
+          >
+            المندبة{getSortArrow('comm_sales')}
+          </th>
+          <th 
+            className="text-center small text-primary table-primary sortable-th"
+            onClick={() => toggleSort && toggleSort('comm_coll')}
+            title="انقر للترتيب"
+          >
+            عمولة تحصيل{getSortArrow('comm_coll')}
+          </th>
+          <th 
+            className="text-center small fw-bold text-dark bg-light-subtle sortable-th"
+            onClick={() => toggleSort && toggleSort('due_salary')}
+            title="انقر للترتيب"
+          >
+            المرتب المستحق{getSortArrow('due_salary')}
+          </th>
+        </tr>
+      </>
+    );
+  };
 
   const renderFiltersGrid = () => (
     <div className="card shadow-sm mb-3" style={{ border: '1px solid #dee2e6' }}>

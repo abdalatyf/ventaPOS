@@ -8,7 +8,6 @@
 /Server/
 /Mobile/
 /django_hybrid_poc/
-/LicenseManager/
 /export_clean/
 /Agents/
 /old_docs/
@@ -47,19 +46,22 @@ venv.bak/
 *.log
 local_settings.py
 db.sqlite3
-db.sqlite3-journal
 *.sqlite3
 *.sqlite3-journal
 *.sqlite3-wal
 *.sqlite3-shm
+backups/
+restore_pending.bin
 
 # Windows Python uncontained venvs & binaries
 Include/
 Lib/
-Scripts/
+/Scripts/
 bin/
 *.dll
 media/
+!VentaPOS_NextGen/scripts/
+!VentaPOS_NextGen/scripts/**
 
 # --- Secrets ---
 .env

@@ -57,18 +57,46 @@ body {
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
-/* 3. Sticky Table Header */
+/* 3. Sticky Table Header (Default: sticks flush beneath Navbar at 56px) */
 .table-sticky-header th {
   position: sticky !important;
-  top: calc(var(--navbar-height) + var(--toolbar-height)) !important;
+  top: var(--navbar-height, 56px) !important;
   z-index: 1010;
   background-color: #f8f9fa !important;
   box-shadow: inset 0 -1px 0 var(--tblr-border-color);
 }
 
-/* Override for Hybrid Scroll containers where the table scrolls internally */
-.hybrid-scroll-container .table-sticky-header th {
+/* When preceded by a .sticky-toolbar in Window-Level scrolling (Mode A) */
+.has-sticky-toolbar .table-sticky-header th,
+.sticky-toolbar + .table-responsive:not(.hybrid-scroll-container):not(.report-table-container) .table-sticky-header th,
+.sticky-toolbar + *:not(.hybrid-scroll-container):not(.report-table-container) .table-sticky-header th {
+  top: calc(var(--navbar-height, 56px) + var(--toolbar-height, 56px)) !important;
+}
+
+/* Mode B: Report & Hybrid Scroll Containers (Internal scroll context -> top: 0) */
+.hybrid-scroll-container .table-sticky-header th,
+.table-responsive.hybrid-scroll-container .table-sticky-header th,
+.sticky-toolbar + .table-responsive.hybrid-scroll-container .table-sticky-header th,
+.sticky-toolbar + * .hybrid-scroll-container .table-sticky-header th,
+.report-table-container .table-sticky-header th,
+.report-sticky-header th {
   top: 0 !important;
+}
+
+/* Tabular Numerals & High-Density Accounting Visual Hierarchy */
+.table td,
+.table th,
+.report-summary-card {
+  font-variant-numeric: tabular-nums;
+}
+
+.table-hover > tbody > tr:hover > * {
+  --tblr-table-accent-bg: rgba(18, 63, 104, 0.045);
+}
+
+.table > tbody > tr.table-row-focused > * {
+  background-color: rgba(18, 63, 104, 0.08) !important;
+  outline: none;
 }
 
 /* Allow natural height to prevent CSS zoom overflow bugs */
@@ -98,32 +126,6 @@ html {
   min-height: 0;
 }
 
-/* Premium KPI Cards */
-.premium-card {
-  background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(245,247,250,0.95) 100%);
-  border: 1px solid rgba(255,255,255,0.4);
-  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.premium-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(15, 82, 186, 0.15);
-}
-
-.premium-icon-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--tblr-primary) 0%, #3b82f6 100%);
-  color: white;
-  box-shadow: 0 4px 10px rgba(15, 82, 186, 0.3);
-}
 
 /* Tab Navigation inside Page Header */
 .dashboard-tabs .nav-link {

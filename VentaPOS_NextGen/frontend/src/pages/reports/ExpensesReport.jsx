@@ -6,6 +6,8 @@ import ReportTable from '../../components/ReportTable';
 import DebouncedInput from '../../components/DebouncedInput';
 import { fmtNum, toEnglish, parseNumber, formatMMYYYY } from '../../utils/formatUtils';
 
+const CATEGORY_PRESETS = ['مصروفات عامة', 'إيجار', 'كهرباء ومياه', 'نقل ومشال', 'صيانة', 'نثريات'];
+
 export default function ExpensesReport() {
   const { year, month, branchId } = useContext(ReportsContext);
   const [data, setData] = useState([]);
@@ -13,6 +15,7 @@ export default function ExpensesReport() {
   const [error, setError] = useState(null);
 
   const [descriptionQuery, setDescriptionQuery] = useState('');
+  const [categoryQuery, setCategoryQuery] = useState('');
   const [minAmount, setMinAmount] = useState('');
   const [maxAmount, setMaxAmount] = useState('');
 
@@ -45,6 +48,10 @@ export default function ExpensesReport() {
     const cleanQuery = descriptionQuery.trim().toLowerCase();
 
     return rawList.filter((item) => {
+      if (categoryQuery) {
+        const cat = item.category || 'مصروفات عامة';
+        if (cat !== categoryQuery) return false;
+      }
       if (cleanQuery) {
         const desc = String(item.description || '').toLowerCase();
         if (!desc.includes(cleanQuery)) return false;
@@ -54,7 +61,7 @@ export default function ExpensesReport() {
       if (cleanMax !== null && amt > cleanMax) return false;
       return true;
     });
-  }, [rawList, descriptionQuery, minAmount, maxAmount]);
+  }, [rawList, descriptionQuery, categoryQuery, minAmount, maxAmount]);
 
   const totalAmount = useMemo(() => {
     return processedItems.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
@@ -62,6 +69,7 @@ export default function ExpensesReport() {
 
   const handleResetFilters = () => {
     setDescriptionQuery('');
+    setCategoryQuery('');
     setMinAmount('');
     setMaxAmount('');
   };
@@ -80,6 +88,17 @@ export default function ExpensesReport() {
       align: 'start', 
       className: 'fw-bold text-primary text-wrap px-2', 
       render: (item) => item.description || 'بدون بيان'
+    },
+    { 
+      key: 'category', 
+      label: 'التصنيف', 
+      align: 'center', 
+      className: 'fw-bold text-nowrap', 
+      render: (item) => (
+        <span className="badge bg-blue-lt text-primary fw-bold px-2 py-1">
+          {item.category || 'مصروفات عامة'}
+        </span>
+      )
     },
     { 
       key: 'amount', 
@@ -119,7 +138,7 @@ export default function ExpensesReport() {
         <form onSubmit={(e) => e.preventDefault()}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '0.75rem', alignItems: 'center' }}>
             
-            <div style={{ gridColumn: 'span 4' }}>
+            <div style={{ gridColumn: 'span 3' }}>
               <div className="input-group input-group-sm">
                 <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">البيان</span>
                 <DebouncedInput 
@@ -129,6 +148,22 @@ export default function ExpensesReport() {
                   value={descriptionQuery}
                   onChange={(e) => setDescriptionQuery(e.target.value)}
                 />
+              </div>
+            </div>
+
+            <div style={{ gridColumn: 'span 2' }}>
+              <div className="input-group input-group-sm">
+                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">التصنيف</span>
+                <select
+                  className="form-select fw-bold border-secondary-subtle"
+                  value={categoryQuery}
+                  onChange={(e) => setCategoryQuery(e.target.value)}
+                >
+                  <option value="">كل التصنيفات</option>
+                  {CATEGORY_PRESETS.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -160,7 +195,7 @@ export default function ExpensesReport() {
               </div>
             </div>
 
-            <div style={{ gridColumn: 'span 2' }} className="d-flex align-items-center gap-2 justify-content-end">
+            <div style={{ gridColumn: 'span 1' }} className="d-flex align-items-center gap-2 justify-content-end">
               <button 
                 type="button" 
                 className="btn btn-outline-secondary w-100 fw-bold fs-4 py-1" 
@@ -192,6 +227,7 @@ export default function ExpensesReport() {
         sortableColumns={[
           { id: 'id', label: 'رقم المصروف' },
           { id: 'description', label: 'البيان' },
+          { id: 'category', label: 'التصنيف' },
           { id: 'amount', label: 'المبلغ' }
         ]}
         defaultSortRules={[

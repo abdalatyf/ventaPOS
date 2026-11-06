@@ -147,7 +147,7 @@ class InventoryItem(models.Model):
         ).aggregate(total=Sum('quantity'))['total'] or 0
 
         sales_qs = self.saleitem_set.filter(
-            is_deleted=False, receipt__is_deleted=False
+            is_deleted=False, receipt__is_deleted=False, receipt__is_confirmed=True
         ).filter(
             Q(receipt__sale_year__lt=year) |
             Q(receipt__sale_year=year, receipt__sale_month__lte=month)
@@ -166,10 +166,9 @@ class InventoryItem(models.Model):
             Q(year__lt=year) | Q(year=year, month__lte=month)
         )
         total_deficit = adjustments.filter(adjustment_type='DEFICIT').aggregate(total=Sum('quantity'))['total'] or 0
-        total_surplus = adjustments.filter(adjustment_type='SURPLUS').aggregate(total=Sum('quantity'))['total'] or 0
 
         final_stock = (
-            self.initial_quantity + total_purchased + total_surplus + total_sales_returns
+            self.initial_quantity + total_purchased + total_sales_returns
         ) - (total_sold + total_returned + total_deficit)
         return max(0, final_stock)
 
@@ -205,32 +204,15 @@ class InventoryItem(models.Model):
         If return_bottleneck is True, returns (safe_qty, bottleneck_month, bottleneck_year).
         Otherwise returns safe_qty as integer.
         """
-        if (target_year, target_month) >= (default_year, default_month):
-            stock = self.get_stock_at_date(target_month, target_year)
-            if return_bottleneck:
-                return stock, target_month, target_year
-            return stock
-        
-        min_stock = None
-        b_month = target_month
-        b_year = target_year
-        curr_year, curr_month = target_year, target_month
-        while (curr_year, curr_month) <= (default_year, default_month):
-            stock = self.get_stock_at_date(curr_month, curr_year)
-            if min_stock is None or stock < min_stock:
-                min_stock = stock
-                b_month = curr_month
-                b_year = curr_year
-            
-            curr_month += 1
-            if curr_month > 12:
-                curr_month = 1
-                curr_year += 1
-                
-        safe_qty = min_stock if min_stock is not None else 0
+        from api.services.stock_service import calculate_bulk_stock_timeline
+        res = calculate_bulk_stock_timeline([self], target_month, target_year, default_month, default_year)
+        item_data = res.get(self.id)
+        if not item_data:
+            return (0, target_month, target_year) if return_bottleneck else 0
+
         if return_bottleneck:
-            return safe_qty, b_month, b_year
-        return safe_qty
+            return item_data['safe_available_qty'], item_data['bottleneck_month'], item_data['bottleneck_year']
+        return item_data['safe_available_qty']
 
 
 # ===========================================================================
@@ -277,11 +259,10 @@ class InventoryAdjustment(models.Model):
     is_synced = models.BooleanField(default=False)
     ADJUSTMENT_TYPES = [
         ("DEFICIT", "عجز (-)"),
-        ("SURPLUS", "زيادة (+)"),
     ]
 
     item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, related_name="adjustments")
-    adjustment_type = models.CharField(max_length=10, choices=ADJUSTMENT_TYPES)
+    adjustment_type = models.CharField(max_length=10, choices=ADJUSTMENT_TYPES, default="DEFICIT")
     quantity = models.PositiveIntegerField()
     reason = models.CharField(max_length=255, blank=True, null=True)
     month = models.PositiveIntegerField(validators=[MinValueValidator(1), MaxValueValidator(12)])
@@ -298,10 +279,12 @@ class InventoryAdjustment(models.Model):
         verbose_name = "تسوية المخزون"
         verbose_name_plural = "تسويات المخزون"
         ordering = ['-year', '-month', '-id']
+        indexes = [
+            models.Index(fields=['item', 'year', 'month'], name='idx_adj_item_date'),
+        ]
 
     def __str__(self):
-        sign = "+" if self.adjustment_type == "SURPLUS" else "-"
-        return f"{sign}{self.quantity} × {self.item.name}"
+        return f"-{self.quantity} × {self.item.name}"
 
 
 # ===========================================================================
@@ -351,7 +334,7 @@ class PurchaseInvoice(models.Model):
     invoice_year = models.PositiveIntegerField(db_index=True, validators=[MinValueValidator(2025)])
     
     is_deleted = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     objects = ActiveManager()
     all_objects = AllObjectsManager()
@@ -431,7 +414,7 @@ class Receipt(models.Model):
     is_synced = models.BooleanField(default=False)
     
     is_deleted = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     objects = ActiveManager()
@@ -448,6 +431,8 @@ class Receipt(models.Model):
         indexes = [
             models.Index(fields=["branch", "sale_year", "sale_month"], name="idx_receipt_branch_date"),
             models.Index(fields=["receipt_hash"], name="idx_receipt_hash"),
+            models.Index(fields=['branch', 'receipt_type', 'sale_year', 'sale_month'], name='idx_rcpt_br_type_date'),
+            models.Index(fields=['parent_receipt', 'receipt_type'], name='idx_rcpt_parent_type'),
         ]
 
     def __str__(self):
@@ -455,19 +440,25 @@ class Receipt(models.Model):
 
     @classmethod
     def get_next_receipt_number(cls, branch):
-        last_num = cls.objects.filter(branch=branch).aggregate(Max('receipt_number'))['receipt_number__max']
+        last_num = cls.all_objects.filter(branch=branch).aggregate(Max('receipt_number'))['receipt_number__max']
         return (last_num or 0) + 1
 
     @property
     def is_authentic(self):
         try:
             from .utils.security_utils import generate_receipt_signature
+            active_items = list(self.sale_items.filter(is_deleted=False).values("inventory_item_id", "quantity", "unit_price"))
             expected_hash = generate_receipt_signature(
+                self.receipt_number, self.total_amount, self.sale_month, self.sale_year, active_items
+            )
+            if self.receipt_hash == expected_hash:
+                return True
+            legacy_hash = generate_receipt_signature(
                 self.receipt_number, self.total_amount, self.sale_month, self.sale_year
             )
-            return self.receipt_hash == expected_hash
-        except ImportError:
-            return True
+            return self.receipt_hash == legacy_hash
+        except Exception:
+            return False
 
 
 # ===========================================================================
@@ -518,6 +509,10 @@ class InstallmentPayment(models.Model):
         db_table = "salesapp_installmentpayment"
         verbose_name = "القسط"
         verbose_name_plural = "الأقساط"
+        indexes = [
+            models.Index(fields=['payment_date'], name='idx_inst_payment_date'),
+            models.Index(fields=['receipt', 'payment_date'], name='idx_inst_receipt_date'),
+        ]
 
     def __str__(self):
         return f"قسط {self.amount} مستحق في {self.payment_date}"
@@ -533,6 +528,7 @@ class Expense(models.Model):
     is_confirmed = models.BooleanField(default=True)
     is_synced = models.BooleanField(default=False)
     branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name="expenses")
+    category = models.CharField(max_length=100, blank=True, default="مصروفات عامة", db_index=True, verbose_name="تصنيف المصروف")
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     description = models.CharField(max_length=255)
     expense_year = models.IntegerField()
@@ -548,6 +544,9 @@ class Expense(models.Model):
         db_table = "salesapp_expense"
         verbose_name = "المصروف"
         verbose_name_plural = "المصروفات"
+        indexes = [
+            models.Index(fields=['branch', 'expense_year', 'expense_month'], name='idx_exp_branch_date'),
+        ]
 
     def __str__(self):
         return f"{self.description} ({self.amount})"
@@ -567,7 +566,6 @@ class CompanySetting(models.Model):
     phone1 = models.CharField(max_length=20)
     phone2 = models.CharField(max_length=20, blank=True, null=True)
     footer_text = models.CharField(max_length=250, default="تطبق الشروط والأحكام")
-    is_cloud_viewer = models.BooleanField(default=False)
     collection_commission_rate = models.DecimalField(
         max_digits=5, decimal_places=2, default=0.10,
         verbose_name="نسبة عمولة التحصيل"
@@ -612,9 +610,6 @@ class ClientLicense(models.Model):
     machine_id = models.CharField(max_length=255, null=True, blank=True)
     company_code = models.IntegerField(null=True, blank=True)
     license_code_hash = models.CharField(max_length=64, null=True, blank=True)
-    is_online_active = models.BooleanField(default=False)
-    online_start_date = models.DateField(null=True, blank=True)
-    online_expiry_date = models.DateField(null=True, blank=True)
     last_checkin = models.DateTimeField(auto_now=True)
     
     is_deleted = models.BooleanField(default=False)
@@ -684,22 +679,5 @@ class LicenseHistory(models.Model):
 
 
 
-# ===========================================================================
-# 11. Reporting Optimizations (Snapshots)
-# ===========================================================================
-class MonthlyInventorySnapshot(models.Model):
-    item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, related_name='snapshots')
-    year = models.PositiveIntegerField(db_index=True)
-    month = models.PositiveIntegerField(db_index=True)
-    closing_stock = models.IntegerField()
-    closing_value = models.DecimalField(max_digits=12, decimal_places=2)
-    created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        unique_together = ('item', 'year', 'month')
-        indexes = [
-            models.Index(fields=['item', 'year', 'month']),
-        ]
 
-    def __str__(self):
-        return f"{self.item.name} - {self.month}/{self.year}: {self.closing_stock}"

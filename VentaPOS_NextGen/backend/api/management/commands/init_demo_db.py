@@ -9,7 +9,8 @@ from django.utils import timezone
 
 from api.models import (
     Branch, Salesperson, InventoryItem, Receipt, SaleItem, InstallmentPayment,
-    Supplier, PurchaseInvoice, PurchaseInvoiceItem, CommissionHistory, CompanySetting, ClientLicense
+    Supplier, PurchaseInvoice, PurchaseInvoiceItem, CommissionHistory, CompanySetting, ClientLicense,
+    Expense, InventoryAdjustment, LicenseHistory, UsedLicense
 )
 from django.contrib.auth.models import User
 from api.utils.security_utils import generate_receipt_signature
@@ -129,18 +130,17 @@ class Command(BaseCommand):
     help = 'Initialize the database with Rich Demo data if no license exists.'
 
     def handle(self, *args, **kwargs):
-        if ClientLicense.objects.filter(is_active=True).exclude(machine_id="DEMO_MACHINE").exists():
-            self.stdout.write(self.style.SUCCESS("System is activated. Skipping demo init."))
-            return
-
-        if CompanySetting.objects.exists():
-            self.stdout.write(self.style.SUCCESS("Database already contains data. Skipping demo init."))
+        if ClientLicense.all_objects.exclude(machine_id="DEMO_MACHINE").exists():
+            self.stdout.write(self.style.SUCCESS("System is activated with a production license. Skipping demo init."))
             return
 
         self.stdout.write(self.style.WARNING("Starting demo database initialization..."))
 
         try:
             with transaction.atomic():
+                Expense.all_objects.all().delete()
+                InventoryAdjustment.all_objects.all().delete()
+                LicenseHistory.all_objects.all().delete()
                 InstallmentPayment.all_objects.all().delete()
                 SaleItem.all_objects.all().delete()
                 Receipt.all_objects.all().delete()
@@ -153,6 +153,7 @@ class Command(BaseCommand):
                 Branch.all_objects.all().delete()
                 CompanySetting.all_objects.all().delete()
                 ClientLicense.objects.all().delete()
+                UsedLicense.objects.all().delete()
 
                 # Demo Environment Setup
                 CompanySetting.objects.create(
@@ -160,7 +161,6 @@ class Command(BaseCommand):
                     phone1="01012345678",
                     phone2="01112345678",
                     footer_text="نسخة تجريبية - جميع البيانات وهمية وسيتم حذفها عند تفعيل النظام",
-                    is_cloud_viewer=False
                 )
                 
                 # Ensure Master Admin User exists

@@ -11,6 +11,9 @@ class AutocompleteAndParityTests(TestCase):
 
     def setUp(self):
         self.client = APIClient()
+        from django.contrib.auth.models import User
+        self.admin_user, _ = User.objects.get_or_create(username="admin", defaults={"is_superuser": True})
+        self.client.force_authenticate(user=self.admin_user)
         self.branch = Branch.objects.create(
             name="Autocomplete Branch")
         self.salesperson = Salesperson.objects.create(

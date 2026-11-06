@@ -13,6 +13,9 @@ class ReportingEndpointsTests(TestCase):
 
     def setUp(self):
         self.client = APIClient()
+        from django.contrib.auth.models import User
+        self.admin_user, _ = User.objects.get_or_create(username="admin", defaults={"is_superuser": True})
+        self.client.force_authenticate(user=self.admin_user)
         
         # Create Tenant
         
@@ -158,10 +161,10 @@ class ReportingEndpointsTests(TestCase):
         self.assertEqual(kpis["total_cogs"], 60000) # (5 + 10) * 4000.00
         
         # sales comm: (5 + 10) * 200.00 = 3000.00
-        # collection comm: 25000.00 * 10% = 2500.00
+        # collection comm (upfront reserve): (55000 - 15000) * 10% = 4000.00
         # operating expenses: 10000.00
-        # estimated_net_profit = 80000.00 - (60000.00 + 3000.00 + 2500.00 + 10000.00) = 4500.00
-        self.assertEqual(kpis["estimated_net_profit"], 4500)
+        # estimated_net_profit = 80000.00 - (60000.00 + 3000.00 + 4000.00 + 10000.00) = 3000.00
+        self.assertEqual(kpis["estimated_net_profit"], 3000)
         
         # stock: 20 (initial) + 10 (purchase) - 15 (sales) = 15.
         # current inventory value: 15 * 4000.00 = 60000.00

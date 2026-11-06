@@ -63,6 +63,7 @@ export default function DashboardReport() {
   const cashSummary = data.cash_drawer_summary || {};
 
   const totalOutgoing = (Number(cashSummary.total_purchases) || 0) + 
+                        (Number(cashSummary.sales_returns_cash) || 0) +
                         (Number(cashSummary.auto_salaries) || 0) + 
                         (Number(cashSummary.operating_expenses) || 0);
 
@@ -78,7 +79,7 @@ export default function DashboardReport() {
               <span>تفاصيل المكسب</span>
             </div>
             <div className="table-responsive">
-              <table className="table table-vcenter table-hover card-table m-0">
+              <table className="table table-vcenter table-hover card-table text-nowrap tabular-nums m-0">
                 <tbody>
                   <tr className="cursor-pointer" onClick={() => navigate(`/reports/receipts?${dateParams}`)} title="عرض فواتير المبيعات">
                     <td className="fw-semibold">إجمالي المبيعات</td>
@@ -100,6 +101,10 @@ export default function DashboardReport() {
                     <td className="text-danger">إجمالي المصروفات</td>
                     <td className="text-end text-danger fw-bold">- {fmtNum(cashSummary.operating_expenses)}</td>
                   </tr>
+                  <tr className="cursor-pointer" onClick={() => navigate(`/reports/inventory?${dateParams}`)} title="عرض حركة المخزون والعجز">
+                    <td className="text-danger">خسائر العجز</td>
+                    <td className="text-end text-danger fw-bold">- {fmtNum(kpis.total_deficit_loss || 0)}</td>
+                  </tr>
                 </tbody>
                 <tfoot>
                   <tr className="bg-primary-subtle border-top border-primary">
@@ -120,7 +125,7 @@ export default function DashboardReport() {
               <span>تفاصيل السيولة</span>
             </div>
             <div className="table-responsive">
-              <table className="table table-vcenter table-hover card-table m-0">
+              <table className="table table-vcenter table-hover card-table text-nowrap tabular-nums m-0">
                 <tbody>
                   <tr className="cursor-pointer" onClick={() => navigate(`/reports/receipts?${dateParams}&is_cash_sale=true`)} title="عرض مبيعات الكاش">
                     <td>(+) مبيعات كاش</td>
@@ -134,13 +139,21 @@ export default function DashboardReport() {
                     <td>(+) التحصيل</td>
                     <td className="text-end fw-bold text-success">{fmtNum(cashSummary.collection_inflow)}</td>
                   </tr>
+                  <tr className="cursor-pointer" onClick={() => navigate(`/reports/purchases?${dateParams}&invoice_type=RETURN`)} title="عرض مرتجع المشتريات">
+                    <td>(+) مرتجع مشتريات</td>
+                    <td className="text-end fw-bold text-success">{fmtNum(cashSummary.purchase_returns_total)}</td>
+                  </tr>
                   <tr className="bg-success-subtle fw-bold text-success border-top border-success">
                     <td>(=) إجمالي الوارد</td>
                     <td className="text-end fw-bolder">{fmtNum(cashSummary.total_cash_inflow)}</td>
                   </tr>
-                  <tr className="cursor-pointer" onClick={() => navigate(`/search-purchases?${dateParams}`)} title="عرض فواتير المشتريات">
+                  <tr className="cursor-pointer" onClick={() => navigate(`/reports/purchases?${dateParams}&invoice_type=PURCHASE`)} title="عرض فواتير المشتريات">
                     <td className="text-danger">(-) إجمالي المشتريات</td>
                     <td className="text-end text-danger fw-bold">- {fmtNum(cashSummary.total_purchases)}</td>
+                  </tr>
+                  <tr className="cursor-pointer" onClick={() => navigate(`/reports/receipts?${dateParams}&receipt_type=RETURN`)} title="عرض مرتجع المبيعات">
+                    <td className="text-danger">(-) مرتجع مبيعات</td>
+                    <td className="text-end text-danger fw-bold">- {fmtNum(cashSummary.sales_returns_cash)}</td>
                   </tr>
                   <tr className="cursor-pointer" onClick={() => navigate(`/reports/salesperson?${dateParams}`)} title="عرض مرتبات المناديب">
                     <td className="text-danger">(-) إجمالي المرتبات</td>

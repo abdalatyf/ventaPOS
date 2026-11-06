@@ -95,15 +95,13 @@ export const formatMMYYYY = (month, year) => {
 };
 
 /**
- * Formats monetary amounts with 2 decimal places and standard comma (,).
+ * Formats monetary amounts as whole integers with thousand separators (no decimals).
  * 
  * @param {string|number|null|undefined} val 
  * @returns {string}
  */
 export const formatMoney = (val) => {
-  const num = parseNumber(val);
-  const formatted = num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return formatted;
+  return fmtNum(val);
 };
 
 // Aliases for backward compatibility

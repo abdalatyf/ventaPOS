@@ -19,10 +19,17 @@ export default function SubscriptionWarningBanner() {
     // Check initially and also listen for updates (e.g. from POS Entry)
     fetchStatus();
     
-    // Optional: Re-fetch periodically or when window gets focus
+    // Optional: Re-fetch periodically or when window gets focus or license updates
     const handleFocus = () => fetchStatus();
+    const handleUpdate = () => fetchStatus();
     window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
+    window.addEventListener('license_updated', handleUpdate);
+    window.addEventListener('subscription_expired', handleUpdate);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('license_updated', handleUpdate);
+      window.removeEventListener('subscription_expired', handleUpdate);
+    };
   }, []);
 
   if (!licenseStatus) return null;

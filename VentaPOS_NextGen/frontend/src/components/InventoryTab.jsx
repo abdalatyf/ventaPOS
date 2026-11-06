@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { IconTrash, IconPlus, IconEdit, IconClockHour4, IconX, IconLoader, IconSortAscending, IconSortDescending } from '@tabler/icons-react';
+import { Link } from 'react-router-dom';
+import { IconTrash, IconPlus, IconEdit, IconX, IconLoader, IconSortAscending, IconSortDescending, IconFileText } from '@tabler/icons-react';
 import toast from 'react-hot-toast';
-import CommissionModal from './CommissionModal';
 import api from '../api';
 import { fmt, parseNumber } from '../utils/formatUtils';
 
@@ -54,12 +54,6 @@ export default function InventoryTab() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
 
-  // Commission Modal state
-  const [commissionModalOpen, setCommissionModalOpen] = useState(false);
-  const [commissionItem, setCommissionItem] = useState(null);
-  const [commissionHistory, setCommissionHistory] = useState([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-
   const nameInputRef = useRef(null);
 
   const handleKeyDown = (e) => {
@@ -80,7 +74,7 @@ export default function InventoryTab() {
   const fetchItems = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/inventory-items/');
+      const res = await api.get('/inventory-items/', { params: { branch_id: currentBranchId } });
       setItems(res.data.results || res.data);
       setError(null);
     } catch (err) {
@@ -93,7 +87,7 @@ export default function InventoryTab() {
 
   useEffect(() => {
     fetchItems();
-  }, []);
+  }, [currentBranchId]);
 
   const filteredItems = useMemo(() => {
     let filtered = items.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -152,7 +146,7 @@ export default function InventoryTab() {
       initial_year: Math.round(parseNumber(formData.startYear)),
     };
 
-    if (currentBranchId && currentBranchId !== 1 && currentBranchId !== '1') {
+    if (currentBranchId) {
       payload.branch = currentBranchId;
     }
 
@@ -223,76 +217,6 @@ export default function InventoryTab() {
       console.error('Error deleting item:', err);
       setDeleteModalOpen(false);
       showError(err.response?.data?.detail || 'لا يمكن حذف هذا الصنف.');
-    }
-  };
-
-  const openCommissionModal = async (item) => {
-    setCommissionItem(item);
-    setCommissionModalOpen(true);
-    setLoadingHistory(true);
-    
-    try {
-      const res = await api.get(`/commission-histories/?item_id=${item.id}`);
-      // Ensure we map the API response to what the Modal expects (amount, month, year)
-      const mapped = (res.data.results || res.data).map(h => ({
-        id: h.id,
-        amount: fmt(h.commission_amount),
-        month: Number(h.activation_month),
-        year: Number(h.activation_year)
-      })).sort((a, b) => (a.year - b.year) || (a.month - b.month));
-      setCommissionHistory(mapped);
-    } catch (err) {
-      console.error('Error fetching commission history', err);
-      setCommissionHistory([]);
-    } finally {
-      setLoadingHistory(false);
-    }
-  };
-
-  const handleAddCommission = async (newComm) => {
-    try {
-      const payload = {
-        item: commissionItem.id,
-        commission_amount: newComm.amount,
-        activation_month: newComm.month,
-        activation_year: newComm.year,
-      };
-      const res = await api.post('/commission-histories/', payload);
-      
-      const savedRecord = {
-        id: res.data.id,
-        amount: fmt(res.data.commission_amount),
-        month: Number(res.data.activation_month),
-        year: Number(res.data.activation_year),
-      };
-      
-      const updatedHistory = [...commissionHistory, savedRecord].sort((a, b) => (a.year - b.year) || (a.month - b.month));
-      setCommissionHistory(updatedHistory);
-      
-      // Update local item current commission for display (approximate)
-      const latest = updatedHistory[updatedHistory.length - 1];
-      setItems(items.map(i => i.id === commissionItem.id ? { ...i, initial_commission_amount: latest.amount } : i));
-      
-    } catch (err) {
-      console.error('Error adding commission', err);
-      const errorMsg = err.response?.data?.detail || err.message || 'فشل إضافة العمولة';
-      showError(errorMsg);
-      toast.error(errorMsg);
-    }
-  };
-
-  const handleDeleteCommission = async (recordId) => {
-    try {
-      await api.delete(`/commission-histories/${recordId}/`);
-      const updatedHistory = commissionHistory.filter(h => h.id !== recordId);
-      setCommissionHistory(updatedHistory);
-      
-      // Update local item current commission for display (approximate)
-      const latest = updatedHistory.length > 0 ? updatedHistory[updatedHistory.length - 1] : { amount: commissionItem.initial_commission_amount };
-      setItems(items.map(i => i.id === commissionItem.id ? { ...i, initial_commission_amount: latest.amount } : i));
-    } catch (err) {
-      console.error('Error deleting commission', err);
-      showError('فشل حذف العمولة');
     }
   };
 
@@ -433,13 +357,13 @@ export default function InventoryTab() {
                       <td className="text-center align-middle border-secondary-subtle">{item.initial_year}/{item.initial_month}</td>
                       <td className="text-center align-middle border-secondary-subtle">{fmt(item.initial_commission_amount || 0)}</td>
                       <td className="text-nowrap text-center align-middle border-secondary-subtle">
-                        <button className="btn btn-sm btn-ghost-info me-1" title="آلة زمن المندبة" onClick={() => openCommissionModal(item)}>
-                          <IconClockHour4 size={18} /> المندبة
-                        </button>
-                        <button className="btn btn-sm btn-ghost-primary me-1" onClick={() => startEdit(item)}>
+                        <Link to={`/product-ledger/${item.id}`} className="btn btn-sm btn-ghost-info me-1" title="كارت الصنف وسجل العمليات">
+                          <IconFileText size={18} /> كارت الصنف
+                        </Link>
+                        <button className="btn btn-sm btn-ghost-primary me-1" title="تعديل الصنف" onClick={() => startEdit(item)}>
                           <IconEdit size={18} />
                         </button>
-                        <button className="btn btn-sm btn-ghost-danger" onClick={() => confirmDelete(item)}>
+                        <button className="btn btn-sm btn-ghost-danger" title="حذف الصنف" onClick={() => confirmDelete(item)}>
                           <IconTrash size={18} />
                         </button>
                       </td>
@@ -460,7 +384,7 @@ export default function InventoryTab() {
               <div className="modal-body text-center py-4">
                 <IconTrash className="text-danger mb-2" size={48} stroke={1.5} />
                 <h3>تأكيد الحذف</h3>
-                <div className="text-muted">هل تريد حذف الصنف "{itemToDelete?.name}"؟ <br/><strong className="text-danger">⚠️ سيتم حذف كل بيانات العمولة المرتبطة.</strong></div>
+                <div className="text-muted">هل تريد حذف الصنف "{itemToDelete?.name}"؟ <br/><strong className="text-danger">⚠️ سيتم حذف كل البيانات المرتبطة بهذا الصنف.</strong></div>
               </div>
               <div className="modal-footer">
                 <div className="w-100">
@@ -475,16 +399,6 @@ export default function InventoryTab() {
         </div>
       )}
 
-      {/* مودال العمولة (المستقل) */}
-      <CommissionModal 
-        show={commissionModalOpen}
-        item={commissionItem}
-        history={commissionHistory}
-        loading={loadingHistory}
-        onClose={() => setCommissionModalOpen(false)}
-        onAddCommission={handleAddCommission}
-        onDeleteCommission={handleDeleteCommission}
-      />
     </div>
   );
 }

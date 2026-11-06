@@ -37,6 +37,9 @@ class ReportingBaseTestCase(TestCase):
 
     def setUp(self):
         self.client = APIClient()
+        from django.contrib.auth.models import User
+        self.admin_user, _ = User.objects.get_or_create(username="admin", defaults={"is_superuser": True})
+        self.client.force_authenticate(user=self.admin_user)
 
         # License setup
         mach_id = get_machine_id()
@@ -199,12 +202,12 @@ class Tier1FeatureCoverageTests(ReportingBaseTestCase):
         # Sales Commissions = (2 * 300) + (3 * 250) = 600 + 750 = 1,350
         self.assertEqual(kpis["total_sales_commissions"], 1350)
 
-        # Collection Commissions = 3,000 // 10 = 300
-        self.assertEqual(kpis["total_collection_commissions"], 300)
+        # Collection Commissions (Upfront Credit Reserve = 18,000 * 0.10 = 1,800)
+        self.assertEqual(kpis["total_collection_commissions"], 1800)
 
         # Operating Expenses = 2,000 + 500 = 2,500
-        # Estimated Net Profit = 44,000 - (34,000 + 1,350 + 300 + 2,500) = 5,850
-        self.assertEqual(kpis["estimated_net_profit"], 5850)
+        # Estimated Net Profit = 44,000 - (34,000 + 1,350 + 1,800 + 2,500) = 4,350
+        self.assertEqual(kpis["estimated_net_profit"], 4350)
 
         # Stock at end of Month 7:
         # Fridge: 20 initial + 10 purchase - 2 sold = 28 * 8,000 = 224,000
@@ -324,12 +327,12 @@ class Tier1FeatureCoverageTests(ReportingBaseTestCase):
 
     def test_tier1_inventory_movement_report(self):
         """Verify Inventory Movement report columns, lifecycle values, and total valuation."""
-        # Add a surplus adjustment of 1 fridge and deficit of 1 washer in Month 7
+        # Add a deficit adjustment of 1 fridge and deficit of 1 washer in Month 7
         InventoryAdjustment.objects.create(
             item=self.item_fridge,
-            adjustment_type="SURPLUS",
+            adjustment_type="DEFICIT",
             quantity=1,
-            reason="فائض جرد",
+            reason="عجز جرد",
             month=7,
             year=2026
         )
@@ -353,16 +356,17 @@ class Tier1FeatureCoverageTests(ReportingBaseTestCase):
         self.assertEqual(data["total_adjustments_count"], 2)
         items = {it["product_name"]: it for it in data["items"]}
 
-        # Fridge: Opening 20, Purchases 10, Returns 0, Sales 2, Surplus 1, Deficit 0 -> Final 29
+        # Fridge: Opening 20, Purchases 10, Returns 0, Sales 2, Surplus 0, Deficit 1 -> Final 27
         fridge_row = items["ثلاجة 16 قدم"]
         self.assertEqual(fridge_row["opening_stock"], 20)
         self.assertEqual(fridge_row["purchases"], 10)
         self.assertEqual(fridge_row["sales"], 2)
-        self.assertEqual(fridge_row["surplus"], 1)
-        self.assertEqual(fridge_row["deficit"], 0)
-        self.assertEqual(fridge_row["final_stock"], 29)
+        self.assertEqual(fridge_row["surplus"], 0)
+        self.assertEqual(fridge_row["deficit"], 1)
+        self.assertEqual(fridge_row["deficit_loss"], 8000)
+        self.assertEqual(fridge_row["final_stock"], 27)
         self.assertEqual(fridge_row["unit_cost"], 8000)
-        self.assertEqual(fridge_row["total_value"], 29 * 8000)
+        self.assertEqual(fridge_row["total_value"], 27 * 8000)
 
         # Washer: Opening 15, Purchases 0, Returns 0, Sales 3, Surplus 0, Deficit 1 -> Final 11
         washer_row = items["غسالة أوتوماتيك"]
@@ -371,11 +375,12 @@ class Tier1FeatureCoverageTests(ReportingBaseTestCase):
         self.assertEqual(washer_row["sales"], 3)
         self.assertEqual(washer_row["surplus"], 0)
         self.assertEqual(washer_row["deficit"], 1)
+        self.assertEqual(washer_row["deficit_loss"], 6000)
         self.assertEqual(washer_row["final_stock"], 11)
         self.assertEqual(washer_row["unit_cost"], 6000)
         self.assertEqual(washer_row["total_value"], 11 * 6000)
 
-        expected_total_val = (29 * 8000) + (11 * 6000)  # 232,000 + 66,000 = 298,000
+        expected_total_val = (27 * 8000) + (11 * 6000)  # 216,000 + 66,000 = 282,000
         self.assertEqual(data["total_inventory_value"], expected_total_val)
 
     def test_tier1_profit_and_loss_report(self):
@@ -970,7 +975,7 @@ class Tier3CrossFeatureIntegrationTests(ReportingBaseTestCase):
             "month": 10
         })
         self.assertEqual(res_dash_m10.json()["cash_drawer_summary"]["collection_inflow"], 1500)
-        self.assertEqual(res_dash_m10.json()["kpis"]["total_collection_commissions"], 150)  # 1500 // 10
+        self.assertEqual(res_dash_m10.json()["kpis"]["total_collection_commissions"], 0)  # No credit sales in month 10 (Card 1 uses upfront reserve)
 
         # Verify Salesperson Performance in Month 10
         res_sp_m10 = self.client.get("/api/v1/reports/salespersons/", {
@@ -1105,9 +1110,9 @@ class Tier4RealWorldWorkloadTests(ReportingBaseTestCase):
         # Rep 1: 5,000 from r2
         InstallmentPayment.objects.create(receipt=r2, payment_date=date(year, month, 10), amount=5000)
 
-        # Adjustments: 1 TV surplus
+        # Adjustments: 1 TV deficit
         InventoryAdjustment.objects.create(
-            item=prod_b, adjustment_type="SURPLUS", quantity=1, reason="فائض مخزني",
+            item=prod_b, adjustment_type="DEFICIT", quantity=1, reason="عجز مخزني",
             month=month, year=year
         )
 
@@ -1161,11 +1166,12 @@ class Tier4RealWorldWorkloadTests(ReportingBaseTestCase):
 
         # INVARIANT 4: Inventory Closing Valuation Reconciliation
         # Prod A: 5 initial + 2 purchase - 1 sold = 6 * 15500 (latest price) = 93,000
-        # Prod B: 8 initial - 2 sold + 1 surplus = 7 * 10000 = 70,000
+        # Prod B: 8 initial - 2 sold - 1 deficit = 5 * 10000 = 50,000
         # Prod C: 4 initial - 1 sold = 3 * 12000 = 36,000
-        # Total Inventory Value = 93,000 + 70,000 + 36,000 = 199,000
-        self.assertEqual(inv_data["total_inventory_value"], 199000)
-        self.assertEqual(dash_kpis["current_inventory_value"], 199000)
+        # Total Inventory Value = 93,000 + 50,000 + 36,000 = 179,000
+        self.assertEqual(inv_data["total_inventory_value"], 179000)
+        self.assertEqual(dash_kpis["current_inventory_value"], 179000)
+        self.assertEqual(dash_kpis["total_deficit_loss"], 10000)
 
         # INVARIANT 5: Net Cash in Hand & Safe Balance Reconciliation
         # Outflows: Purchases (2 * 15500 = 31000) + Expenses (4000) + Salaries (2100) = 37100

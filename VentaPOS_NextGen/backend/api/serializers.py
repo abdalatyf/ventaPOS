@@ -102,6 +102,8 @@ class InventoryItemSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "is_deleted", "created_at", "current_stock"]
 
     def get_current_stock(self, obj):
+        if hasattr(obj, '_precomputed_stock'):
+            return obj._precomputed_stock
         from django.utils import timezone
         now = timezone.now()
         return obj.get_stock_at_date(now.month, now.year)
@@ -127,6 +129,7 @@ class CommissionHistorySerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class InventoryAdjustmentSerializer(serializers.ModelSerializer):
+    adjustment_type = serializers.CharField(default="DEFICIT", required=False)
 
     class Meta:
         model = InventoryAdjustment
@@ -145,29 +148,30 @@ class InventoryAdjustmentSerializer(serializers.ModelSerializer):
             data_copy["year"] = data_copy["adjustment_year"]
         if "inventory_item" in data_copy and "item" not in data_copy:
             data_copy["item"] = data_copy["inventory_item"]
+        if not data_copy.get("adjustment_type"):
+            data_copy["adjustment_type"] = "DEFICIT"
         return super().to_internal_value(data_copy)
 
     def validate(self, data):
-        if data.get("adjustment_type") == "DEFICIT":
-            from api.views import get_default_date
-            from rest_framework.exceptions import ValidationError
-            default_year, default_month = get_default_date()
+        from api.views import get_default_date
+        from rest_framework.exceptions import ValidationError
+        default_year, default_month = get_default_date()
+        
+        target_year = data.get("year", self.instance.year if self.instance else None)
+        target_month = data.get("month", self.instance.month if self.instance else None)
+        item = data.get("item", self.instance.item if self.instance else None)
+        qty = data.get("quantity", self.instance.quantity if self.instance else None)
+        
+        if item and target_month and target_year and qty:
+            safe_limit = item.get_safe_available_qty(target_month, target_year, default_month, default_year)
             
-            target_year = data.get("year", self.instance.year if self.instance else None)
-            target_month = data.get("month", self.instance.month if self.instance else None)
-            item = data.get("item", self.instance.item if self.instance else None)
-            qty = data.get("quantity", self.instance.quantity if self.instance else None)
-            
-            if item and target_month and target_year and qty:
-                safe_limit = item.get_safe_available_qty(target_month, target_year, default_month, default_year)
+            if self.instance and not self.instance.is_deleted:
+                safe_limit += self.instance.quantity
                 
-                if self.instance and not self.instance.is_deleted:
-                    safe_limit += self.instance.quantity
-                    
-                if qty > safe_limit:
-                    raise ValidationError({
-                        "error": f"عفواً، أقصى كمية يمكن تسويتها بالنقصان للصنف '{item.name}' في هذا التاريخ هي ({safe_limit})."
-                    })
+            if qty > safe_limit:
+                raise ValidationError({
+                    "error": f"عفواً، أقصى كمية يمكن تسويتها بالنقصان للصنف '{item.name}' في هذا التاريخ هي ({safe_limit})."
+                })
         return data
 
 
@@ -213,77 +217,15 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         items_data = validated_data.pop("items", [])
-        branch = validated_data.get("branch")
-        
-        # Stock validation for RETURNS
-        if validated_data.get("invoice_type") == "RETURN":
-            from api.views import get_default_date
-            from rest_framework.exceptions import ValidationError
-            default_year, default_month = get_default_date()
-            target_year = validated_data["invoice_year"]
-            target_month = validated_data["invoice_month"]
-            
-            for item_data in items_data:
-                item = item_data["inventory_item"]
-                qty = item_data["quantity"]
-                safe_limit = item.get_safe_available_qty(target_month, target_year, default_month, default_year)
-                if qty > safe_limit:
-                    raise ValidationError({
-                        "error": f"عفواً، لا يمكن الإرجاع! أقصى كمية يمكن إرجاعها للمورد للصنف '{item.name}' هي ({safe_limit})."
-                    })
-
-        # Auto-generate invoice_number sequentially per branch if not provided
-        if "invoice_number" not in validated_data:
-            from django.db.models import Max
-            last_invoice = PurchaseInvoice.all_objects.filter(
-                branch=branch
-            ).aggregate(Max("invoice_number"))
-            last_num = last_invoice.get("invoice_number__max") or 0
-            validated_data["invoice_number"] = last_num + 1
-
-        with transaction.atomic():
-            invoice = PurchaseInvoice.objects.create(**validated_data)
-            for item_data in items_data:
-                PurchaseInvoiceItem.objects.create(
-                    invoice=invoice,
-                    **item_data,
-                )
-        return invoice
+    def create(self, validated_data):
+        from api.services.purchase_service import create_purchase_invoice
+        items_data = validated_data.pop("items", [])
+        return create_purchase_invoice(validated_data, items_data)
 
     def update(self, instance, validated_data):
+        from api.services.purchase_service import update_purchase_invoice
         items_data = validated_data.pop("items", None)
-
-        with transaction.atomic():
-            for attr, value in validated_data.items():
-                setattr(instance, attr, value)
-            instance.save()
-
-            if items_data is not None:
-                # Soft delete old items BEFORE calculating safe limits for returns
-                instance.items.all().update(is_deleted=True)
-
-                if validated_data.get("invoice_type", instance.invoice_type) == "RETURN":
-                    from api.views import get_default_date
-                    from rest_framework.exceptions import ValidationError
-                    default_year, default_month = get_default_date()
-                    target_year = validated_data.get("invoice_year", instance.invoice_year)
-                    target_month = validated_data.get("invoice_month", instance.invoice_month)
-                    
-                    for item_data in items_data:
-                        item = item_data["inventory_item"]
-                        qty = item_data["quantity"]
-                        safe_limit = item.get_safe_available_qty(target_month, target_year, default_month, default_year)
-                        if qty > safe_limit:
-                            raise ValidationError({
-                                "error": f"عفواً، لا يمكن الإرجاع! أقصى كمية يمكن إرجاعها للمورد للصنف '{item.name}' هي ({safe_limit})."
-                            })
-
-                for item_data in items_data:
-                    PurchaseInvoiceItem.objects.create(
-                        invoice=instance, **item_data
-                    )
-
-        return instance
+        return update_purchase_invoice(instance, validated_data, items_data)
 
 
 # ---------------------------------------------------------------------------
@@ -385,6 +327,8 @@ class ReceiptSerializer(serializers.ModelSerializer):
 
     def get_has_returns(self, obj):
         # Check if this receipt has any associated RETURN receipts
+        if hasattr(obj, '_has_returns'):
+            return bool(obj._has_returns)
         return obj.child_receipts.filter(receipt_type="RETURN", is_deleted=False).exists()
 
     def to_internal_value(self, data):
@@ -416,261 +360,57 @@ class ReceiptSerializer(serializers.ModelSerializer):
             
         return super().to_internal_value(data)
 
+    def validate(self, data):
+        from api.services.receipt_service import get_active_license
+        from rest_framework import exceptions
+        import datetime
+
+        active_lic = get_active_license()
+        is_print_only = bool(active_lic and active_lic.product_id in (2, 3))
+
+        sale_year = data.get("sale_year", self.instance.sale_year if self.instance else None)
+        sale_month = data.get("sale_month", self.instance.sale_month if self.instance else None)
+        items = data.get("sale_items", None)
+
+        is_pre_license = False
+        if active_lic and active_lic.start_date and sale_year and sale_month:
+            try:
+                inv_date = datetime.date(int(sale_year), int(sale_month), 1)
+                lic_start = active_lic.start_date.replace(day=1)
+                if inv_date < lic_start:
+                    is_pre_license = True
+            except (ValueError, TypeError):
+                pass
+
+        if is_print_only or is_pre_license:
+            if items and len(items) > 0:
+                raise exceptions.ValidationError({
+                    "items": "لا يمكن إضافة بنود أصناف مجزأة في هذه الفاتورة (باقة طباعة فقط أو فاتورة سابقة للاشتراك)."
+                })
+            products_text = data.get("products_text", self.instance.products_text if self.instance else "")
+            total_amount = data.get("total_amount", self.instance.total_amount if self.instance else 0)
+            if not str(products_text or "").strip():
+                raise exceptions.ValidationError({
+                    "products_text": "يجب إدخال وصف البضاعة كنص."
+                })
+            if float(total_amount or 0) <= 0:
+                raise exceptions.ValidationError({
+                    "total_amount": "يجب إدخال إجمالي الفاتورة بشكل صحيح."
+                })
+
+        return data
+
     def create(self, validated_data):
+        from api.services.receipt_service import create_receipt
         items_data = validated_data.pop("sale_items", [])
         installments_data = validated_data.pop("payments", [])
-        
-        # Strict Financial Balance Validation for Installment Sales
-        is_cash_sale = validated_data.get("is_cash_sale", False)
-        if not is_cash_sale:
-            total_amount = validated_data.get("total_amount", 0)
-            down_payment = validated_data.get("down_payment", 0)
-            installments_total = sum(item.get("amount", 0) for item in installments_data)
-            
-            # The payload's total_amount MUST exactly equal the sum of payments.
-            # (The 5 EGP rounding tolerance for products is handled by the frontend).
-            if abs(float(total_amount) - float(down_payment + installments_total)) > 0.01:
-                raise ValidationError({
-                    "error": "إجمالي الأقساط والمقدم لا يتطابق مع إجمالي الفاتورة المدخلة بالنظام."
-                })
-
-
-        is_confirmed = validated_data.get("is_confirmed", True)
-        with transaction.atomic():
-            active_lic = None
-            if is_confirmed:
-                # Deduct from license balance (pessimistic lock)
-                active_lic = (
-                    ClientLicense.objects
-                    .select_for_update()
-                    .filter(
-                        is_deleted=False,
-                        invoices_balance__gt=0,
-                    )
-                    .first()
-                )
-                if not active_lic:
-                    raise ValidationError({
-                        "license": (
-                            "لا يمكن طباعة أو إصدار الفاتورة، رصيد الفواتير المسموح به "
-                            "للرخصة قد نفد. يرجى الشحن أولاً."
-                        )
-                    })
-
-                # Date Boundary Validation
-                from dateutil.relativedelta import relativedelta
-                from datetime import date
-                
-                try:
-                    sale_year = int(validated_data.get("sale_year"))
-                    sale_month = int(validated_data.get("sale_month"))
-                    invoice_date = date(sale_year, sale_month, 1)
-                except Exception:
-                    raise ValidationError({"error": "تاريخ الفاتورة غير صحيح."})
-                    
-                lic_start_month = active_lic.start_date.replace(day=1)
-                if invoice_date < lic_start_month:
-                    raise ValidationError({"error": "التاريخ يسبق بداية الاشتراك."})
-                    
-                if active_lic.expiry_date:
-                    last_allowed_month = (active_lic.expiry_date - relativedelta(months=2)).replace(day=1)
-                    if invoice_date > last_allowed_month:
-                        raise ValidationError({"error": "التاريخ بعد انتهاء الاشتراك."})
-                    
-                    grace_end = active_lic.expiry_date + relativedelta(days=25)
-                    if date.today() > grace_end:
-                        raise ValidationError({"error": "انتهت فترة الاشتراك."})
-
-                # Auto-assign receipt_number if not provided
-                if not validated_data.get("receipt_number"):
-                    branch = validated_data.get("branch")
-                    last = (
-                        Receipt.all_objects
-                        .select_for_update()
-                        .filter(is_deleted=False, branch=branch)
-                        .order_by("receipt_number")
-                        .last()
-                    )
-                    validated_data["receipt_number"] = (
-                        (last.receipt_number + 1) if last and last.receipt_number else 1
-                    )
-
-            # Stock validation (Skip for RETURN receipts)
-            from api.views import get_default_date
-            default_year, default_month = get_default_date()
-            target_year = validated_data["sale_year"]
-            target_month = validated_data["sale_month"]
-            
-            if is_confirmed and validated_data.get("receipt_type") != "RETURN":
-                for item_data in items_data:
-                    item = item_data["inventory_item"]
-                    qty = item_data["quantity"]
-                    safe_limit = item.get_safe_available_qty(target_month, target_year, default_month, default_year)
-                    if qty > safe_limit:
-                        raise ValidationError({
-                            "error": f"عفواً، لا يمكن البيع! أقصى كمية يمكن بيعها بأثر رجعي للصنف '{item.name}' هي ({safe_limit}) لتجنب حدوث رصيد سالب في الشهور اللاحقة."
-                        })
-
-            if "products_text" not in validated_data and items_data:
-                validated_data["products_text"] = " + ".join([f"{i['inventory_item'].name}" if i['quantity'] == 1 else f"{i['quantity']} {i['inventory_item'].name}" for i in items_data])
-
-            receipt = Receipt.objects.create(**validated_data)
-
-            for item_data in items_data:
-                SaleItem.objects.create(receipt=receipt, **item_data)
-
-            for inst_data in installments_data:
-                payment_month = inst_data.pop("payment_month", 1)
-                payment_year = inst_data.pop("payment_year", 2026)
-                if "payment_date" not in inst_data:
-                    import datetime
-                    inst_data["payment_date"] = datetime.date(payment_year, payment_month, 25)
-                InstallmentPayment.objects.create(
-                    receipt=receipt, **inst_data
-                )
-
-            if is_confirmed:
-                # Generate & store receipt hash (schema §1.5)
-                receipt.receipt_hash = generate_receipt_signature(
-                receipt.receipt_number,
-                receipt.total_amount,
-                receipt.sale_month,
-                receipt.sale_year,
-                items_data,
-            )
-            receipt.save(update_fields=["receipt_hash"])
-
-            # Deduct license balance & re-sign the license row
-            machine_id = active_lic.machine_id
-            active_lic.invoices_balance -= 1
-            active_lic.license_code_hash = generate_record_signature(
-                active_lic.expiry_date,
-                active_lic.invoices_balance,
-                machine_id,
-                active_lic.product_id,
-                active_lic.is_active,
-            )
-            active_lic.save(update_fields=["invoices_balance", "license_code_hash"])
-
-        return receipt
+        return create_receipt(validated_data, items_data, installments_data)
 
     def update(self, instance, validated_data):
-        if instance.receipt_type == "RETURN":
-            raise ValidationError({"error": "لا يمكن تعديل فواتير المرتجعات. برجاء إنشاء مرتجع جديد أو حذفه وإعادة إنشائه."})
-
+        from api.services.receipt_service import update_receipt
         items_data = validated_data.pop("sale_items", None)
         installments_data = validated_data.pop("payments", None)
-
-        # Strict Financial Balance Validation for Installment Sales
-        is_cash_sale = validated_data.get("is_cash_sale", instance.is_cash_sale)
-        if not is_cash_sale:
-            total_amount = validated_data.get("total_amount", instance.total_amount)
-            down_payment = validated_data.get("down_payment", instance.down_payment)
-            
-            if installments_data is not None:
-                installments_total = sum(item.get("amount", 0) for item in installments_data)
-            else:
-                from django.db.models import Sum
-                installments_total = instance.payments.filter(is_deleted=False).aggregate(total=Sum('amount'))['total'] or 0
-
-            if abs(float(total_amount) - float(down_payment + installments_total)) > 0.01:
-                raise ValidationError({
-                    "error": "إجمالي الأقساط والمقدم لا يتطابق مع إجمالي الفاتورة المدخلة بالنظام."
-                })
-
-        with transaction.atomic():
-            for attr, value in validated_data.items():
-                setattr(instance, attr, value)
-
-            from dateutil.relativedelta import relativedelta
-            from datetime import date
-            active_lic = ClientLicense.objects.filter(
-                is_deleted=False
-            ).first()
-            if not active_lic:
-                raise ValidationError({"license": "لا يوجد ترخيص ساري."})
-                
-            try:
-                invoice_date = date(instance.sale_year, instance.sale_month, 1)
-            except:
-                raise ValidationError({"error": "تاريخ الفاتورة غير صحيح."})
-                
-            lic_start_month = active_lic.start_date.replace(day=1)
-            if invoice_date < lic_start_month:
-                raise ValidationError({"error": "التاريخ يسبق بداية الاشتراك."})
-                
-            if active_lic.expiry_date:
-                last_allowed_month = (active_lic.expiry_date - relativedelta(months=2)).replace(day=1)
-                if invoice_date > last_allowed_month:
-                    raise ValidationError({"error": "التاريخ بعد انتهاء الاشتراك."})
-                grace_end = active_lic.expiry_date + relativedelta(days=25)
-                if date.today() > grace_end:
-                    raise ValidationError({"error": "انتهت فترة الاشتراك."})
-
-            instance.save()
-
-            if items_data is not None:
-                # Soft delete old items BEFORE calculating safe limits
-                instance.sale_items.all().update(is_deleted=True)
-
-                # Stock validation
-                from api.views import get_default_date
-                default_year, default_month = get_default_date()
-                target_year = validated_data.get("sale_year", instance.sale_year)
-                target_month = validated_data.get("sale_month", instance.sale_month)
-
-                if validated_data.get("receipt_type", instance.receipt_type) != "RETURN":
-                    for item_data in items_data:
-                        item = item_data["inventory_item"]
-                        qty = item_data["quantity"]
-
-                        safe_limit = item.get_safe_available_qty(target_month, target_year, default_month, default_year)
-                        if qty > safe_limit:
-                            raise ValidationError({
-                                "error": f"عفواً، أقصى كمية يمكن بيعها أو تعديلها للصنف '{item.name}' في هذا التاريخ هي ({safe_limit})."
-                            })
-
-                for item_data in items_data:
-                    SaleItem.objects.create(
-                        receipt=instance, **item_data
-                    )
-
-            if installments_data is not None:
-                instance.payments.all().update(is_deleted=True)
-                for inst_data in installments_data:
-                    payment_month = inst_data.pop("payment_month", 1)
-                    payment_year = inst_data.pop("payment_year", 2026)
-                    if "payment_date" not in inst_data:
-                        import datetime
-                        inst_data["payment_date"] = datetime.date(payment_year, payment_month, 25)
-                    InstallmentPayment.objects.create(
-                        receipt=instance, **inst_data
-                    )
-
-            # Re-hash the receipt
-            current_items = (
-                items_data
-                if items_data is not None
-                else list(instance.sale_items.filter(is_deleted=False).values(
-                    "inventory_item_id", "quantity", "unit_price"
-                ))
-            )
-            if items_data is not None:
-                instance.products_text = " + ".join([f"{i['inventory_item'].name}" if i['quantity'] == 1 else f"{i['quantity']} {i['inventory_item'].name}" for i in items_data])
-
-            instance.receipt_hash = generate_receipt_signature(
-                instance.receipt_number,
-                instance.total_amount,
-                instance.sale_month,
-                instance.sale_year,
-                current_items,
-            )
-            update_fields = ["receipt_hash"]
-            if items_data is not None:
-                update_fields.append("products_text")
-            instance.save(update_fields=update_fields)
-
-        return instance
+        return update_receipt(instance, validated_data, items_data, installments_data)
 
 
 # ---------------------------------------------------------------------------
@@ -682,7 +422,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Expense
         fields = [
-            "id", "branch", "amount", "description",
+            "id", "branch", "category", "amount", "description",
             "expense_year", "expense_month",
             "is_deleted", "created_at",
         ]
@@ -700,7 +440,7 @@ class CompanySettingSerializer(serializers.ModelSerializer):
         model = CompanySetting
         fields = [
             "id", "name", "description",
-            "phone1", "phone2", "footer_text", "is_cloud_viewer",
+            "phone1", "phone2", "footer_text",
             "collection_commission_rate", "zoom_level",
             "is_deleted", "created_at", "admin_password"
         ]
@@ -740,7 +480,6 @@ class ClientLicenseSerializer(serializers.ModelSerializer):
             "id", "product_id",
             "start_date", "expiry_date", "invoices_balance",
             "is_active", "machine_id", "company_code", "license_code_hash",
-            "is_online_active", "online_start_date", "online_expiry_date",
             "last_checkin", "is_deleted", "created_at",
         ]
         read_only_fields = [
