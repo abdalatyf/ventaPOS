@@ -55,6 +55,11 @@ CREATE POLICY "Allow select for audit"
 
 -- Note: No UPDATE or DELETE policies are granted. RLS rejects them by default.
 
+-- Explicit Permissions for API roles (anon, authenticated)
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT SELECT, INSERT ON TABLE public.licenses TO anon, authenticated;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+
 -- 4. Cryptographic Anti-Tamper Trigger (Guaranteed Append-Only)
 -- Prevents any modification or deletion even if elevated privileges are used
 CREATE OR REPLACE FUNCTION public.prevent_license_tamper()
