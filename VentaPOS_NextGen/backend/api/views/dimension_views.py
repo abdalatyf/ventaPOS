@@ -66,8 +66,25 @@ class SalespersonViewSet(SoftDeleteModelViewSet):
 
 
 class SupplierViewSet(SoftDeleteModelViewSet):
-    queryset = Supplier.objects.all()
+    queryset = Supplier.objects.select_related("branch").all()
     serializer_class = SupplierSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        branch_id = get_request_branch_id(self.request)
+        if branch_id:
+            qs = qs.filter(branch_id=branch_id)
+        search = self.request.query_params.get("search")
+        if search:
+            qs = qs.filter(name__icontains=search.strip())
+        return qs
+
+    def perform_create(self, serializer):
+        branch_id = get_request_branch_id(self.request)
+        if branch_id and not serializer.validated_data.get("branch"):
+            serializer.save(branch_id=branch_id)
+        else:
+            serializer.save()
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()

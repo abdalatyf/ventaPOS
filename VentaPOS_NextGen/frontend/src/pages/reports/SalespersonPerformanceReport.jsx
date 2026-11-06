@@ -13,8 +13,22 @@ export default function SalespersonPerformanceReport() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
+  const [salespersonsList, setSalespersonsList] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSalesperson, setSelectedSalesperson] = useState(null);
+  const [areaFilter, setAreaFilter] = useState('');
+
+  useEffect(() => {
+    const fetchSalespersons = async () => {
+      try {
+        const res = await api.get('/salespersons/', { params: { branch_id: branchId } });
+        setSalespersonsList(res.data.results || res.data || []);
+      } catch (err) {
+        console.error('Error fetching salespersons list:', err);
+      }
+    };
+    if (branchId) fetchSalespersons();
+  }, [branchId]);
 
   useEffect(() => {
     const fetchReport = async () => {
@@ -22,9 +36,14 @@ export default function SalespersonPerformanceReport() {
       setLoading(true);
       setError(null);
       try {
-        const res = await api.get('/reports/salesperson-performance/', {
-          params: { branch_id: branchId, year, month }
-        });
+        const params = { branch_id: branchId, year, month };
+        if (selectedSalesperson) {
+          params.salesperson_id = selectedSalesperson.id || selectedSalesperson.salesperson_id;
+        }
+        if (areaFilter) {
+          params.area = areaFilter;
+        }
+        const res = await api.get('/reports/salesperson-performance/', { params });
         setData(res.data || { salespersons: [], totals: {} });
       } catch (err) {
         console.error('Error fetching salesperson performance report:', err);
@@ -34,7 +53,7 @@ export default function SalespersonPerformanceReport() {
       }
     };
     fetchReport();
-  }, [year, month, branchId]);
+  }, [year, month, branchId, selectedSalesperson, areaFilter]);
 
   const items = useMemo(() => {
     if (!data) return [];
@@ -312,9 +331,9 @@ export default function SalespersonPerformanceReport() {
 
   const subFiltersRow1 = () => (
     <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
-      <div style={{ width: '260px' }} className="flex-shrink-0">
+      <div style={{ width: '240px' }} className="flex-shrink-0">
         <ReportAutocomplete
-          items={items}
+          items={salespersonsList}
           value={searchQuery}
           onChange={(text) => {
             setSearchQuery(text);
@@ -326,9 +345,34 @@ export default function SalespersonPerformanceReport() {
           }}
           placeholder="ابحث عن مندوب..."
           displayKey="name"
-          idKey="salesperson_id"
-          searchKeys={['name', 'local_id', 'salesperson_id']}
+          idKey="id"
+          searchKeys={['name', 'local_id', 'id']}
           allowClear={true}
+          className="form-control form-control-sm fw-bold border-secondary-subtle"
+        />
+      </div>
+
+      {/* Area Autocomplete */}
+      <div style={{ width: '200px' }} className="flex-shrink-0">
+        <ReportAutocomplete
+          value={areaFilter}
+          onChange={(val) => setAreaFilter(val)}
+          onSelect={(item) => {
+            const val = typeof item === 'object' ? (item.area || item.name || '') : String(item);
+            setAreaFilter(val);
+          }}
+          fetchSuggestions={async (query) => {
+            try {
+              const res = await api.get('/customer-suggestions/', {
+                params: { field: 'area', term: query || '', branch_id: branchId }
+              });
+              const data = res.data || [];
+              return data.map(i => typeof i === 'object' ? i : { name: i, id: i });
+            } catch {
+              return [];
+            }
+          }}
+          placeholder="تصفية حسب المنطقة..."
           className="form-control form-control-sm fw-bold border-secondary-subtle"
         />
       </div>
@@ -339,6 +383,7 @@ export default function SalespersonPerformanceReport() {
         onClick={() => {
           setSearchQuery('');
           setSelectedSalesperson(null);
+          setAreaFilter('');
         }}
         disabled={loading}
         title="إعادة ضبط"

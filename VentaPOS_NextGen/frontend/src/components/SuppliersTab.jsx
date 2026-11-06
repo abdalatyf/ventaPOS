@@ -60,10 +60,12 @@ export default function SuppliersTab() {
     return filtered;
   }, [suppliers, searchQuery, sortColumn, sortDirection]);
 
+  const currentBranchId = localStorage.getItem('branchId') || 1;
+
   const fetchSuppliers = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/suppliers/');
+      const res = await api.get('/suppliers/', { params: { branch_id: currentBranchId } });
       setSuppliers(res.data.results || res.data);
       setError(null);
     } catch (err) {
@@ -76,7 +78,7 @@ export default function SuppliersTab() {
 
   useEffect(() => {
     fetchSuppliers();
-  }, []);
+  }, [currentBranchId]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -84,7 +86,7 @@ export default function SuppliersTab() {
     
     try {
       setSubmitting(true);
-      const res = await api.post('/suppliers/', { name: newSupplierName.trim() });
+      const res = await api.post('/suppliers/', { name: newSupplierName.trim(), branch: currentBranchId });
       setSuppliers([...suppliers, res.data]);
       setNewSupplierName('');
       toast.success('تم الحفظ بنجاح');
@@ -111,7 +113,7 @@ export default function SuppliersTab() {
   const saveEdit = async (id) => {
     if (!editName.trim()) return;
     try {
-      const res = await api.put(`/suppliers/${id}/`, { name: editName.trim() });
+      const res = await api.put(`/suppliers/${id}/`, { name: editName.trim(), branch: currentBranchId });
       setSuppliers(suppliers.map(s => s.id === id ? res.data : s));
       setEditingId(null);
     } catch (err) {

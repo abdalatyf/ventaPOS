@@ -230,7 +230,7 @@ class Command(BaseCommand):
                 ]
                 suppliers = []
                 for s_name in supplier_names:
-                    s = Supplier.objects.create(name=s_name)
+                    s = Supplier.objects.create(name=s_name, branch=branch)
                     suppliers.append(s)
 
                 today = date.today()

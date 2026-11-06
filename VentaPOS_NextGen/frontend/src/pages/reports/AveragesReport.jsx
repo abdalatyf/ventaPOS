@@ -20,6 +20,7 @@ export default function AveragesReport() {
   const [salespersonId, setSalespersonId] = useState('');
   const [salespersonQuery, setSalespersonQuery] = useState('');
   const [salespersons, setSalespersons] = useState([]);
+  const [areaFilter, setAreaFilter] = useState('');
 
   useEffect(() => {
     const fetchSalespersons = async () => {
@@ -41,6 +42,7 @@ export default function AveragesReport() {
       try {
         let url = `/reports/profit-and-loss/?branch_id=${branchId}&month=${month}&year=${year}`;
         if (salespersonId) url += `&salesperson_id=${salespersonId}`;
+        if (areaFilter) url += `&area=${encodeURIComponent(areaFilter)}`;
         const res = await api.get(url);
         setData(res.data);
       } catch (err) {
@@ -51,7 +53,7 @@ export default function AveragesReport() {
       }
     };
     fetchReport();
-  }, [year, month, branchId, salespersonId]);
+  }, [year, month, branchId, salespersonId, areaFilter]);
 
   const { items, rawCombined } = useMemo(() => {
     if (!data) return { items: [], rawCombined: [] };
@@ -210,6 +212,31 @@ export default function AveragesReport() {
         />
       </div>
 
+      {/* Area Autocomplete */}
+      <div style={{ width: '200px' }} className="flex-shrink-0">
+        <ReportAutocomplete
+          value={areaFilter}
+          onChange={(val) => setAreaFilter(val)}
+          onSelect={(item) => {
+            const val = typeof item === 'object' ? (item.area || item.name || '') : String(item);
+            setAreaFilter(val);
+          }}
+          fetchSuggestions={async (query) => {
+            try {
+              const res = await api.get('/customer-suggestions/', {
+                params: { field: 'area', term: query || '', branch_id: branchId }
+              });
+              const data = res.data || [];
+              return data.map(i => typeof i === 'object' ? i : { name: i, id: i });
+            } catch {
+              return [];
+            }
+          }}
+          placeholder="تصفية حسب المنطقة..."
+          className="form-control form-control-sm fw-bold border-secondary-subtle"
+        />
+      </div>
+
       {/* Reset */}
       <button 
         type="button" 
@@ -220,6 +247,7 @@ export default function AveragesReport() {
           setSaleTypeFilter('all');
           setSalespersonId('');
           setSalespersonQuery('');
+          setAreaFilter('');
         }}
         disabled={loading}
         title="إعادة ضبط"

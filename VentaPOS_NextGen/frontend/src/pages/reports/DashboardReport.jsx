@@ -5,20 +5,91 @@ import api from '../../api';
 import { ReportsContext } from './ReportsLayout';
 import { fmtNum } from '../../utils/formatUtils';
 import { useStandardTableSlots } from '../../components/common/StandardTablePageLayout';
+import ReportAutocomplete from '../../components/ReportAutocomplete';
 
 export default function DashboardReport() {
-  const { year, month, branchId } = useContext(ReportsContext);
+  const { year, month, branchId, registerPrintHandler } = useContext(ReportsContext);
   const navigate = useNavigate();
+
+  const [salespersons, setSalespersons] = useState([]);
+  const [salespersonId, setSalespersonId] = useState('');
+  const [salespersonName, setSalespersonName] = useState('');
+  const [areaFilter, setAreaFilter] = useState('');
+
+  useEffect(() => {
+    if (!branchId) return;
+    api.get('/salespersons/', { params: { branch_id: branchId } })
+      .then(res => setSalespersons(res.data.results || res.data || []))
+      .catch(() => {});
+  }, [branchId]);
 
   const slotPortals = useStandardTableSlots({
     row1Extra: (
-      <div className="text-dark fw-bold small d-flex align-items-center gap-2">
-        <span>ملخص الأداء المالي والتشغيلي الشامل للفرع</span>
+      <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
+        <div style={{ width: '220px' }} className="flex-shrink-0">
+          <div className="input-group input-group-sm flex-nowrap">
+            <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">المندوب</span>
+            <ReportAutocomplete
+              value={salespersonName}
+              onChange={(val) => {
+                setSalespersonName(val);
+                if (!val) setSalespersonId('');
+              }}
+              onSelect={(item) => {
+                setSalespersonName(item.name || '');
+                setSalespersonId(item.id || item.local_id || '');
+              }}
+              items={salespersons}
+              placeholder="جميع المناديب..."
+              className="form-control fw-bold border-secondary-subtle px-1"
+            />
+          </div>
+        </div>
+        <div style={{ width: '220px' }} className="flex-shrink-0">
+          <div className="input-group input-group-sm flex-nowrap">
+            <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">المنطقة</span>
+            <ReportAutocomplete
+              value={areaFilter}
+              onChange={(val) => setAreaFilter(val)}
+              onSelect={(item) => {
+                const val = typeof item === 'object' ? (item.area || item.name || '') : String(item);
+                setAreaFilter(val);
+              }}
+              fetchSuggestions={async (query) => {
+                try {
+                  const res = await api.get('/customer-suggestions/', {
+                    params: { field: 'area', term: query || '', branch_id: branchId }
+                  });
+                  const data = res.data || [];
+                  return data.map(i => typeof i === 'object' ? i : { name: i, id: i });
+                } catch {
+                  return [];
+                }
+              }}
+              placeholder="جميع المناطق..."
+              className="form-control fw-bold border-secondary-subtle px-1"
+            />
+          </div>
+        </div>
+        {(salespersonId || areaFilter) && (
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-secondary px-2 py-1 flex-shrink-0 border-secondary-subtle"
+            onClick={() => {
+              setSalespersonId('');
+              setSalespersonName('');
+              setAreaFilter('');
+            }}
+          >
+            إلغاء الفلاتر
+          </button>
+        )}
       </div>
     ),
     row2: (
-      <div className="text-muted fw-bold small d-flex align-items-center gap-2">
+      <div className="text-muted fw-bold small d-flex align-items-center justify-content-between w-100">
         <span>الفترة المحددة: {year}/{String(month).padStart(2, '0')}</span>
+        <span>ملخص الأداء المالي والتشغيلي الشامل للفرع</span>
       </div>
     )
   });
@@ -38,6 +109,8 @@ export default function DashboardReport() {
           branch_id: branchId,
           year: year,
           month: month,
+          salesperson_id: salespersonId || undefined,
+          area: areaFilter || undefined,
         }
       });
       setData(response.data);
@@ -51,7 +124,7 @@ export default function DashboardReport() {
 
   useEffect(() => {
     fetchReport();
-  }, [year, month, branchId]);
+  }, [year, month, branchId, salespersonId, areaFilter]);
 
   if (loading) {
     return (

@@ -18,6 +18,7 @@ export default function InventoryMovementReport() {
   const [salespersonId, setSalespersonId] = useState('');
   const [salespersonQuery, setSalespersonQuery] = useState('');
   const [salespersonsList, setSalespersonsList] = useState([]);
+  const [areaFilter, setAreaFilter] = useState('');
 
   useEffect(() => {
     const fetchSalespersons = async () => {
@@ -42,7 +43,8 @@ export default function InventoryMovementReport() {
             year,
             month,
             branch_id: branchId,
-            salesperson_id: salespersonId || undefined
+            salesperson_id: salespersonId || undefined,
+            area: areaFilter || undefined,
           }
         });
         setData(res.data || { items: [], total_inventory_value: 0 });
@@ -54,7 +56,7 @@ export default function InventoryMovementReport() {
       }
     };
     fetchReport();
-  }, [year, month, branchId, salespersonId]);
+  }, [year, month, branchId, salespersonId, areaFilter]);
 
   const items = useMemo(() => {
     if (!data) return [];
@@ -220,7 +222,7 @@ export default function InventoryMovementReport() {
       </div>
 
       {/* Salesperson */}
-      <div style={{ width: '220px' }} className="flex-shrink-0">
+      <div style={{ width: '200px' }} className="flex-shrink-0">
         <ReportAutocomplete
           items={salespersonsList}
           value={salespersonQuery}
@@ -245,6 +247,31 @@ export default function InventoryMovementReport() {
           className="form-control form-control-sm fw-bold border-secondary-subtle"
         />
       </div>
+
+      {/* Area */}
+      <div style={{ width: '200px' }} className="flex-shrink-0">
+        <ReportAutocomplete
+          value={areaFilter}
+          onChange={(val) => setAreaFilter(val)}
+          onSelect={(item) => {
+            const val = typeof item === 'object' ? (item.area || item.name || '') : String(item);
+            setAreaFilter(val);
+          }}
+          fetchSuggestions={async (query) => {
+            try {
+              const res = await api.get('/customer-suggestions/', {
+                params: { field: 'area', term: query || '', branch_id: branchId }
+              });
+              const data = res.data || [];
+              return data.map(i => typeof i === 'object' ? i : { name: i, id: i });
+            } catch {
+              return [];
+            }
+          }}
+          placeholder="جميع المناطق..."
+          className="form-control form-control-sm fw-bold border-secondary-subtle"
+        />
+      </div>
     </div>
   );
 
@@ -258,6 +285,7 @@ export default function InventoryMovementReport() {
           setSelectedProduct(null);
           setSalespersonId('');
           setSalespersonQuery('');
+          setAreaFilter('');
         }}
         disabled={loading}
         title="إعادة ضبط"

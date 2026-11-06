@@ -1,6 +1,7 @@
 import React from 'react';
 import Autocomplete from '../Autocomplete';
 import { IconRefresh } from '@tabler/icons-react';
+import api from '../../api';
 
 export function ReceiptsFilterRow1({
   filters,
@@ -135,17 +136,32 @@ export function ReceiptsFilterRow2({
         </div>
       </div>
 
-      {/* Area */}
-      <div className="flex-grow-1" style={{ minWidth: '140px' }}>
-        <div className="input-group input-group-sm">
+      {/* Area Autocomplete */}
+      <div className="flex-grow-1" style={{ minWidth: '150px' }}>
+        <div className="input-group input-group-sm flex-nowrap">
           <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">المنطقة</span>
-          <input 
-            type="text" 
-            className="form-control fw-bold border-secondary-subtle" 
-            name="area" 
+          <Autocomplete
+            value={filters.area || ''}
+            onChange={(val) => {
+              handleFilterChange({ target: { name: 'area', value: val } });
+            }}
+            onSelect={(item) => {
+              const selectedArea = typeof item === 'object' ? (item.area || item.name || '') : String(item);
+              handleFilterChange({ target: { name: 'area', value: selectedArea } });
+            }}
+            fetchSuggestions={async (query) => {
+              try {
+                const res = await api.get('/customer-suggestions/', {
+                  params: { field: 'area', term: query || '' }
+                });
+                const data = res.data || [];
+                return data.map(i => typeof i === 'object' ? i : { name: i, id: i });
+              } catch {
+                return [];
+              }
+            }}
             placeholder="المنطقة / القرية"
-            value={filters.area} 
-            onChange={handleFilterChange} 
+            className="form-control fw-bold border-secondary-subtle px-1"
           />
         </div>
       </div>

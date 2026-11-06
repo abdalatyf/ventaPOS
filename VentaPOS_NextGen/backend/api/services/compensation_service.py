@@ -8,9 +8,10 @@ import calendar
 import datetime
 
 
-def calculate_branch_salespersons_performance(branch_id, month, year, get_cached_comm=None, coll_rate=None):
+def calculate_branch_salespersons_performance(branch_id, month, year, get_cached_comm=None, coll_rate=None, salesperson_id=None, area=None):
     """
-    Computes performance and due salary for all active salespersons in a branch for a given month/year.
+    Computes performance and due salary for active salespersons in a branch for a given month/year.
+    Supports optional salesperson_id and area filters.
     Optimized with bulk grouped queries and B-Tree date range scanning.
     Returns:
     {
@@ -39,10 +40,11 @@ def calculate_branch_salespersons_performance(branch_id, month, year, get_cached
         branch_item_ids = list(InventoryItem.objects.filter(branch_id=branch_id, is_deleted=False).values_list('id', flat=True))
         get_cached_comm = get_bulk_commission_resolver(branch_item_ids)
 
-    salespersons = list(Salesperson.objects.filter(
-        branch_id=branch_id,
-        is_deleted=False
-    ))
+    sp_query = Q(branch_id=branch_id, is_deleted=False)
+    if salesperson_id:
+        sp_query &= Q(id=salesperson_id)
+
+    salespersons = list(Salesperson.objects.filter(sp_query))
 
     if not salespersons:
         return {
@@ -75,14 +77,20 @@ def calculate_branch_salespersons_performance(branch_id, month, year, get_cached
     }
 
     # 1. Non-return receipts bulk grouped
+    non_return_qs = Receipt.objects.filter(
+        branch_id=branch_id,
+        sale_month=month,
+        sale_year=year,
+        is_deleted=False,
+    ).exclude(receipt_type="RETURN")
+
+    if salesperson_id:
+        non_return_qs = non_return_qs.filter(salesperson_id=salesperson_id)
+    if area:
+        non_return_qs = non_return_qs.filter(area__icontains=area)
+
     non_return_receipts = (
-        Receipt.objects.filter(
-            branch_id=branch_id,
-            sale_month=month,
-            sale_year=year,
-            is_deleted=False,
-        )
-        .exclude(receipt_type="RETURN")
+        non_return_qs
         .values("salesperson_id")
         .annotate(
             count=Count("id"),
@@ -100,18 +108,24 @@ def calculate_branch_salespersons_performance(branch_id, month, year, get_cached
             sp_data[sid]["down_payments"] = row["down_payments"] or 0
 
     # 2. Return receipts bulk
-    return_receipts = list(
-        Receipt.objects.filter(
-            branch_id=branch_id,
-            receipt_type="RETURN",
-            is_deleted=False,
-        )
-        .filter(
-            Q(parent_receipt__sale_month=month, parent_receipt__sale_year=year)
-            | Q(parent_receipt__isnull=True, sale_month=month, sale_year=year)
-        )
-        .select_related("parent_receipt")
+    return_qs = Receipt.objects.filter(
+        branch_id=branch_id,
+        receipt_type="RETURN",
+        is_deleted=False,
+    ).filter(
+        Q(parent_receipt__sale_month=month, parent_receipt__sale_year=year)
+        | Q(parent_receipt__isnull=True, sale_month=month, sale_year=year)
     )
+    if salesperson_id:
+        return_qs = return_qs.filter(
+            Q(salesperson_id=salesperson_id) | Q(parent_receipt__salesperson_id=salesperson_id)
+        )
+    if area:
+        return_qs = return_qs.filter(
+            Q(area__icontains=area) | Q(parent_receipt__area__icontains=area)
+        )
+
+    return_receipts = list(return_qs.select_related("parent_receipt"))
     for ret in return_receipts:
         affected_sp_ids = set()
         if ret.salesperson_id and ret.salesperson_id in sp_data:
@@ -131,14 +145,19 @@ def calculate_branch_salespersons_performance(branch_id, month, year, get_cached
     start_date = datetime.date(year, month, 1)
     end_date = datetime.date(year, month, last_day)
 
-    collections_qs = InstallmentPayment.objects.filter(
+    collections_filter = Q(
         receipt__branch_id=branch_id,
         receipt__is_confirmed=True,
         payment_date__range=(start_date, end_date),
         is_deleted=False,
         receipt__is_deleted=False,
     )
-    total_branch_collections = collections_qs.aggregate(s=Sum("amount"))["s"] or 0
+    if salesperson_id:
+        collections_filter &= Q(receipt__salesperson_id=salesperson_id)
+    if area:
+        collections_filter &= Q(receipt__area__icontains=area)
+
+    collections_qs = InstallmentPayment.objects.filter(collections_filter)
     collections = (
         collections_qs
         .values("receipt__salesperson_id")
@@ -150,17 +169,20 @@ def calculate_branch_salespersons_performance(branch_id, month, year, get_cached
             sp_data[sid]["collected"] = row["total"] or 0
 
     # 4. Sale items (Sales commission)
-    sale_items = (
-        SaleItem.objects.filter(
-            receipt__branch_id=branch_id,
-            receipt__sale_month=month,
-            receipt__sale_year=year,
-            receipt__is_deleted=False,
-            is_deleted=False,
-        )
-        .exclude(receipt__receipt_type="RETURN")
-        .select_related("inventory_item", "receipt")
-    )
+    sale_items_qs = SaleItem.objects.filter(
+        receipt__branch_id=branch_id,
+        receipt__sale_month=month,
+        receipt__sale_year=year,
+        receipt__is_deleted=False,
+        is_deleted=False,
+    ).exclude(receipt__receipt_type="RETURN")
+
+    if salesperson_id:
+        sale_items_qs = sale_items_qs.filter(receipt__salesperson_id=salesperson_id)
+    if area:
+        sale_items_qs = sale_items_qs.filter(receipt__area__icontains=area)
+
+    sale_items = sale_items_qs.select_related("inventory_item", "receipt")
     for item in sale_items:
         sid = item.receipt.salesperson_id
         if sid in sp_data:
@@ -169,19 +191,25 @@ def calculate_branch_salespersons_performance(branch_id, month, year, get_cached
             sp_data[sid]["comm_sales"] += float(qty) * float(comm_unit)
 
     # 5. Return items (Commission deduction)
-    return_items = (
-        SaleItem.objects.filter(
-            receipt__branch_id=branch_id,
-            receipt__receipt_type="RETURN",
-            receipt__is_deleted=False,
-            is_deleted=False,
-        )
-        .filter(
-            Q(receipt__parent_receipt__sale_month=month, receipt__parent_receipt__sale_year=year)
-            | Q(receipt__parent_receipt__isnull=True, receipt__sale_month=month, receipt__sale_year=year)
-        )
-        .select_related("inventory_item", "receipt", "receipt__parent_receipt")
+    return_items_qs = SaleItem.objects.filter(
+        receipt__branch_id=branch_id,
+        receipt__receipt_type="RETURN",
+        receipt__is_deleted=False,
+        is_deleted=False,
+    ).filter(
+        Q(receipt__parent_receipt__sale_month=month, receipt__parent_receipt__sale_year=year)
+        | Q(receipt__parent_receipt__isnull=True, receipt__sale_month=month, receipt__sale_year=year)
     )
+    if salesperson_id:
+        return_items_qs = return_items_qs.filter(
+            Q(receipt__salesperson_id=salesperson_id) | Q(receipt__parent_receipt__salesperson_id=salesperson_id)
+        )
+    if area:
+        return_items_qs = return_items_qs.filter(
+            Q(receipt__area__icontains=area) | Q(receipt__parent_receipt__area__icontains=area)
+        )
+
+    return_items = return_items_qs.select_related("inventory_item", "receipt", "receipt__parent_receipt")
     for item in return_items:
         affected_sp_ids = set()
         if item.receipt.salesperson_id and item.receipt.salesperson_id in sp_data:
@@ -210,7 +238,7 @@ def calculate_branch_salespersons_performance(branch_id, month, year, get_cached
     grand_total_cash = 0
     grand_total_credit = 0
     grand_total_down_payments = 0
-    grand_total_collected = float(total_branch_collections)
+    grand_total_collected = 0
     grand_total_comm_sales = 0
     grand_total_comm_coll = 0
 
@@ -225,9 +253,14 @@ def calculate_branch_salespersons_performance(branch_id, month, year, get_cached
         comm_coll = float(collected) * coll_rate
         due_salary = float(comm_sales) + float(comm_coll)
 
+        # If area is filtered, exclude salespersons with zero transactions in that area
+        if area and d["receipts_count"] == 0 and collected == 0 and total_sales_val == 0 and d["cash_returns"] == 0 and d["credit_returns"] == 0 and comm_sales == 0:
+            continue
+
         grand_total_cash += cash_sales
         grand_total_credit += credit_sales
         grand_total_down_payments += down_payments
+        grand_total_collected += float(collected)
         grand_total_comm_sales += float(comm_sales)
         grand_total_comm_coll += float(comm_coll)
 

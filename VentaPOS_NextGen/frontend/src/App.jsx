@@ -33,6 +33,7 @@ import ToolsDashboard from './pages/tools/ToolsDashboard';
 import ReportsLayout from './pages/reports/ReportsLayout';
 import ReceiptsReport from './pages/reports/ReceiptsReport';
 import ExpensesReport from './pages/reports/ExpensesReport';
+import AreasReport from './pages/reports/AreasReport';
 import PurchasesReport from './pages/reports/PurchasesReport';
 import SettingsIndex from './pages/settings/SettingsIndex';
 
@@ -164,6 +165,7 @@ function App() {
             <Route path="dashboard" element={<DashboardReport />} />
             <Route path="receipts" element={<ReceiptsReport />} />
             <Route path="purchases" element={<PurchasesReport />} />
+            <Route path="areas" element={<AreasReport />} />
             <Route path="expenses" element={<ExpensesReport />} />
             <Route path="salesperson" element={<SalespersonPerformanceReport />} />
             <Route path="inventory" element={<InventoryMovementReport />} />

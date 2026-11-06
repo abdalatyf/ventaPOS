@@ -82,6 +82,15 @@ class DashboardReportView(views.APIView):
         month = int(month_str) if month_str.isdigit() else now.month
         year = int(year_str) if year_str.isdigit() else now.year
 
+        sp_id_str = request.query_params.get("salesperson_id", "").strip()
+        salesperson_id = None
+        if sp_id_str:
+            try:
+                salesperson_id = int(to_english_numerals(sp_id_str))
+            except ValueError:
+                pass
+        area_query = request.query_params.get("area", "").strip()
+
         active_lic = ClientLicense.objects.filter(is_active=True, is_deleted=False).exclude(machine_id="DEMO_MACHINE").order_by('-expiry_date').first()
         is_pre_license_month = False
         if active_lic and active_lic.start_date:
@@ -108,6 +117,17 @@ class DashboardReportView(views.APIView):
                 Q(parent_receipt__isnull=True, sale_month=month, sale_year=year)
             )
 
+        if salesperson_id:
+            sales_receipts = sales_receipts.filter(salesperson_id=salesperson_id)
+            return_receipts = return_receipts.filter(
+                Q(salesperson_id=salesperson_id) | Q(parent_receipt__salesperson_id=salesperson_id)
+            )
+        if area_query:
+            sales_receipts = sales_receipts.filter(area__icontains=area_query)
+            return_receipts = return_receipts.filter(
+                Q(area__icontains=area_query) | Q(parent_receipt__area__icontains=area_query)
+            )
+
         sales_rev = sales_receipts.aggregate(s=Sum('total_amount'))['s'] or 0
         returns_rev = return_receipts.aggregate(s=Sum('total_amount'))['s'] or 0
         total_revenue = float(sales_rev) - float(returns_rev)
@@ -124,6 +144,11 @@ class DashboardReportView(views.APIView):
             receipt__is_deleted=False,
             is_deleted=False
         ).exclude(receipt__receipt_type='RETURN').select_related('inventory_item', 'receipt')
+
+        if salesperson_id:
+            sale_items = sale_items.filter(receipt__salesperson_id=salesperson_id)
+        if area_query:
+            sale_items = sale_items.filter(receipt__area__icontains=area_query)
 
         total_cogs = 0
         total_sales_comm_fixed = 0
@@ -143,6 +168,17 @@ class DashboardReportView(views.APIView):
             Q(receipt__parent_receipt__sale_month=month, receipt__parent_receipt__sale_year=year) |
             Q(receipt__parent_receipt__isnull=True, receipt__sale_month=month, receipt__sale_year=year)
         ).select_related('inventory_item', 'receipt')
+
+        if salesperson_id:
+            return_sale_items = return_sale_items.filter(
+                Q(receipt__salesperson_id=salesperson_id) |
+                Q(receipt__parent_receipt__salesperson_id=salesperson_id)
+            )
+        if area_query:
+            return_sale_items = return_sale_items.filter(
+                Q(receipt__area__icontains=area_query) |
+                Q(receipt__parent_receipt__area__icontains=area_query)
+            )
 
         for item in return_sale_items:
             qty = item.quantity
@@ -275,11 +311,25 @@ class SalespersonPerformanceReportView(views.APIView):
 
         month_str = request.query_params.get("month", "").strip()
         year_str = request.query_params.get("year", "").strip()
+        sp_id_str = request.query_params.get("salesperson_id", "").strip()
+        area = request.query_params.get("area", "").strip()
+
+        salesperson_id = None
+        if sp_id_str:
+            try:
+                salesperson_id = int(to_english_numerals(sp_id_str))
+            except ValueError:
+                pass
+
         now = timezone.now()
         month = int(month_str) if month_str.isdigit() else now.month
         year = int(year_str) if year_str.isdigit() else now.year
 
-        perf_data = calculate_branch_salespersons_performance(branch_id, month, year)
+        perf_data = calculate_branch_salespersons_performance(
+            branch_id, month, year,
+            salesperson_id=salesperson_id,
+            area=area if area else None
+        )
 
         return Response({
             "totals": perf_data["totals"],
@@ -333,15 +383,20 @@ class InventoryMovementReportView(views.APIView):
             resolve_price = get_bulk_price_resolver(items)
 
             sp_sales_map = defaultdict(lambda: {'sales': 0, 'sales_returns': 0})
-            if salesperson_id:
+            area_query = request.query_params.get("area", "").strip()
+            if salesperson_id or area_query:
                 sp_sales_qs = SaleItem.objects.filter(
                     receipt__branch_id=branch_id,
-                    receipt__salesperson_id=salesperson_id,
                     receipt__sale_month=month, receipt__sale_year=year,
                     inventory_item_id__in=[item.id for item in items],
                     is_deleted=False,
                     receipt__is_deleted=False
-                ).values('inventory_item_id', 'receipt__receipt_type').annotate(s=Sum('quantity'))
+                )
+                if salesperson_id:
+                    sp_sales_qs = sp_sales_qs.filter(receipt__salesperson_id=salesperson_id)
+                if area_query:
+                    sp_sales_qs = sp_sales_qs.filter(receipt__area__icontains=area_query)
+                sp_sales_qs = sp_sales_qs.values('inventory_item_id', 'receipt__receipt_type').annotate(s=Sum('quantity'))
                 for row in sp_sales_qs:
                     iid = row['inventory_item_id']
                     rtype = row['receipt__receipt_type']
@@ -365,7 +420,7 @@ class InventoryMovementReportView(views.APIView):
                 purchases = movements['purchases']
                 returns = movements['purchase_returns']
 
-                if salesperson_id:
+                if salesperson_id or area_query:
                     sales = sp_sales_map[item.id]['sales']
                     sales_returns = sp_sales_map[item.id]['sales_returns']
                 else:
@@ -456,6 +511,14 @@ class ProfitAndLossReportView(views.APIView):
             return_items_qs = return_items_qs.filter(
                 Q(receipt__salesperson_id=salesperson_id) |
                 Q(receipt__parent_receipt__salesperson_id=salesperson_id)
+            )
+
+        area_query = request.query_params.get("area", "").strip()
+        if area_query:
+            sale_items_qs = sale_items_qs.filter(receipt__area__icontains=area_query)
+            return_items_qs = return_items_qs.filter(
+                Q(receipt__area__icontains=area_query) |
+                Q(receipt__parent_receipt__area__icontains=area_query)
             )
 
         cash_groups = {}
@@ -633,13 +696,27 @@ class CashDrawerReportView(views.APIView):
         month = int(month_str) if month_str.isdigit() else now.month
         year = int(year_str) if year_str.isdigit() else now.year
 
+        sp_id_str = request.query_params.get("salesperson_id", "").strip()
+        salesperson_id = None
+        if sp_id_str:
+            try:
+                salesperson_id = int(to_english_numerals(sp_id_str))
+            except ValueError:
+                pass
+        area_query = request.query_params.get("area", "").strip()
+
         # 1. Cash Sales receipts
         cash_receipts = Receipt.objects.filter(
             branch_id=branch_id,
             sale_month=month, sale_year=year,
             is_cash_sale=True,
             is_deleted=False
-        ).order_by('created_at')
+        )
+        if salesperson_id:
+            cash_receipts = cash_receipts.filter(salesperson_id=salesperson_id)
+        if area_query:
+            cash_receipts = cash_receipts.filter(area__icontains=area_query)
+        cash_receipts = cash_receipts.order_by('created_at')
 
         cash_sales_list = [
             {
@@ -659,7 +736,12 @@ class CashDrawerReportView(views.APIView):
             is_cash_sale=False,
             down_payment__gt=0,
             is_deleted=False
-        ).order_by('created_at')
+        )
+        if salesperson_id:
+            down_payment_receipts = down_payment_receipts.filter(salesperson_id=salesperson_id)
+        if area_query:
+            down_payment_receipts = down_payment_receipts.filter(area__icontains=area_query)
+        down_payment_receipts = down_payment_receipts.order_by('created_at')
 
         down_payments_list = [
             {
@@ -686,7 +768,12 @@ class CashDrawerReportView(views.APIView):
             payment_date__range=(start_date, end_date),
             is_deleted=False,
             receipt__is_deleted=False
-        ).order_by('payment_date').select_related('receipt')
+        )
+        if salesperson_id:
+            collections_payments = collections_payments.filter(receipt__salesperson_id=salesperson_id)
+        if area_query:
+            collections_payments = collections_payments.filter(receipt__area__icontains=area_query)
+        collections_payments = collections_payments.order_by('payment_date').select_related('receipt')
 
         collections_list = [
             {
@@ -840,6 +927,7 @@ class PurchasesReportView(views.APIView):
         if item_id_str.isdigit():
             filters &= Q(items__inventory_item_id=int(item_id_str), items__is_deleted=False)
 
+        # 1. Base Query on Invoices
         invoices_qs = (
             PurchaseInvoice.objects.filter(filters)
             .distinct()
@@ -857,9 +945,9 @@ class PurchasesReportView(views.APIView):
         distinct_suppliers = set()
 
         for inv in invoices_qs:
-            items_list = list(inv.items.filter(is_deleted=False).select_related("inventory_item"))
-            inv_total = sum(float(it.quantity * it.purchase_price) for it in items_list)
-            inv_units = sum(it.quantity for it in items_list)
+            items_list_inv = list(inv.items.filter(is_deleted=False).select_related("inventory_item"))
+            inv_total = sum(float(it.quantity * it.purchase_price) for it in items_list_inv)
+            inv_units = sum(it.quantity for it in items_list_inv)
 
             if inv.supplier_id:
                 distinct_suppliers.add(inv.supplier_id)
@@ -873,7 +961,7 @@ class PurchasesReportView(views.APIView):
                 gross_purchases_amount += inv_total
                 total_items_quantity += inv_units
 
-            summary_parts = [f"{it.inventory_item.name} ({it.quantity})" for it in items_list]
+            summary_parts = [f"{it.inventory_item.name} ({it.quantity})" for it in items_list_inv]
             items_summary = " - ".join(summary_parts) if summary_parts else "بدون بنود"
 
             invoices_list.append({
@@ -891,6 +979,97 @@ class PurchasesReportView(views.APIView):
                 "created_at": inv.created_at.isoformat() if inv.created_at else None,
             })
 
+        # 2. Aggregation by (Product, Supplier)
+        item_filters = Q(
+            invoice__branch_id=branch_id,
+            invoice__is_deleted=False,
+            is_deleted=False
+        )
+        if year_str.isdigit():
+            item_filters &= Q(invoice__invoice_year=int(year_str))
+        if month_str.isdigit():
+            item_filters &= Q(invoice__invoice_month=int(month_str))
+        if supplier_id_str.isdigit():
+            item_filters &= Q(invoice__supplier_id=int(supplier_id_str))
+        if invoice_type in ("PURCHASE", "RETURN"):
+            item_filters &= Q(invoice__invoice_type=invoice_type)
+        if invoice_from.isdigit():
+            item_filters &= Q(invoice__invoice_number__gte=int(invoice_from))
+        if invoice_to.isdigit():
+            item_filters &= Q(invoice__invoice_number__lte=int(invoice_to))
+        if item_id_str.isdigit():
+            item_filters &= Q(inventory_item_id=int(item_id_str))
+
+        raw_items_qs = (
+            PurchaseInvoiceItem.objects.filter(item_filters)
+            .select_related("inventory_item", "invoice", "invoice__supplier")
+            .order_by("inventory_item__name", "invoice__supplier__name")
+        )
+
+        matrix = {}
+        for it in raw_items_qs:
+            item_id = it.inventory_item_id
+            item_name = it.inventory_item.name if it.inventory_item else "صنف محذوف"
+            supp_id = it.invoice.supplier_id
+            supp_name = it.invoice.supplier.name if it.invoice.supplier else "مورد عام"
+
+            key = (item_id, supp_id)
+            if key not in matrix:
+                matrix[key] = {
+                    "item_id": item_id,
+                    "item_name": item_name,
+                    "supplier_id": supp_id,
+                    "supplier_name": supp_name,
+                    "invoices_set": set(),
+                    "purchased_qty": 0,
+                    "returned_qty": 0,
+                    "gross_purchases": 0.0,
+                    "returns_amount": 0.0,
+                }
+
+            matrix[key]["invoices_set"].add(it.invoice_id)
+            line_cost = float(it.quantity * it.purchase_price)
+            if it.invoice.invoice_type == "RETURN":
+                matrix[key]["returned_qty"] += it.quantity
+                matrix[key]["returns_amount"] += line_cost
+            else:
+                matrix[key]["purchased_qty"] += it.quantity
+                matrix[key]["gross_purchases"] += line_cost
+
+        aggregated_items = []
+        distinct_products = set()
+        for idx, ((i_id, s_id), data_dict) in enumerate(sorted(matrix.items(), key=lambda x: (x[1]["item_name"], x[1]["supplier_name"])), start=1):
+            distinct_products.add(i_id)
+            p_qty = data_dict["purchased_qty"]
+            r_qty = data_dict["returned_qty"]
+            net_qty = p_qty - r_qty
+            g_amt = data_dict["gross_purchases"]
+            r_amt = data_dict["returns_amount"]
+            net_amt = g_amt - r_amt
+
+            if net_qty > 0 and net_amt > 0:
+                avg_cost = round(net_amt / net_qty, 2)
+            elif p_qty > 0:
+                avg_cost = round(g_amt / p_qty, 2)
+            else:
+                avg_cost = 0.0
+
+            aggregated_items.append({
+                "index": idx,
+                "item_id": i_id,
+                "item_name": data_dict["item_name"],
+                "supplier_id": s_id,
+                "supplier_name": data_dict["supplier_name"],
+                "invoices_count": len(data_dict["invoices_set"]),
+                "purchased_qty": p_qty,
+                "returned_qty": r_qty,
+                "net_qty": net_qty,
+                "avg_unit_cost": avg_cost,
+                "gross_purchases": g_amt,
+                "returns_amount": r_amt,
+                "net_purchases": net_amt,
+            })
+
         net_purchases_amount = gross_purchases_amount - gross_returns_amount
 
         summary_data = {
@@ -901,6 +1080,7 @@ class PurchasesReportView(views.APIView):
             "total_returns_amount": gross_returns_amount,
             "total_items_quantity": total_items_quantity,
             "suppliers_count": len(distinct_suppliers),
+            "distinct_products_count": len(distinct_products),
             # Aliases for frontend convenience
             "purchase_invoices_count": purchases_count,
             "returns_count": returns_count,
@@ -912,7 +1092,170 @@ class PurchasesReportView(views.APIView):
         return Response({
             "summary": summary_data,
             "kpis": summary_data,
+            "items": aggregated_items,
             "invoices": invoices_list,
+        })
+
+
+class AreasReportView(views.APIView):
+    """
+    GET /api/v1/reports/areas/
+    Geographic zones & territories analytical report.
+    Aggregates sales, collections, and down payments per geographic area.
+    """
+    def get(self, request):
+        branch_id = validate_request_branch(request)
+
+        month_str = request.query_params.get("month", "").strip()
+        year_str = request.query_params.get("year", "").strip()
+        sp_id_str = request.query_params.get("salesperson_id", "").strip()
+        area_query = request.query_params.get("area", "").strip()
+
+        now = timezone.now()
+        month = int(month_str) if month_str.isdigit() else now.month
+        year = int(year_str) if year_str.isdigit() else now.year
+
+        salesperson_id = None
+        if sp_id_str:
+            try:
+                salesperson_id = int(to_english_numerals(sp_id_str))
+            except ValueError:
+                pass
+
+        receipts_qs = Receipt.objects.filter(
+            branch_id=branch_id,
+            sale_month=month,
+            sale_year=year,
+            is_deleted=False
+        ).select_related("salesperson")
+
+        if salesperson_id:
+            receipts_qs = receipts_qs.filter(salesperson_id=salesperson_id)
+        if area_query:
+            receipts_qs = receipts_qs.filter(area__icontains=area_query)
+
+        # Monthly due installments in the given month/year
+        import calendar
+        import datetime
+        _, last_day = calendar.monthrange(year, month)
+        start_date = datetime.date(year, month, 1)
+        end_date = datetime.date(year, month, last_day)
+
+        due_payments_qs = InstallmentPayment.objects.filter(
+            receipt__branch_id=branch_id,
+            receipt__is_deleted=False,
+            is_deleted=False,
+            payment_date__range=(start_date, end_date)
+        ).select_related("receipt")
+
+        if salesperson_id:
+            due_payments_qs = due_payments_qs.filter(receipt__salesperson_id=salesperson_id)
+        if area_query:
+            due_payments_qs = due_payments_qs.filter(receipt__area__icontains=area_query)
+
+        area_due_map = defaultdict(float)
+        for p in due_payments_qs:
+            a_key = (p.receipt.area or "").strip() or "غير محدد"
+            area_due_map[a_key] += float(p.amount or 0)
+
+        area_data = {}
+        for r in receipts_qs:
+            a_name = (r.area or "").strip() or "غير محدد"
+            if a_name not in area_data:
+                area_data[a_name] = {
+                    "area": a_name,
+                    "invoices_count": 0,
+                    "cash_sales": 0.0,
+                    "installment_sales": 0.0,
+                    "gross_sales": 0.0,
+                    "down_payments": 0.0,
+                    "returns_count": 0,
+                    "returns_amount": 0.0,
+                    "salespersons": set(),
+                }
+
+            area_data[a_name]["invoices_count"] += 1
+            if r.salesperson:
+                area_data[a_name]["salespersons"].add(r.salesperson.name)
+
+            amt = float(r.total_amount or 0)
+            dp = float(r.down_payment or 0)
+
+            if r.receipt_type == 'RETURN':
+                area_data[a_name]["returns_count"] += 1
+                area_data[a_name]["returns_amount"] += amt
+            else:
+                area_data[a_name]["gross_sales"] += amt
+                area_data[a_name]["down_payments"] += dp
+                if r.is_cash_sale:
+                    area_data[a_name]["cash_sales"] += amt
+                else:
+                    area_data[a_name]["installment_sales"] += amt
+
+        # Also incorporate areas that might only have due payments this month
+        for a_name, due_amt in area_due_map.items():
+            if a_name not in area_data:
+                area_data[a_name] = {
+                    "area": a_name,
+                    "invoices_count": 0,
+                    "cash_sales": 0.0,
+                    "installment_sales": 0.0,
+                    "gross_sales": 0.0,
+                    "down_payments": 0.0,
+                    "returns_count": 0,
+                    "returns_amount": 0.0,
+                    "salespersons": set(),
+                }
+
+        areas_list = []
+        total_gross = 0.0
+        total_returns = 0.0
+        total_down_payments = 0.0
+        total_due_installments = sum(area_due_map.values())
+        total_invoices = 0
+
+        for idx, (a_name, d) in enumerate(sorted(area_data.items(), key=lambda x: -x[1]["gross_sales"]), start=1):
+            net = d["gross_sales"] - d["returns_amount"]
+            due_inst = round(area_due_map.get(a_name, 0.0), 2)
+            total_gross += d["gross_sales"]
+            total_returns += d["returns_amount"]
+            total_down_payments += d["down_payments"]
+            total_invoices += d["invoices_count"]
+
+            areas_list.append({
+                "index": idx,
+                "area": a_name,
+                "invoices_count": d["invoices_count"],
+                "cash_sales": round(d["cash_sales"], 2),
+                "installment_sales": round(d["installment_sales"], 2),
+                "gross_sales": round(d["gross_sales"], 2),
+                "down_payments": round(d["down_payments"], 2),
+                "due_installments_month": due_inst,
+                "returns_count": d["returns_count"],
+                "returns_amount": round(d["returns_amount"], 2),
+                "net_sales": round(net, 2),
+                "active_salespersons": sorted(list(d["salespersons"])) if d["salespersons"] else ["-"],
+                "salespersons_display": "، ".join(sorted(list(d["salespersons"]))) if d["salespersons"] else "-",
+            })
+
+        net_sales = total_gross - total_returns
+        top_area = areas_list[0]["area"] if areas_list else "-"
+
+        summary_data = {
+            "total_sales": round(total_gross, 2),
+            "net_sales": round(net_sales, 2),
+            "total_returns_amount": round(total_returns, 2),
+            "total_down_payments": round(total_down_payments, 2),
+            "total_due_installments": round(total_due_installments, 2),
+            "total_invoices_count": total_invoices,
+            "areas_count": len(areas_list),
+            "top_area": top_area,
+        }
+
+        return Response({
+            "summary": summary_data,
+            "kpis": summary_data,
+            "areas": areas_list,
         })
 
 

@@ -64,6 +64,7 @@ from .report_views import (
     CashDrawerReportView,
     InstallmentsReportView,
     PurchasesReportView,
+    AreasReportView,
     ReportDesktopPrintView,
 )
 from .system_views import (

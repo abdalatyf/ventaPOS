@@ -298,14 +298,28 @@ export default function InstallmentsReport() {
         />
       </div>
 
-      {/* Area */}
-      <div style={{ width: '150px' }} className="flex-shrink-0">
-        <DebouncedInput 
-          type="text" 
-          className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
-          placeholder="المنطقة..." 
-          value={area} 
-          onChange={(e) => setArea(e.target.value)} 
+      {/* Area Autocomplete */}
+      <div style={{ width: '180px' }} className="flex-shrink-0">
+        <ReportAutocomplete
+          value={area}
+          onChange={(val) => setArea(val)}
+          onSelect={(item) => {
+            const val = typeof item === 'object' ? (item.area || item.name || '') : String(item);
+            setArea(val);
+          }}
+          fetchSuggestions={async (query) => {
+            try {
+              const res = await api.get('/customer-suggestions/', {
+                params: { field: 'area', term: query || '', branch_id: branchId }
+              });
+              const data = res.data || [];
+              return data.map(i => typeof i === 'object' ? i : { name: i, id: i });
+            } catch {
+              return [];
+            }
+          }}
+          placeholder="المنطقة..."
+          className="form-control form-control-sm fw-bold border-secondary-subtle"
         />
       </div>
     </div>

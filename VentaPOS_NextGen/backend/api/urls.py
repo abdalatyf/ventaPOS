@@ -12,7 +12,7 @@ from .views import (
     CustomerSuggestionsView, ProductSuggestionsView,
     DashboardReportView, SalespersonPerformanceReportView, InventoryMovementReportView,
     ProfitAndLossReportView, CashDrawerReportView, DefaultDateView, InstallmentsReportView,
-    PurchasesReportView, ReportDesktopPrintView,
+    PurchasesReportView, AreasReportView, ReportDesktopPrintView,
     SystemCheckUpdateView, SystemApplyUpdateView
 )
 from .views import ExpenseViewSet
@@ -63,6 +63,7 @@ urlpatterns = [
     path('reports/cash-drawer/', CashDrawerReportView.as_view(), name='report-cash-drawer-alias'),
     path('reports/installments/', InstallmentsReportView.as_view(), name='report-installments'),
     path('reports/purchases/', PurchasesReportView.as_view(), name='report-purchases'),
+    path('reports/areas/', AreasReportView.as_view(), name='report-areas'),
     path('reports/desktop_print/', ReportDesktopPrintView.as_view(), name='report-desktop-print'),
     
     # Tools APIs

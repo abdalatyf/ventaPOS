@@ -296,7 +296,8 @@ class Supplier(models.Model):
     sync_action = models.CharField(max_length=20, default="NEW")
     is_confirmed = models.BooleanField(default=True)
     is_synced = models.BooleanField(default=False)
-    name = models.CharField(max_length=200, unique=True)
+    name = models.CharField(max_length=200)
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="suppliers", null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -307,9 +308,12 @@ class Supplier(models.Model):
         db_table = "salesapp_supplier"
         verbose_name = "المورد"
         verbose_name_plural = "الموردون"
+        constraints = [
+            models.UniqueConstraint(fields=["name", "branch"], name="uq_supplier_name_branch")
+        ]
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.branch.name if self.branch else 'عام'})"
 
 
 # ===========================================================================

@@ -57,8 +57,9 @@ export default function SearchPurchases() {
   }, [loadingMore, nextPageUrl]);
 
   useEffect(() => {
-    fetchSuppliersList().then(setSuppliers);
-    fetchProductsMap().then(setProductsMap);
+    const branchId = localStorage.getItem('branchId');
+    fetchSuppliersList(branchId).then(setSuppliers);
+    fetchProductsMap(branchId).then(setProductsMap);
     fetchInvoices(initialFilters);
 
     const handleClick = () => setContextMenu(null);
@@ -175,7 +176,8 @@ export default function SearchPurchases() {
   const fetchSupplierSuggestions = async (query) => {
     if (!query) return [];
     try {
-      const res = await api.get(`/suppliers/?search=${encodeURIComponent(query)}`);
+      const branchId = localStorage.getItem('branchId');
+      const res = await api.get('/suppliers/', { params: { branch_id: branchId, search: query } });
       const results = res.data?.results || res.data;
       if (Array.isArray(results) && results.length > 0) return results;
       return suppliers.filter(s => s.name && s.name.toLowerCase().includes(query.toLowerCase()));

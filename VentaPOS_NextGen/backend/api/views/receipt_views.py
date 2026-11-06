@@ -50,6 +50,7 @@ class ReceiptPagination(PageNumberPagination):
         total_down_payments = aggregates["total_down_payments"] or 0
         total_credit = aggregates["total_credit"] or 0
         all_ids = list(qs.values_list('id', flat=True))
+        all_installment_ids = list(qs.filter(is_cash_sale=False).values_list('id', flat=True))
         return Response({
             "count": self.page.paginator.count,
             "next": self.get_next_link(),
@@ -62,6 +63,7 @@ class ReceiptPagination(PageNumberPagination):
             },
             "total_amount_sum": total_sales,
             "all_ids": all_ids,
+            "all_installment_ids": all_installment_ids,
             "results": data
         })
 

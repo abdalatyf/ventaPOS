@@ -180,11 +180,12 @@ class InventoryAdjustmentSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class SupplierSerializer(serializers.ModelSerializer):
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
 
     class Meta:
         model = Supplier
-        fields = ["id", "name", "is_deleted", "created_at"]
-        read_only_fields = ["id", "is_deleted", "created_at"]
+        fields = ["id", "name", "branch", "branch_name", "is_deleted", "created_at"]
+        read_only_fields = ["id", "is_deleted", "created_at", "branch_name"]
 
 
 # ---------------------------------------------------------------------------

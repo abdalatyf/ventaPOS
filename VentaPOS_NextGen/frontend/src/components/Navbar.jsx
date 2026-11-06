@@ -308,7 +308,7 @@ export default function Navbar() {
 
               {!isPrintOnly && (
                 <li className={`nav-item ${location.pathname.startsWith('/reports') ? 'active' : ''}`}>
-                  <Link className="nav-link text-warning" to="/reports" onClick={() => setOpenDropdown(null)}>
+                  <Link className="nav-link text-warning" to="/reports/dashboard" onClick={() => setOpenDropdown(null)}>
                     <span className="nav-link-icon d-md-none d-lg-inline-block">
                       <IconChartBar stroke={1.5} />
                     </span>

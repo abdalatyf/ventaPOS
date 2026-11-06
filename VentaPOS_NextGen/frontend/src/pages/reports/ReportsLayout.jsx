@@ -59,8 +59,15 @@ export default function ReportsLayout() {
   }, [navigate]);
   
   // Extract report type from current path
-  const currentPath = location.pathname.split('/').pop();
-  const reportPath = currentPath === 'reports' ? 'dashboard' : currentPath;
+  const currentPath = location.pathname.split('/').filter(Boolean).pop();
+  const reportPath = (!currentPath || currentPath === 'reports') ? 'dashboard' : currentPath;
+
+  // Immediately redirect /reports or /reports/ to /reports/dashboard
+  useEffect(() => {
+    if (location.pathname === '/reports' || location.pathname === '/reports/') {
+      navigate(`/reports/dashboard${location.search}`, { replace: true });
+    }
+  }, [location.pathname, location.search, navigate]);
 
   // Sync with URL params or default
   useEffect(() => {
@@ -126,9 +133,10 @@ export default function ReportsLayout() {
                 onChange={(e) => navigate(`/reports/${e.target.value}${location.search}`)}
                 style={{ cursor: 'pointer' }}
               >
-                <option value="dashboard">الملخص (Dashboard)</option>
+                <option value="dashboard">الملخص الشامل (لوحة القيادة)</option>
                 <option value="receipts">فواتير المبيعات</option>
-                <option value="purchases">فواتير المشتريات</option>
+                <option value="purchases">المشتريات والموردين</option>
+                <option value="areas">المناطق والتحصيل</option>
                 <option value="installments">التحصيل (الأقساط)</option>
                 <option value="expenses">المصروفات</option>
                 <option value="profit-and-loss">الأرباح والخسائر (المجاميع)</option>

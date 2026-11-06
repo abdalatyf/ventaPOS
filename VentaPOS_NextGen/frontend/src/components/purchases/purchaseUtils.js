@@ -30,9 +30,11 @@ export const checkSafeStockForReturn = async (productId, reqQty, month, year, ex
   return { ok: true, safeQty: undefined, error: null };
 };
 
-export const fetchSuppliersList = async () => {
+export const fetchSuppliersList = async (branchId) => {
   try {
-    const res = await api.get('/suppliers/');
+    const branch = branchId || localStorage.getItem('branchId');
+    const url = branch ? `/suppliers/?branch_id=${branch}` : '/suppliers/';
+    const res = await api.get(url);
     return res.data?.results || (Array.isArray(res.data) ? res.data : []);
   } catch (error) {
     console.error('Error fetching suppliers:', error);
@@ -61,8 +63,9 @@ export const fetchProductsMap = async (branchId) => {
 export const fetchPurchaseEntryInitialData = async (id, branchId) => {
   const branch = branchId || localStorage.getItem('branchId');
   const itemsUrl = branch ? `/inventory-items/?limit=5000&branch_id=${branch}` : '/inventory-items/?limit=5000';
+  const suppsUrl = branch ? `/suppliers/?branch_id=${branch}` : '/suppliers/';
   const [suppliersRes, productsRes] = await Promise.all([
-    api.get('/suppliers/').catch(() => ({ data: [] })),
+    api.get(suppsUrl).catch(() => ({ data: [] })),
     api.get(itemsUrl).catch(() => ({ data: [] }))
   ]);
   const suppData = suppliersRes.data?.results || suppliersRes.data;

@@ -20,6 +20,7 @@ export default function ProfitAndLossReport() {
   const [salespersonId, setSalespersonId] = useState('');
   const [salespersonQuery, setSalespersonQuery] = useState('');
   const [salespersons, setSalespersons] = useState([]);
+  const [areaFilter, setAreaFilter] = useState('');
 
   useEffect(() => {
     const fetchSalespersons = async () => {
@@ -41,6 +42,7 @@ export default function ProfitAndLossReport() {
       try {
         let url = `/reports/profit-and-loss/?branch_id=${branchId}&month=${month}&year=${year}`;
         if (salespersonId) url += `&salesperson_id=${salespersonId}`;
+        if (areaFilter) url += `&area=${encodeURIComponent(areaFilter)}`;
         const res = await api.get(url);
         setData(res.data);
       } catch (err) {
@@ -51,7 +53,7 @@ export default function ProfitAndLossReport() {
       }
     };
     fetchReport();
-  }, [year, month, branchId, salespersonId]);
+  }, [year, month, branchId, salespersonId, areaFilter]);
 
   const { items, rawCombined, totals } = useMemo(() => {
     if (!data) return { items: [], rawCombined: [], totals: { revenue: 0, cost: 0, salesCommission: 0, collCommission: 0, expenses: 0, deficitLoss: 0, profit: 0 } };
@@ -218,7 +220,7 @@ export default function ProfitAndLossReport() {
   const subFiltersRow2 = () => (
     <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Salesperson Autocomplete */}
-      <div style={{ width: '220px' }} className="flex-shrink-0">
+      <div style={{ width: '200px' }} className="flex-shrink-0">
         <ReportAutocomplete
           items={salespersons}
           value={salespersonQuery}
@@ -244,6 +246,31 @@ export default function ProfitAndLossReport() {
         />
       </div>
 
+      {/* Area Autocomplete */}
+      <div style={{ width: '200px' }} className="flex-shrink-0">
+        <ReportAutocomplete
+          value={areaFilter}
+          onChange={(val) => setAreaFilter(val)}
+          onSelect={(item) => {
+            const val = typeof item === 'object' ? (item.area || item.name || '') : String(item);
+            setAreaFilter(val);
+          }}
+          fetchSuggestions={async (query) => {
+            try {
+              const res = await api.get('/customer-suggestions/', {
+                params: { field: 'area', term: query || '', branch_id: branchId }
+              });
+              const data = res.data || [];
+              return data.map(i => typeof i === 'object' ? i : { name: i, id: i });
+            } catch {
+              return [];
+            }
+          }}
+          placeholder="تصفية حسب المنطقة..."
+          className="form-control form-control-sm fw-bold border-secondary-subtle"
+        />
+      </div>
+
       {/* Reset */}
       <button 
         type="button" 
@@ -254,6 +281,7 @@ export default function ProfitAndLossReport() {
           setSaleTypeFilter('all');
           setSalespersonId('');
           setSalespersonQuery('');
+          setAreaFilter('');
         }}
         disabled={loading}
         title="إعادة ضبط"

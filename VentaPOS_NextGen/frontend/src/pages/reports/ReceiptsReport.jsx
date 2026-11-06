@@ -360,15 +360,38 @@ export default function ReceiptsReport() {
         />
       </div>
 
-      {/* Area */}
-      <div style={{ width: '130px' }} className="flex-shrink-0">
-        <DebouncedInput 
-          type="text" 
-          name="area" 
-          className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
+      {/* Area Autocomplete */}
+      <div style={{ width: '180px' }} className="flex-shrink-0">
+        <ReportAutocomplete
+          value={filters.area || ''}
+          onChange={(val) => {
+            setFilters(prev => {
+              const newFilters = { ...prev, area: val };
+              fetchReceipts(newFilters);
+              return newFilters;
+            });
+          }}
+          onSelect={(item) => {
+            const val = typeof item === 'object' ? (item.area || item.name || '') : String(item);
+            setFilters(prev => {
+              const newFilters = { ...prev, area: val };
+              fetchReceipts(newFilters);
+              return newFilters;
+            });
+          }}
+          fetchSuggestions={async (query) => {
+            try {
+              const res = await api.get('/customer-suggestions/', {
+                params: { field: 'area', term: query || '', branch_id: branchId }
+              });
+              const data = res.data || [];
+              return data.map(i => typeof i === 'object' ? i : { name: i, id: i });
+            } catch {
+              return [];
+            }
+          }}
           placeholder="المنطقة..."
-          value={filters.area} 
-          onChange={handleFilterChange} 
+          className="form-control form-control-sm fw-bold border-secondary-subtle px-1"
         />
       </div>
 

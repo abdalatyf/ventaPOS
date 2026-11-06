@@ -23,8 +23,12 @@ export default function ReceiptsTable({
   handleReturnSingle,
   lastRowElementRef,
   setTableRef,
-  loadingMore
+  loadingMore,
+  selectAllMatching
 }) {
+  const isAllMatchingSelected = globalAllIds.length > 0 && selectedIds.length === globalAllIds.length;
+  const isCurrentPageSelected = receipts.length > 0 && selectedIds.length === receipts.length;
+
   return (
     <div className="card shadow-sm border-secondary-subtle mb-0 flex-grow-1">
       {/* Row 1 of Table Card: Sticky Toolbar directly above <thead> */}
@@ -75,6 +79,27 @@ export default function ReceiptsTable({
         </div>
       </div>
 
+      {/* Two-Tier Selection Alert Strip */}
+      {selectedIds.length > 0 && totalInvoicesCount > receipts.length && (
+        <div className="bg-light-subtle border-bottom px-3 py-1 text-center small fw-bold text-dark d-flex align-items-center justify-content-center gap-2 d-print-none">
+          {isAllMatchingSelected ? (
+            <>
+              <span>تم تحديد كافة الـ {totalInvoicesCount} فاتورة المطابقة للبحث.</span>
+              <button type="button" className="btn btn-link btn-sm p-0 fw-bold text-danger text-decoration-none" onClick={() => toggleSelectAll && toggleSelectAll()}>
+                إلغاء التحديد
+              </button>
+            </>
+          ) : (
+            <>
+              <span>تم تحديد {selectedIds.length} فاتورة في هذه الصفحة.</span>
+              <button type="button" className="btn btn-link btn-sm p-0 fw-bold text-primary text-decoration-none" onClick={() => selectAllMatching && selectAllMatching()}>
+                تحديد كافة الـ {totalInvoicesCount} فاتورة المطابقة للبحث
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Row 2 of Table Card: Table Container */}
       <div ref={setTableRef} className="table-responsive report-table-container flex-grow-1">
         <table className="table table-sm table-bordered table-vcenter table-hover table-sticky-header text-nowrap tabular-nums mb-0">
@@ -84,7 +109,7 @@ export default function ReceiptsTable({
                 <input 
                   type="checkbox" 
                   className="form-check-input" 
-                  checked={receipts.length > 0 && selectedIds.length === (globalAllIds.length > 0 ? globalAllIds.length : receipts.length)} 
+                  checked={receipts.length > 0 && (isCurrentPageSelected || isAllMatchingSelected)} 
                   onChange={toggleSelectAll} 
                 />
               </th>

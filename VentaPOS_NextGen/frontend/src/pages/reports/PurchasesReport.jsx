@@ -4,12 +4,13 @@ import api from '../../api';
 import { ReportsContext } from './ReportsLayout';
 import ReportTable from '../../components/ReportTable';
 import DebouncedInput from '../../components/DebouncedInput';
+import ReportAutocomplete from '../../components/ReportAutocomplete';
 import { fmtNum } from '../../utils/formatUtils';
 
 export default function PurchasesReport() {
-  const { year, month, branchId } = useContext(ReportsContext);
+  const { year, month, branchId, registerPrintHandler } = useContext(ReportsContext);
 
-  const [invoices, setInvoices] = useState([]);
+  const [items, setItems] = useState([]);
   const [summary, setSummary] = useState({
     total_purchases_amount: 0,
     gross_purchases_amount: 0,
@@ -18,31 +19,33 @@ export default function PurchasesReport() {
     total_returns_amount: 0,
     total_items_quantity: 0,
     suppliers_count: 0,
+    distinct_products_count: 0,
   });
 
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Filters
+  // Filters - ONLY PurchasesReport has supplier filter
   const [selectedSupplier, setSelectedSupplier] = useState('');
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [selectedProductName, setSelectedProductName] = useState('');
   const [invoiceType, setInvoiceType] = useState('ALL');
-  const [invoiceFrom, setInvoiceFrom] = useState('');
-  const [invoiceTo, setInvoiceTo] = useState('');
-  const [itemQuery, setItemQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch suppliers list once for the dropdown
+  // Fetch branch-scoped suppliers list
   useEffect(() => {
     const fetchSuppliers = async () => {
+      if (!branchId) return;
       try {
-        const res = await api.get('/suppliers/');
+        const res = await api.get('/suppliers/', { params: { branch_id: branchId } });
         setSuppliers(res.data.results || res.data || []);
       } catch (err) {
         console.error('Failed to load suppliers:', err);
       }
     };
     fetchSuppliers();
-  }, []);
+  }, [branchId]);
 
   const fetchPurchases = async () => {
     if (!branchId) return;
@@ -56,13 +59,12 @@ export default function PurchasesReport() {
     if (year) params.year = year;
     if (month) params.month = month;
     if (selectedSupplier) params.supplier_id = selectedSupplier;
+    if (selectedProductId) params.item_id = selectedProductId;
     if (invoiceType !== 'ALL') params.invoice_type = invoiceType;
-    if (invoiceFrom) params.invoice_from = invoiceFrom;
-    if (invoiceTo) params.invoice_to = invoiceTo;
 
     try {
       const res = await api.get('/reports/purchases/', { params });
-      setInvoices(res.data.invoices || []);
+      setItems(res.data.items || []);
       setSummary(res.data.summary || {});
     } catch (err) {
       console.error('Error fetching purchases report:', err);
@@ -74,107 +76,175 @@ export default function PurchasesReport() {
 
   useEffect(() => {
     fetchPurchases();
-  }, [branchId, year, month, selectedSupplier, invoiceType, invoiceFrom, invoiceTo]);
+  }, [branchId, year, month, selectedSupplier, selectedProductId, invoiceType]);
 
-  // Client-side text filter on items_summary
-  const filteredInvoices = useMemo(() => {
-    if (!itemQuery.trim()) return invoices;
-    const q = itemQuery.trim().toLowerCase();
-    return invoices.filter((inv) =>
-      String(inv.items_summary || '').toLowerCase().includes(q) ||
-      String(inv.supplier_name || '').toLowerCase().includes(q)
+  // Client-side text filter on item_name and supplier_name
+  const filteredItems = useMemo(() => {
+    if (!searchQuery.trim()) return items;
+    const q = searchQuery.trim().toLowerCase();
+    return items.filter((row) =>
+      String(row.item_name || '').toLowerCase().includes(q) ||
+      String(row.supplier_name || '').toLowerCase().includes(q)
     );
-  }, [invoices, itemQuery]);
+  }, [items, searchQuery]);
 
   const handleResetFilters = () => {
     setSelectedSupplier('');
+    setSelectedProductId('');
+    setSelectedProductName('');
     setInvoiceType('ALL');
-    setInvoiceFrom('');
-    setInvoiceTo('');
-    setItemQuery('');
+    setSearchQuery('');
   };
+
+  // Register print handler for ReportsLayout print button
+  useEffect(() => {
+    if (!registerPrintHandler) return;
+    registerPrintHandler(() => {
+      api.post('/reports/desktop_print/', {
+        title: 'تقرير المشتريات والموردين',
+        branch_id: branchId,
+        period_label: year && month ? `${year}/${String(month).padStart(2, '0')}` : undefined,
+        action: 'view',
+        filters_summary: [
+          selectedSupplier ? { label: 'المورد', value: suppliers.find(s => s.id === Number(selectedSupplier))?.name || selectedSupplier } : null,
+          selectedProductName ? { label: 'الصنف', value: selectedProductName } : null,
+          invoiceType !== 'ALL' ? { label: 'نوع الفاتورة', value: invoiceType === 'PURCHASE' ? 'شراء' : 'مرتجع' } : null,
+        ].filter(Boolean),
+        kpis: [
+          { label: 'صافي المشتريات', value: `${fmtNum(summary.total_purchases_amount || 0)} ج.م`, color: 'primary' },
+          { label: 'إجمالي الشراء', value: `${fmtNum(summary.gross_purchases_amount || 0)} ج.م`, color: 'success' },
+          { label: 'إجمالي المرتجع', value: `${fmtNum(summary.total_returns_amount || 0)} ج.م`, color: 'danger' },
+          { label: 'صافي القطع', value: fmtNum(summary.total_items_quantity || 0), color: 'info' },
+          { label: 'عدد الأصناف', value: fmtNum(summary.distinct_products_count || 0), color: 'secondary' },
+          { label: 'عدد الموردين', value: fmtNum(summary.suppliers_count || 0), color: 'warning' },
+        ],
+        columns: [
+          { key: 'index', label: 'م', width: '40px', align: 'center' },
+          { key: 'item_name', label: 'اسم الصنف', align: 'start' },
+          { key: 'supplier_name', label: 'اسم المورد', align: 'start' },
+          { key: 'invoices_count', label: 'الفواتير', align: 'center' },
+          { key: 'purchased_qty', label: 'كمية الشراء', align: 'center' },
+          { key: 'returned_qty', label: 'كمية المرتجع', align: 'center' },
+          { key: 'net_qty', label: 'صافي الكمية', align: 'center' },
+          { key: 'avg_unit_cost', label: 'متوسط السعر', align: 'center' },
+          { key: 'gross_purchases', label: 'إجمالي الشراء', align: 'center' },
+          { key: 'returns_amount', label: 'إجمالي المرتجع', align: 'center' },
+          { key: 'net_purchases', label: 'صافي المشتريات', align: 'center' },
+        ],
+        rows: filteredItems.map((r, idx) => ({
+          index: idx + 1,
+          item_name: r.item_name,
+          supplier_name: r.supplier_name,
+          invoices_count: r.invoices_count,
+          purchased_qty: fmtNum(r.purchased_qty || 0),
+          returned_qty: fmtNum(r.returned_qty || 0),
+          net_qty: fmtNum(r.net_qty || 0),
+          avg_unit_cost: fmtNum(r.avg_unit_cost || 0),
+          gross_purchases: fmtNum(r.gross_purchases || 0),
+          returns_amount: fmtNum(r.returns_amount || 0),
+          net_purchases: fmtNum(r.net_purchases || 0),
+        })),
+      }).catch(err => console.error('Error opening report print modal:', err));
+    });
+  }, [registerPrintHandler, branchId, year, month, selectedSupplier, selectedProductName, invoiceType, summary, filteredItems, suppliers]);
 
   const summaryCards = [
     { label: 'صافي المشتريات', value: `${fmtNum(summary.total_purchases_amount || 0)} ج.م`, color: 'primary' },
-    { label: 'فواتير الشراء', value: fmtNum(summary.total_purchases_count || 0), color: 'success' },
-    { label: 'مرتجعات الشراء', value: fmtNum(summary.total_returns_count || 0), color: 'warning' },
-    { label: 'قيمة المرتجع', value: `${fmtNum(summary.total_returns_amount || 0)} ج.م`, color: 'danger' },
-    { label: 'صافي القطع', value: `${fmtNum(summary.total_items_quantity || 0)} قطعة`, color: 'info' },
-    { label: 'عدد الموردين', value: fmtNum(summary.suppliers_count || 0), color: 'secondary' },
+    { label: 'إجمالي الشراء', value: `${fmtNum(summary.gross_purchases_amount || 0)} ج.م`, color: 'success' },
+    { label: 'إجمالي المرتجع', value: `${fmtNum(summary.total_returns_amount || 0)} ج.م`, color: 'danger' },
+    { label: 'صافي القطع المشتراة', value: `${fmtNum(summary.total_items_quantity || 0)} قطعة`, color: 'info' },
+    { label: 'عدد الأصناف', value: fmtNum(summary.distinct_products_count || 0), color: 'secondary' },
+    { label: 'عدد الموردين', value: fmtNum(summary.suppliers_count || 0), color: 'warning' },
   ];
 
   const subFiltersRow1 = () => (
     <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
-      {/* Supplier Dropdown */}
-      <div style={{ width: '180px' }} className="flex-shrink-0">
-        <select
-          className="form-select form-select-sm border-secondary-subtle fw-bold"
-          value={selectedSupplier}
-          onChange={(e) => setSelectedSupplier(e.target.value)}
-        >
-          <option value="">جميع الموردين</option>
-          {suppliers.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
+      {/* Supplier Dropdown - ONLY PurchasesReport has supplier filter */}
+      <div style={{ width: '220px' }} className="flex-shrink-0">
+        <div className="input-group input-group-sm">
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">المورد</span>
+          <select
+            className="form-select form-select-sm border-secondary-subtle fw-bold"
+            value={selectedSupplier}
+            onChange={(e) => setSelectedSupplier(e.target.value)}
+          >
+            <option value="">جميع الموردين</option>
+            {suppliers.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Product Autocomplete */}
+      <div style={{ width: '260px' }} className="flex-shrink-0">
+        <div className="input-group input-group-sm flex-nowrap">
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">الصنف</span>
+          <ReportAutocomplete
+            value={selectedProductName}
+            onChange={(val) => {
+              setSelectedProductName(val);
+              if (!val) setSelectedProductId('');
+            }}
+            onSelect={(item) => {
+              setSelectedProductName(item.name || '');
+              setSelectedProductId(item.id || '');
+            }}
+            fetchSuggestions={async (query) => {
+              try {
+                const res = await api.get('/inventory-items/', {
+                  params: { branch_id: branchId, search: query, limit: 10 }
+                });
+                return res.data?.results || res.data || [];
+              } catch {
+                return [];
+              }
+            }}
+            placeholder="جميع الأصناف..."
+            className="form-control fw-bold border-secondary-subtle px-1"
+          />
+        </div>
       </div>
 
       {/* Invoice Type */}
-      <div style={{ width: '140px' }} className="flex-shrink-0">
-        <select
-          className="form-select form-select-sm border-secondary-subtle fw-bold text-center"
-          value={invoiceType}
-          onChange={(e) => setInvoiceType(e.target.value)}
-        >
-          <option value="ALL">جميع الأنواع</option>
-          <option value="PURCHASE">شراء فقط</option>
-          <option value="RETURN">مرتجع فقط</option>
-        </select>
-      </div>
-
-      {/* Invoice From/To */}
-      <div style={{ width: '90px' }} className="flex-shrink-0">
-        <input
-          type="number"
-          className="form-control form-control-sm text-center border-secondary-subtle fw-bold px-1"
-          placeholder="من رقم"
-          value={invoiceFrom}
-          onChange={(e) => setInvoiceFrom(e.target.value)}
-        />
-      </div>
-      <div style={{ width: '90px' }} className="flex-shrink-0">
-        <input
-          type="number"
-          className="form-control form-control-sm text-center border-secondary-subtle fw-bold px-1"
-          placeholder="إلى رقم"
-          value={invoiceTo}
-          onChange={(e) => setInvoiceTo(e.target.value)}
-        />
+      <div style={{ width: '150px' }} className="flex-shrink-0">
+        <div className="input-group input-group-sm">
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">النوع</span>
+          <select
+            className="form-select form-select-sm border-secondary-subtle fw-bold text-center"
+            value={invoiceType}
+            onChange={(e) => setInvoiceType(e.target.value)}
+          >
+            <option value="ALL">الكل</option>
+            <option value="PURCHASE">شراء فقط</option>
+            <option value="RETURN">مرتجع فقط</option>
+          </select>
+        </div>
       </div>
     </div>
   );
 
   const subFiltersRow2 = () => (
     <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
-      {/* Item Query */}
-      <div className="flex-grow-1" style={{ minWidth: '180px' }}>
+      {/* Search Input */}
+      <div className="flex-grow-1" style={{ minWidth: '200px' }}>
         <DebouncedInput
           type="text"
           className="form-control form-control-sm border-secondary-subtle fw-bold"
-          placeholder="بحث في الأصناف..."
-          value={itemQuery}
-          onChange={(val) => setItemQuery(val)}
+          placeholder="بحث سريع باسم الصنف أو المورد..."
+          value={searchQuery}
+          onChange={(val) => setSearchQuery(val)}
         />
       </div>
 
-      {/* Filter Button */}
+      {/* Refresh Button */}
       <button
         type="button"
         className="btn btn-sm btn-primary px-3 py-1 flex-shrink-0 border-secondary-subtle d-flex align-items-center gap-1 fw-bold"
         onClick={fetchPurchases}
       >
         <IconFilter size={14} />
-        <span>تصفية</span>
+        <span>تحديث</span>
       </button>
 
       {/* Reset Button */}
@@ -192,66 +262,92 @@ export default function PurchasesReport() {
 
   const columns = [
     {
-      key: 'invoice_number',
-      label: 'رقم الفاتورة',
+      key: 'index',
+      label: '#',
       align: 'center',
-      className: 'fw-bold tabular-nums',
-      render: (inv) => `#${inv.invoice_number}`,
-      getValue: (inv) => `#${inv.invoice_number}`,
+      className: 'tabular-nums text-muted w-1',
+      render: (_, idx) => idx + 1,
+      getValue: (_, idx) => idx + 1,
     },
     {
-      key: 'invoice_type',
-      label: 'النوع',
-      align: 'center',
-      render: (inv) =>
-        inv.invoice_type === 'RETURN' ? (
-          <span className="badge bg-warning-lt text-warning fw-bold d-inline-flex align-items-center gap-1">
-            <IconArrowBackUp size={14} />
-            مرتجع مشتريات
-          </span>
-        ) : (
-          <span className="badge bg-success-lt text-success fw-bold d-inline-flex align-items-center gap-1">
-            <IconPackage size={14} />
-            فاتورة شراء
-          </span>
-        ),
-      getValue: (inv) => (inv.invoice_type === 'RETURN' ? 'مرتجع مشتريات' : 'فاتورة شراء'),
+      key: 'item_name',
+      label: 'اسم الصنف',
+      align: 'start',
+      className: 'fw-bold text-dark px-2',
+      render: (r) => r.item_name || 'غير محدد',
+      getValue: (r) => r.item_name || '',
     },
     {
       key: 'supplier_name',
-      label: 'المورد',
+      label: 'اسم المورد',
       align: 'start',
-      className: 'fw-bold text-dark px-2',
-      render: (inv) => inv.supplier_name || 'غير محدد',
+      className: 'fw-bold text-secondary px-2',
+      render: (r) => r.supplier_name || 'مورد عام',
+      getValue: (r) => r.supplier_name || '',
     },
     {
-      key: 'items_summary',
-      label: 'الأصناف المشتراة',
-      align: 'start',
-      className: 'text-muted small px-2',
-      render: (inv) => inv.items_summary || '-',
-    },
-    {
-      key: 'total_units',
-      label: 'إجمالي القطع',
+      key: 'invoices_count',
+      label: 'الفواتير',
       align: 'center',
       className: 'tabular-nums fw-bold',
-      render: (inv) => fmtNum(inv.total_units || 0),
+      render: (r) => fmtNum(r.invoices_count || 0),
+      getValue: (r) => r.invoices_count || 0,
     },
     {
-      key: 'invoice_date',
-      label: 'التاريخ',
+      key: 'purchased_qty',
+      label: 'كمية الشراء',
+      align: 'center',
+      className: 'tabular-nums fw-bold text-success',
+      render: (r) => fmtNum(r.purchased_qty || 0),
+      getValue: (r) => r.purchased_qty || 0,
+    },
+    {
+      key: 'returned_qty',
+      label: 'كمية المرتجع',
+      align: 'center',
+      className: 'tabular-nums fw-bold text-danger',
+      render: (r) => fmtNum(r.returned_qty || 0),
+      getValue: (r) => r.returned_qty || 0,
+    },
+    {
+      key: 'net_qty',
+      label: 'صافي الكمية',
+      align: 'center',
+      className: 'tabular-nums fw-bold text-dark',
+      render: (r) => fmtNum(r.net_qty || 0),
+      getValue: (r) => r.net_qty || 0,
+    },
+    {
+      key: 'avg_unit_cost',
+      label: 'متوسط السعر (ج.م)',
       align: 'center',
       className: 'tabular-nums text-muted',
-      render: (inv) => inv.invoice_date || '-',
+      render: (r) => fmtNum(r.avg_unit_cost || 0),
+      getValue: (r) => r.avg_unit_cost || 0,
     },
     {
-      key: 'total_cost',
-      label: 'الإجمالي (ج.م)',
+      key: 'gross_purchases',
+      label: 'إجمالي الشراء (ج.م)',
+      align: 'center',
+      className: 'tabular-nums fw-bold text-success',
+      render: (r) => fmtNum(r.gross_purchases || 0),
+      getValue: (r) => r.gross_purchases || 0,
+    },
+    {
+      key: 'returns_amount',
+      label: 'إجمالي المرتجع (ج.م)',
+      align: 'center',
+      className: 'tabular-nums fw-bold text-danger',
+      render: (r) => fmtNum(r.returns_amount || 0),
+      getValue: (r) => r.returns_amount || 0,
+    },
+    {
+      key: 'net_purchases',
+      label: 'صافي المشتريات (ج.م)',
       align: 'center',
       className: 'tabular-nums fw-bold text-primary',
-      render: (inv) => fmtNum(inv.total_cost || 0),
-      format: 'currency',
+      render: (r) => fmtNum(r.net_purchases || 0),
+      getValue: (r) => r.net_purchases || 0,
     },
   ];
 
@@ -264,22 +360,22 @@ export default function PurchasesReport() {
       )}
 
       <ReportTable
-        reportTitle="تقرير فواتير المشتريات"
+        reportTitle="تقرير المشتريات والموردين"
         periodLabel={year && month ? `${year}/${String(month).padStart(2, '0')}` : undefined}
         columns={columns}
-        data={filteredInvoices}
+        data={filteredItems}
         loading={loading}
         summaryCards={summaryCards}
         subFiltersRow1={subFiltersRow1}
         subFiltersRow2={subFiltersRow2}
         sortableColumns={[
-          { id: 'invoice_number', label: 'رقم الفاتورة' },
-          { id: 'supplier_name', label: 'المورد' },
-          { id: 'total_units', label: 'إجمالي القطع' },
-          { id: 'total_cost', label: 'الإجمالي' },
+          { id: 'item_name', label: 'اسم الصنف' },
+          { id: 'supplier_name', label: 'اسم المورد' },
+          { id: 'net_qty', label: 'صافي الكمية' },
+          { id: 'net_purchases', label: 'صافي المشتريات' },
         ]}
-        defaultSortRules={[{ id: 1, column: 'invoice_number', dir: 'desc' }]}
-        emptyMessage="لا توجد فواتير مشتريات مطابقة"
+        defaultSortRules={[{ id: 1, column: 'net_purchases', dir: 'desc' }]}
+        emptyMessage="لا توجد مشتريات مطابقة"
         emptyIcon={IconPackage}
       />
     </div>

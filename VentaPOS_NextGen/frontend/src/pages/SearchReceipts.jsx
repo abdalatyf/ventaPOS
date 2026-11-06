@@ -57,6 +57,7 @@ export default function SearchReceipts() {
 
   const [selectedIds, setSelectedIds] = useState([]);
   const [globalAllIds, setGlobalAllIds] = useState([]);
+  const [globalInstallmentIds, setGlobalInstallmentIds] = useState([]);
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [printModalIds, setPrintModalIds] = useState([]);
 
@@ -113,7 +114,9 @@ export default function SearchReceipts() {
         setTotalInvoicesCount(res.data.count || 0);
         setTotalAmountSum(res.data.aggregate?.total_sales ?? res.data.total_amount_sum ?? 0);
         const allIds = res.data.all_ids || [];
+        const allInstIds = res.data.all_installment_ids || [];
         setGlobalAllIds(allIds);
+        setGlobalInstallmentIds(allInstIds);
         setSelectedIds(allIds.length > 0 ? allIds : res.data.results.map(r => r.id));
       }
     } catch (error) {
@@ -194,12 +197,15 @@ export default function SearchReceipts() {
   };
 
   const toggleSelectAll = () => {
-    const targetLength = globalAllIds.length > 0 ? globalAllIds.length : receipts.length;
-    if (selectedIds.length === targetLength) {
+    if (selectedIds.length > 0) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(globalAllIds.length > 0 ? globalAllIds : receipts.map(r => r.id));
+      setSelectedIds(receipts.map(r => r.id));
     }
+  };
+
+  const selectAllMatching = () => {
+    setSelectedIds(globalAllIds.length > 0 ? globalAllIds : receipts.map(r => r.id));
   };
 
   const handleBulkDelete = async () => {
@@ -267,10 +273,15 @@ export default function SearchReceipts() {
     if (!ids || ids.length === 0) return;
 
     // Physical printing is strictly reserved for Installment Schedules. Standard cash receipts are not printed.
-    const selectedReceipts = receipts.filter(r => ids.includes(r.id));
-    const installmentReceipts = selectedReceipts.filter(r => !r.is_cash_sale);
+    const installmentIds = ids.filter(id => {
+      if (globalInstallmentIds && globalInstallmentIds.length > 0) {
+        return globalInstallmentIds.includes(id);
+      }
+      const r = receipts.find(rc => rc.id === id);
+      return r ? !r.is_cash_sale : true;
+    });
 
-    if (selectedReceipts.length > 0 && installmentReceipts.length === 0) {
+    if (ids.length > 0 && installmentIds.length === 0) {
       Swal.fire({
         icon: 'info',
         title: 'تنبيه الطباعة',
@@ -281,7 +292,7 @@ export default function SearchReceipts() {
       return;
     }
 
-    const targetIds = installmentReceipts.length > 0 ? installmentReceipts.map(r => r.id) : ids;
+    const targetIds = installmentIds.length > 0 ? installmentIds : ids;
     setPrintModalIds(targetIds);
     setPrintModalOpen(true);
   };
@@ -380,6 +391,7 @@ export default function SearchReceipts() {
         globalAllIds={globalAllIds}
         toggleSelect={toggleSelect}
         toggleSelectAll={toggleSelectAll}
+        selectAllMatching={selectAllMatching}
         handlePrint={handlePrint}
         handleBulkDelete={handleBulkDelete}
         handleContextMenu={handleContextMenu}
