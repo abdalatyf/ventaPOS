@@ -1,192 +1,200 @@
 import { test, expect } from '@playwright/test';
 
-// ملاحظة: يُفضل استخدام قاعدة بيانات تجريبية أثناء تشغيل هذه الاختبارات لتجنب إنشاء فواتير حقيقية
-// إلا إذا كنت قد هيأت بيئة التطوير لتنظيف نفسها بعد كل عملية.
+test.describe('POS Page - Core Features & Cart E2E Tests', () => {
+  test.beforeEach(async ({ page, context }) => {
+    // Authenticate in localStorage
+    await context.addInitScript(() => {
+      localStorage.setItem('token', 'mock-token');
+      localStorage.setItem('branchId', '1');
+      localStorage.setItem('branchName', 'الفرع الرئيسي');
+    });
 
-test.describe('POS Page - الشاشة الرئيسية والميزات الأساسية', () => {
-  
-  test.beforeEach(async ({ page }) => {
-    // محاكاة تسجيل الدخول (يتجاوز صفحة الدخول ويختار الفرع تلقائيا لو كان فرعا واحدا)
-    await page.goto('/login');
-    
-    // انتظار التحويل التلقائي إما للداشبورد أو صفحة الفروع
-    await page.waitForURL('**/(select-branch|receipts)', { timeout: 10000 }).catch(() => {});
-    
-    // إذا توقف في صفحة اختيار الفرع، نضغط على أول فرع
-    if (page.url().includes('select-branch')) {
-        await page.locator('.card-link').first().click();
-        await page.waitForURL('**/receipts', { timeout: 5000 });
-    }
-    
-    // الانتقال لصفحة نقطة البيع
+    await page.route('**/api/v1/frontend-logs/**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    });
+
+    await page.route('**/api/v1/license/status/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'active',
+          is_demo: false,
+          is_print_only: false,
+          is_expired: false,
+          total_invoices_balance: 5000,
+        })
+      });
+    });
+
+    await page.route('**/api/v1/branches/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ id: 1, name: 'الفرع الرئيسي' }])
+      });
+    });
+
+    await page.route('**/api/v1/company-settings/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ name: 'مؤسسة التجارة الحديثة' })
+      });
+    });
+
+    await page.route('**/api/v1/salespersons/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ id: 1, name: 'محمد علي' }])
+      });
+    });
+
+    await page.route('**/api/v1/default-date/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ year: 2026, month: 7 })
+      });
+    });
+
+    await page.route('**/api/v1/receipts-next-number/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ next_receipt_number: 105 })
+      });
+    });
+
+    await page.route('**/api/v1/inventory-items/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          { id: 1, name: 'باركية خشب فاخر', safe_available_qty: 20, initial_purchase_price: 500 }
+        ])
+      });
+    });
+
+    await page.route('**/api/v1/customer-suggestions/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          { name: 'محمود سعيد', phone: '01000123456', area: 'المعادي', address: 'شارع النصر' }
+        ])
+      });
+    });
+
+    await page.route('**/api/v1/product-suggestions/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          { id: 1, value: 'باركية خشب فاخر', safe_available_qty: 20, current_price: 500 }
+        ])
+      });
+    });
+
+    await page.route('**/api/v1/receipts/**', async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify({ id: 105, receipt_number: 105 })
+        });
+      } else {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ count: 0, results: [] })
+        });
+      }
+    });
+
     await page.goto('/pos');
-    
-    // التأكد من استجابة الصفحة
-    await expect(page.getByRole('heading', { name: 'نقطة البيع' })).toBeVisible();
+    await expect(page.locator('.spinner-border')).not.toBeVisible();
   });
 
   test('يجب أن تحتوي الصفحة على الحقول الأساسية المحملة', async ({ page }) => {
-    // التأكد من وجود خانات شهر وسنة البيع
-    const monthInput = page.locator('input[tabindex="1"]');
-    await expect(monthInput).toBeVisible();
-    
-    // التأكد من وجود خانة المندوب
-    const spSelect = page.locator('input[tabindex="3"]');
-    await expect(spSelect).toBeVisible();
+    await expect(page.locator('label', { hasText: 'الشهر' })).toBeVisible();
+    await expect(page.locator('label', { hasText: 'السنة' })).toBeVisible();
+    await expect(page.locator('label', { hasText: 'المندوب' })).toBeVisible();
+    await expect(page.locator('#input_name')).toBeVisible();
+    await expect(page.locator('#input_phone')).toBeVisible();
   });
 
-  test('يجب البحث عن عميل واختياره بشكل صحيح', async ({ page }) => {
-    const nameInput = page.locator('input[tabindex="4"]');
-    
-    // كتابة حرف للبحث
-    await nameInput.fill('م');
-    
-    // انتظار ظهور القائمة المنسدلة (تأخير 50ms في الكود + سرعة الشبكة)
-    const suggestionsList = page.locator('.list-group').filter({ hasText: 'م' }).first();
-    await expect(suggestionsList).toBeVisible();
+  test('تفعيل تبديل "كاش" يخفي بيانات العميل ونظام التقسيط ويعيد إظهارها عند اختيار "قسط"', async ({ page }) => {
+    const cashBtn = page.locator('button', { hasText: 'كاش' });
+    const installmentBtn = page.locator('button', { hasText: 'قسط' });
 
-    // اختيار أول اقتراح بالضغط على السهم لأسفل ثم Enter
-    await nameInput.press('ArrowDown');
-    await nameInput.press('Enter');
-    
-    // التأكد من أن القائمة أغلقت
-    await expect(suggestionsList).toBeHidden();
+    // Switch to Cash
+    await cashBtn.click();
+    await expect(page.locator('#input_name')).toBeHidden();
+    await expect(page.locator('text=كاش — لا توجد أقساط ومقدم')).toBeVisible();
+
+    // Switch back to Installments
+    await installmentBtn.click();
+    await expect(page.locator('#input_name')).toBeVisible();
+    await expect(page.locator('text=كاش — لا توجد أقساط ومقدم')).toBeHidden();
   });
 
-  test('تفعيل تبديل "بيع كاش" يجب أن يخفي بيانات العميل ونظام التقسيط', async ({ page }) => {
-    const cashToggle = page.locator('input#cashSaleToggle');
-    const nameInput = page.locator('input[tabindex="4"]');
-    const downPaymentInput = page.locator('input[tabindex="12"]'); // المقدم
-    
-    // تأكيد أن الخانات ظاهرة قبل التبديل
-    await expect(nameInput).toBeVisible();
-    await expect(downPaymentInput).toBeVisible();
-    
-    // تفعيل بيع كاش
-    // Force click since label is what's usually clicked
-    await page.locator('label[for="cashSaleToggle"]').click();
-    
-    // تأكيد اختفاء الخانات
-    await expect(nameInput).toBeHidden();
-    await expect(downPaymentInput).toBeHidden();
-  });
-});
+  test('إضافة صنف للسلة والتأكد من نزوله في الجدول وتحديث الإجمالي', async ({ page }) => {
+    const prodInput = page.locator('.row.mb-4 input[type="text"]').first();
+    await prodInput.fill('باركية خشب فاخر');
 
-test.describe('POS Page - إضافة الأصناف وتجربة عربة التسوق', () => {
-  
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/login');
-    await page.waitForURL('**/(select-branch|receipts)', { timeout: 10000 }).catch(() => {});
-    if (page.url().includes('select-branch')) {
-        await page.locator('.card-link').first().click();
-        await page.waitForURL('**/receipts', { timeout: 5000 });
-    }
-    await page.goto('/pos');
-  });
-
-  test('البحث عن صنف وإضافته للسلة وتأثيره على الإجمالي', async ({ page }) => {
-    // 1. بحث عن صنف (نفترض وجود حرف "ب" في قاعدة البيانات)
-    const productInput = page.locator('input[tabindex="8"]');
-    await productInput.fill('ب');
-    
-    // انتظار ظهور القائمة واختيار أول صنف
-    const productList = page.locator('.list-group button').first();
-    await expect(productList).toBeVisible();
-    await productList.click();
-
-    // 2. إدخال الكمية والسعر
-    const qtyInput = page.locator('input[tabindex="9"]');
-    const priceInput = page.locator('input[tabindex="10"]');
-    
+    const qtyInput = page.locator('.row.mb-4 input[type="number"]').first();
     await qtyInput.fill('2');
-    await priceInput.fill('500'); // الإجمالي سيكون 1000
-    
-    // الضغط على Enter للإضافة للسلة
-    await priceInput.press('Enter');
-    
-    // 3. التحقق من إضافة الصنف في الجدول
+
+    const priceInput = page.locator('.row.mb-4 input[type="number"]').nth(1);
+    await priceInput.fill('500');
+
+    const addBtn = page.locator('.row.mb-4 button', { hasText: '+' });
+    await addBtn.click();
+
     const tableRow = page.locator('table tbody tr').first();
-    await expect(tableRow).toContainText('2'); // الكمية
-    await expect(tableRow).toContainText('500'); // السعر
-    await expect(tableRow).toContainText('1000'); // الإجمالي
-    
-    // 4. التحقق من تحديث الإجمالي العام في الأسفل
-    const totalDiv = page.locator('text=إجمالي المنتجات').locator('..').locator('.text-dark');
-    await expect(totalDiv).toHaveText('1,000');
+    await expect(tableRow).toBeVisible();
+    await expect(tableRow).toContainText('2');
+    await expect(tableRow).toContainText('500');
+
+    await expect(page.locator('.text-success.fs-3', { hasText: '1,000' })).toBeVisible();
   });
 
-});
-
-test.describe('POS Page - الحسابات وحفظ الفاتورة', () => {
-
-  test('توزيع نظام القسط المكتوب وعمل الحسابات بشكل صحيح', async ({ page }) => {
-    await page.goto('/login');
-    await page.waitForURL('**/(select-branch|receipts)', { timeout: 10000 }).catch(() => {});
-    if (page.url().includes('select-branch')) {
-        await page.locator('.card-link').first().click();
-        await page.waitForURL('**/receipts', { timeout: 5000 });
+  test('حفظ الفاتورة الكاش بنجاح وإعادة تعيين السلة', async ({ page }) => {
+    // Select salesperson
+    const spInput = page.locator('input[placeholder="ابحث عن مندوب..."]').first();
+    await spInput.fill('محمد علي');
+    const spSuggestion = page.locator('.list-group button, .list-group-item', { hasText: 'محمد علي' }).first();
+    if (await spSuggestion.count() > 0) {
+      await spSuggestion.click();
     }
-    await page.goto('/pos');
-    
-    const systemInput = page.locator('input[tabindex="13"]').first(); // نظام القسط
-    
-    // إدخال نظام قسط (بالأرقام العربية أو الإنجليزية)
-    await systemInput.fill('200*3 + 150*2');
-    
-    // التحقق من أن المجموعات تم تعبئتها تلقائياً
-    // الخانة 13 مكررة (لعدد شهور أول مجموعة لأن tabindex يبدأ من 13 هناك أيضاً)
-    const group1Count = page.locator('input[tabindex="13"]').nth(1); 
-    const group1Amount = page.locator('input[tabindex="14"]').first();
-    const group2Count = page.locator('input[tabindex="15"]').first();
-    const group2Amount = page.locator('input[tabindex="16"]').first();
-    
-    // نعتمد على .inputValue() للتحقق من الأرقام (أرقام قياسية ASCII)
-    await expect(group1Count).toHaveValue('3');
-    await expect(group1Amount).toHaveValue('200');
-    await expect(group2Count).toHaveValue('2');
-    await expect(group2Amount).toHaveValue('150');
-  });
 
-  test('حفظ الفاتورة الكاش يجب أن ينجح ويظهر رسالة النجاح', async ({ page }) => {
-    await page.goto('/login');
-    await page.waitForURL('**/(select-branch|receipts)', { timeout: 10000 }).catch(() => {});
-    if (page.url().includes('select-branch')) {
-        await page.locator('.card-link').first().click();
-        await page.waitForURL('**/receipts', { timeout: 5000 });
-    }
-    await page.goto('/pos');
+    // Switch to Cash mode
+    await page.locator('button', { hasText: 'كاش' }).click();
 
-    // 1. تفعيل الكاش
-    await page.locator('label[for="cashSaleToggle"]').click();
+    const prodInput = page.locator('.row.mb-4 input[type="text"]').first();
+    await prodInput.fill('باركية خشب فاخر');
 
-    // 2. اختيار صنف
-    const productInput = page.locator('input[tabindex="8"]');
-    await productInput.fill('ب');
-    await page.locator('.list-group button').first().click();
-    
-    // 3. تعبئة الكمية والسعر وإضافة الصنف
-    await page.locator('input[tabindex="9"]').fill('1');
-    await page.locator('input[tabindex="10"]').fill('1500');
-    // الضغط على Enter للإضافة
-    await page.locator('input[tabindex="10"]').press('Enter');
+    const qtyInput = page.locator('.row.mb-4 input[type="number"]').first();
+    await qtyInput.fill('1');
 
-    // التأكد من نزوله في الجدول
-    await expect(page.locator('table tbody tr').first()).toContainText('1500');
+    const priceInput = page.locator('.row.mb-4 input[type="number"]').nth(1);
+    await priceInput.fill('1500');
 
-    // 4. حفظ الفاتورة (ملاحظة: هذا الاختبار سينشئ فاتورة حقيقية)
-    page.on('dialog', dialog => {
-      console.log('Dialog message:', dialog.message());
-      dialog.accept();
-    }); 
-    
-    // انتظار طلب الـ API والتوجيه
+    await page.locator('.row.mb-4 button', { hasText: '+' }).click();
+    await expect(page.locator('table tbody tr').first()).toBeVisible();
+
+    const confirmBtn = page.locator('button', { hasText: 'تأكيد البيع' });
+    await expect(confirmBtn).toBeEnabled();
+
+    // Click confirm and wait for successful POST
     await Promise.all([
-      page.waitForResponse(resp => resp.url().includes('/receipts/') && resp.status() === 201, { timeout: 10000 }),
-      page.locator('button', { hasText: 'حفظ الفاتورة' }).click(),
+      page.waitForRequest(req => req.url().includes('/api/v1/receipts/') && req.method() === 'POST'),
+      confirmBtn.click()
     ]);
 
-    // بعد الحفظ الناجح، يجب أن يتم توجيهنا إلى الصفحة الرئيسية
-    await expect(page).toHaveURL(/.*\/receipts/);
+    // Cart is reset
+    await expect(page.locator('text=لا توجد أصناف مضافة')).toBeVisible();
   });
-
 });

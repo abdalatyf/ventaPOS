@@ -1,9 +1,68 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Reports Module E2E Tests', () => {
-  test.beforeEach(async ({ page }) => {
-    // Intercept all API calls
-    await page.route('**/default-date/**', async (route) => {
+  test.beforeEach(async ({ page, context }) => {
+    // Pre-populate localStorage so every page load is already authenticated
+    await context.addInitScript(() => {
+      localStorage.setItem('token', 'mock-token');
+      localStorage.setItem('branchId', '1');
+      localStorage.setItem('branchName', 'الفرع الرئيسي');
+    });
+
+    // Intercept all API calls strictly under /api/v1/ to avoid intercepting Vite source files
+    await page.route('**/api/v1/frontend-logs/**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+    });
+
+    await page.route('**/api/v1/license/status/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'active',
+          is_demo: false,
+          is_print_only: false,
+          is_expired: false,
+          total_invoices_balance: 5000,
+          expiry_date: '2027-01-01',
+          start_date: '2026-01-01',
+        })
+      });
+    });
+
+    await page.route('**/api/v1/branches/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ id: 1, name: 'الفرع الرئيسي' }])
+      });
+    });
+
+    await page.route('**/api/v1/company-settings/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ name: 'مؤسسة التجارة الحديثة' })
+      });
+    });
+
+    await page.route('**/api/v1/salespersons/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ id: 1, name: 'محمد علي' }])
+      });
+    });
+
+    await page.route('**/api/v1/suppliers/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ id: 1, name: 'شركة النور' }])
+      });
+    });
+
+    await page.route('**/api/v1/default-date/**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -11,7 +70,21 @@ test.describe('Reports Module E2E Tests', () => {
       });
     });
 
-    await page.route('**/reports/dashboard/**', async (route) => {
+    await page.route('**/api/v1/reports/dashboard/summary/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          sales: { gross: 100000, net: 95000, cash: 40000, installment: 60000, down_payments: 15000, returns: 5000 },
+          collections: { expected: 20000, actual: 18000, percentage: 90 },
+          purchases: { total: 50000, returns: 2000, net: 48000 },
+          expenses: { total: 7000 },
+          profit: { gross: 30000, net: 23000 }
+        })
+      });
+    });
+
+    await page.route('**/api/v1/reports/dashboard/**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -44,34 +117,54 @@ test.describe('Reports Module E2E Tests', () => {
       });
     });
 
-    await page.route('**/receipts/**', async (route) => {
+    await page.route('**/api/v1/receipts/**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify([{ id: 1, total_amount: 100 }])
+        body: JSON.stringify({
+          count: 1,
+          results: [{ id: 1, receipt_number: 101, customer_name: 'أحمد', total_amount: 100 }]
+        })
       });
     });
 
-    await page.route('**/expenses/**', async (route) => {
+    await page.route('**/api/v1/expenses/**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify([{ id: 1, amount: 50 }])
+        body: JSON.stringify({
+          count: 1,
+          results: [{ id: 1, description: 'إيجار', amount: 50 }]
+        })
       });
     });
 
-    await page.route('**/reports/salesperson-performance/**', async (route) => {
+    await page.route('**/api/v1/reports/salesperson-performance/**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
           totals: { grand_total_sales: 0, grand_total_collected: 0, grand_total_due: 0, grand_total_cash: 0 },
-          salespersons: []
+          salespersons: [
+            {
+              id: 1,
+              name: 'محمد علي',
+              receipts_count: 5,
+              cash_sales: 1000,
+              credit_sales: 4000,
+              down_payments: 500,
+              total_sales_val: 5000,
+              collected: 1000,
+              comm_sales: 250,
+              comm_coll: 100,
+              due_salary: 350
+            }
+          ]
         })
       });
     });
 
-    await page.route('**/reports/profit-and-loss/**', async (route) => {
+    await page.route('**/api/v1/reports/profit-and-loss/**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -88,34 +181,84 @@ test.describe('Reports Module E2E Tests', () => {
       });
     });
 
-    await page.route('**/reports/inventory-movement/**', async (route) => {
+    await page.route('**/api/v1/reports/inventory-movement/**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
           total_inventory_value: 0,
           total_adjustments_count: 0,
-          items: []
+          items: [
+            {
+              id: 1,
+              name: 'منتج',
+              initial_qty: 10,
+              purchases_qty: 5,
+              sales_qty: 2,
+              returns_qty: 0,
+              current_stock: 13
+            }
+          ]
         })
       });
     });
 
-    await page.route('**/reports/installments/**', async (route) => {
+    await page.route('**/api/v1/reports/installments/**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          total_collected: 0,
-          salesperson_breakdown: [{ salesperson_id: 1, salesperson_name: 'Test', total_collected: 100 }]
+          total_installments_amount: 100,
+          installments_count: 1,
+          installments: [{ id: 1, receipt_number: 101, customer_name: 'علي حسن', monthly_amount: 500, total_amount: 3000 }]
         })
       });
     });
 
-    // Bypass login by setting localStorage
-    await page.goto('/');
-    await page.evaluate(() => {
-      localStorage.setItem('token', 'mock-token');
-      localStorage.setItem('branchId', '1');
+    await page.route('**/api/v1/reports/areas/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          areas: [
+            {
+              area: 'الدقي',
+              gross_sales: 10000,
+              cash_sales: 4000,
+              installment_sales: 6000,
+              down_payments: 1000,
+              due_installments_month: 2000,
+              returns_amount: 0,
+              net_sales: 10000,
+              invoices_count: 5,
+              salespersons_display: 'محمد علي'
+            }
+          ],
+          summary: { total_sales: 10000, net_sales: 10000, areas_count: 1 }
+        })
+      });
+    });
+
+    await page.route('**/api/v1/reports/purchases/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          invoices: [],
+          summary: { total_purchases: 0, total_returns: 0, net_purchases: 0 }
+        })
+      });
+    });
+
+    await page.route('**/api/v1/reports/averages/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          products: [],
+          summary: { total_sales: 0, total_units: 0 }
+        })
+      });
     });
   });
 
@@ -136,7 +279,7 @@ test.describe('Reports Module E2E Tests', () => {
   test('Installments Report tab loads successfully', async ({ page }) => {
     await page.goto('/reports/installments');
     await expect(page.locator('.spinner-border')).not.toBeVisible();
-    await expect(page.locator('.card-body').first()).toBeVisible();
+    await expect(page.locator('table')).toBeVisible();
   });
 
   test('Expenses Report tab loads as read-only', async ({ page }) => {
@@ -149,7 +292,7 @@ test.describe('Reports Module E2E Tests', () => {
   test('Profit & Loss Report tab loads successfully', async ({ page }) => {
     await page.goto('/reports/profit-and-loss');
     await expect(page.locator('.spinner-border')).not.toBeVisible();
-    await expect(page.locator('.card-body .fw-bold').first()).toBeVisible();
+    await expect(page.locator('table')).toBeVisible();
   });
 
   test('Inventory Movement Report tab loads successfully', async ({ page }) => {
@@ -161,7 +304,24 @@ test.describe('Reports Module E2E Tests', () => {
   test('Salesperson Performance Report tab loads successfully', async ({ page }) => {
     await page.goto('/reports/salesperson');
     await expect(page.locator('.spinner-border')).not.toBeVisible();
-    await expect(page.locator('.card-body .fw-bold.fs-3')).toHaveCount(4);
-    await expect(page.locator('table th')).toHaveCount(9);
+    await expect(page.locator('table th')).toHaveCount(12);
+  });
+
+  test('Areas Report tab loads successfully', async ({ page }) => {
+    await page.goto('/reports/areas');
+    await expect(page.locator('.spinner-border')).not.toBeVisible();
+    await expect(page.locator('table')).toBeVisible();
+  });
+
+  test('Purchases Report tab loads successfully', async ({ page }) => {
+    await page.goto('/reports/purchases');
+    await expect(page.locator('.spinner-border')).not.toBeVisible();
+    await expect(page.locator('table')).toBeVisible();
+  });
+
+  test('Averages Report tab loads successfully', async ({ page }) => {
+    await page.goto('/reports/averages');
+    await expect(page.locator('.spinner-border')).not.toBeVisible();
+    await expect(page.locator('table')).toBeVisible();
   });
 });

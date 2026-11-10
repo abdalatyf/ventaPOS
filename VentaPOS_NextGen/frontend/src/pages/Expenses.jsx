@@ -53,8 +53,9 @@ export default function Expenses() {
   };
 
   const filteredAndSortedExpenses = React.useMemo(() => {
-    let filtered = expenses.filter(e => {
-      const matchSearch = (e.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const list = Array.isArray(expenses) ? expenses : [];
+    let filtered = list.filter(e => {
+      const matchSearch = (e.description || e.notes || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchCategory = !categoryFilter || (e.category || 'مصروفات عامة') === categoryFilter;
       return matchSearch && matchCategory;
     });
@@ -98,7 +99,8 @@ export default function Expenses() {
     setLoading(true);
     try {
       const res = await api.get(`/expenses/?month=${expenseMonth}&year=${expenseYear}`);
-      setExpenses(res.data.results || res.data);
+      const list = Array.isArray(res.data?.results) ? res.data.results : (Array.isArray(res.data) ? res.data : []);
+      setExpenses(list);
       setError(null);
     } catch (err) {
       console.error(err);

@@ -62,7 +62,7 @@ export default function ProductLedger() {
     const fetchProducts = async () => {
       try {
         const res = await api.get('/inventory-items/', { params: { branch_id: currentBranchId } });
-        const list = res.data.results || res.data || [];
+        const list = Array.isArray(res.data?.results) ? res.data.results : (Array.isArray(res.data) ? res.data : []);
         setAllProducts(list);
         
         if (paramId) {

@@ -83,15 +83,16 @@ def get_num_to_words_ar(amount):
     except Exception:
         return str(amount)
 
-def generate_and_open_pdf(html_content, filename_prefix="document", target_printer=None, action="print", paper_size="DL"):
+def generate_and_open_pdf(html_content, filename_prefix="document", target_printer=None, action="print", paper_size="DL", orientation="Portrait"):
     try:
         config = get_wkhtmltopdf_config()
         
+        pdf_orientation = 'Landscape' if str(orientation).lower() == 'landscape' else 'Portrait'
         if paper_size == "A4":
             options = {
                 'encoding': "UTF-8",
                 'page-size': 'A4',
-                'orientation': 'Portrait',
+                'orientation': pdf_orientation,
                 'margin-top': '10mm',
                 'margin-right': '10mm',
                 'margin-bottom': '10mm',

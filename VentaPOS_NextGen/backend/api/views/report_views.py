@@ -1261,11 +1261,116 @@ class AreasReportView(views.APIView):
 
 class ReportDesktopPrintView(views.APIView):
     def post(self, request):
+        report_type = request.data.get("report_type")
         title = request.data.get("title")
+        columns = request.data.get("columns", [])
+        rows = request.data.get("rows", [])
+        kpis = request.data.get("kpis", [])
+
+        branch_id = request.data.get("branch_id")
+        year = request.data.get("year")
+        month = request.data.get("month")
+
+        if report_type == 'areas':
+            if not title:
+                title = "تقرير المناطق والتحصيل الجغرافي"
+            if not columns:
+                columns = [
+                    {"key": "area", "label": "المنطقة", "align": "start"},
+                    {"key": "invoices_count", "label": "عدد الفواتير", "align": "center"},
+                    {"key": "cash_sales", "label": "مبيعات نقدي", "align": "center"},
+                    {"key": "installment_sales", "label": "مبيعات تقسيط", "align": "center"},
+                    {"key": "gross_sales", "label": "إجمالي المبيعات", "align": "center"},
+                    {"key": "down_payments", "label": "إجمالي المقدمات", "align": "center"},
+                    {"key": "due_installments_month", "label": "الأقساط المستحقة", "align": "center"},
+                    {"key": "returns_amount", "label": "المرتجعات", "align": "center"},
+                    {"key": "net_sales", "label": "صافي المبيعات", "align": "center"},
+                    {"key": "salespersons_display", "label": "المناديب", "align": "start"},
+                ]
+            if not rows:
+                from rest_framework.test import APIRequestFactory
+                factory = APIRequestFactory()
+                params = {}
+                if branch_id:
+                    params["branch_id"] = branch_id
+                if year:
+                    params["year"] = year
+                if month:
+                    params["month"] = month
+                if request.data.get("salesperson_id"):
+                    params["salesperson_id"] = request.data.get("salesperson_id")
+                if request.data.get("area"):
+                    params["area"] = request.data.get("area")
+                sub_req = factory.get("/api/v1/reports/areas/", params)
+                sub_req.user = request.user
+                if hasattr(request, 'auth'):
+                    sub_req.auth = request.auth
+                areas_res = AreasReportView.as_view()(sub_req)
+                if areas_res.status_code == 200:
+                    data = areas_res.data
+                    rows = data.get("areas", [])
+                    if not kpis:
+                        s = data.get("summary", {})
+                        kpis = [
+                            {"label": "إجمالي المبيعات", "value": s.get("total_sales", 0), "color": "success"},
+                            {"label": "صافي المبيعات", "value": s.get("net_sales", 0), "color": "primary"},
+                            {"label": "إجمالي المقدمات", "value": s.get("total_down_payments", 0), "color": "info"},
+                            {"label": "الأقساط المستحقة", "value": s.get("total_due_installments", 0), "color": "warning"},
+                            {"label": "المرتجعات", "value": s.get("total_returns_amount", 0), "color": "danger"},
+                        ]
+
+        elif report_type == 'purchases':
+            if not title:
+                title = "تقرير المشتريات والموردين"
+            if not columns:
+                columns = [
+                    {"key": "item_name", "label": "اسم الصنف", "align": "start"},
+                    {"key": "supplier_name", "label": "اسم المورد", "align": "start"},
+                    {"key": "invoices_count", "label": "عدد الفواتير", "align": "center"},
+                    {"key": "purchased_qty", "label": "كمية الشراء", "align": "center"},
+                    {"key": "returned_qty", "label": "كمية المرتجع", "align": "center"},
+                    {"key": "net_qty", "label": "صافي الكمية", "align": "center"},
+                    {"key": "avg_unit_cost", "label": "متوسط سعر الشراء", "align": "center"},
+                    {"key": "gross_purchases", "label": "إجمالي الشراء", "align": "center"},
+                    {"key": "returns_amount", "label": "إجمالي المرتجع", "align": "center"},
+                    {"key": "net_purchases", "label": "صافي المشتريات", "align": "center"},
+                ]
+            if not rows:
+                from rest_framework.test import APIRequestFactory
+                factory = APIRequestFactory()
+                params = {}
+                if branch_id:
+                    params["branch_id"] = branch_id
+                if year:
+                    params["year"] = year
+                if month:
+                    params["month"] = month
+                if request.data.get("supplier_id"):
+                    params["supplier_id"] = request.data.get("supplier_id")
+                if request.data.get("item_id"):
+                    params["item_id"] = request.data.get("item_id")
+                if request.data.get("invoice_type"):
+                    params["invoice_type"] = request.data.get("invoice_type")
+                sub_req = factory.get("/api/v1/reports/purchases/", params)
+                sub_req.user = request.user
+                if hasattr(request, 'auth'):
+                    sub_req.auth = request.auth
+                purch_res = PurchasesReportView.as_view()(sub_req)
+                if purch_res.status_code == 200:
+                    data = purch_res.data
+                    rows = data.get("items", [])
+                    if not kpis:
+                        s = data.get("summary", {})
+                        kpis = [
+                            {"label": "صافي المشتريات", "value": s.get("total_purchases_amount", 0), "color": "primary"},
+                            {"label": "إجمالي الشراء", "value": s.get("gross_purchases_amount", 0), "color": "success"},
+                            {"label": "إجمالي المرتجع", "value": s.get("total_returns_amount", 0), "color": "danger"},
+                            {"label": "صافي القطع", "value": s.get("total_items_quantity", 0), "color": "info"},
+                        ]
+
         if not title:
             return Response({"status": "error", "message": "عنوان التقرير مطلوب."}, status=status.HTTP_400_BAD_REQUEST)
 
-        columns = request.data.get("columns", [])
         if not columns or len(columns) == 0:
             return Response({"status": "error", "message": "أعمدة التقرير مطلوبة."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1362,6 +1467,7 @@ class ReportDesktopPrintView(views.APIView):
             'rows': formatted_rows,
             'footer_row': formatted_footer,
             'orientation': orientation,
+            'report_type': report_type,
             'footer_text': company_settings.footer_text if company_settings and company_settings.footer_text else None
         }
 
@@ -1370,7 +1476,7 @@ class ReportDesktopPrintView(views.APIView):
         if action_type == "view":
             success, result_msg = generate_and_open_pdf(
                 html_content, "View_Report",
-                target_printer=None, action="view", paper_size="A4"
+                target_printer=None, action="view", paper_size="A4", orientation=orientation
             )
             if success:
                 return Response({"status": "success", "message": result_msg}, status=status.HTTP_200_OK)
@@ -1378,7 +1484,7 @@ class ReportDesktopPrintView(views.APIView):
         else:
             success, msg = generate_and_open_pdf(
                 html_content, "Print_Report",
-                target_printer=target_printer, action="print", paper_size="A4"
+                target_printer=target_printer, action="print", paper_size="A4", orientation=orientation
             )
             if success:
                 return Response({"status": "success", "message": msg}, status=status.HTTP_200_OK)

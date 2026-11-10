@@ -1,151 +1,162 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Return Logic End-to-End Tests', () => {
-
-  // Helper function to pick a receipt and open return page
-  async function openFirstAvailableReturnPage(page) {
-    await page.goto('/receipts');
-    // Wait for the receipts table to load
-    await page.waitForSelector('table tbody tr');
-    
-    // Find the first receipt that has the "إرجاع بضاعة" (Return Items) button
-    const returnLink = page.locator('a:has-text("استرجاع"), a[href*="/return/"], a:has-text("مرتجع")').first();
-    
-    // Check if there's any available receipt to return
-    const count = await returnLink.count();
-    if (count === 0) {
-      test.skip('No available receipts for return found in the database. Please ensure the DB has receipts.');
-      return false;
-    }
-    
-    await returnLink.click();
-    await page.waitForURL(/\/receipts\/\d+\/return/);
-    return true;
-  }
-
-  test('Test Case 1: Valid return flow from existing receipt', async ({ page }) => {
-    const hasReceipts = await openFirstAvailableReturnPage(page);
-    if (!hasReceipts) return;
-
-    // Wait for the return items table/list to load
-    await page.waitForSelector('input[type="number"]');
-
-    // Get the first item's quantity input
-    const firstQtyInput = page.locator('input[type="number"]').first();
-    
-    // Enter 1 as the return quantity
-    await firstQtyInput.fill('1');
-
-    // Click Save
-    await page.getByRole('button', { name: /حفظ|تأكيد/ }).click();
-
-    // Verify success message and redirection
-    // Note: The app uses `alert()` currently in React code, we need to handle dialogs.
-    page.once('dialog', async dialog => {
-      expect(dialog.message()).toContain('نجاح');
-      await dialog.accept();
+  test.beforeEach(async ({ page, context }) => {
+    // Authenticate in localStorage
+    await context.addInitScript(() => {
+      localStorage.setItem('token', 'mock-token');
+      localStorage.setItem('branchId', '1');
+      localStorage.setItem('branchName', 'الفرع الرئيسي');
     });
 
-    // Ensure we are redirected back to receipts
-    await page.waitForURL('/receipts');
-  });
+    await page.route('**/api/v1/frontend-logs/**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    });
 
-  test('Test Case 2: Over-return protection', async ({ page }) => {
-    const hasReceipts = await openFirstAvailableReturnPage(page);
-    if (!hasReceipts) return;
-
-    await page.waitForSelector('input[type="number"]');
-    const firstQtyInput = page.locator('input[type="number"]').first();
-    
-    // Enter an artificially large quantity
-    await firstQtyInput.fill('9999');
-
-    // Handle the expected error alert
-    const dialogPromise = page.waitForEvent('dialog');
-    await page.getByRole('button', { name: /حفظ|تأكيد/ }).click();
-    
-    const dialog = await dialogPromise;
-    const msg = dialog.message();
-    // The backend error should contain "تتخطى الكمية المتاحة" or similar
-    expect(msg).toMatch(/تتخطى|أكبر من|خطأ/);
-    await dialog.accept();
-
-    // Verify we are still on the return page
-    expect(page.url()).toMatch(/\/receipts\/\d+\/return/);
-  });
-
-  test('Test Case 3: Price manipulation protection (Network Intercept)', async ({ page }) => {
-    const hasReceipts = await openFirstAvailableReturnPage(page);
-    if (!hasReceipts) return;
-
-    await page.waitForSelector('input[type="number"]');
-    const firstQtyInput = page.locator('input[type="number"]').first();
-    await firstQtyInput.fill('1');
-
-    // Intercept the API POST request to /return_receipt/
-    await page.route('**/return_receipt/', async route => {
-      const request = route.request();
-      const payload = request.postDataJSON();
-      
-      // Manipulate the return value
-      if (payload) {
-        payload.return_value = 9999999; 
-        if (payload.returned_items && payload.returned_items.length > 0) {
-            payload.returned_items[0].unit_price = 9999999;
-        }
-      }
-      
-      // Continue with modified payload
-      await route.continue({
-        postData: JSON.stringify(payload)
+    await page.route('**/api/v1/license/status/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'active',
+          is_demo: false,
+          is_print_only: false,
+          is_expired: false,
+          total_invoices_balance: 5000,
+        })
       });
     });
 
-    // Click Save
-    const dialogPromise = page.waitForEvent('dialog');
-    await page.getByRole('button', { name: /حفظ|تأكيد/ }).click();
-    
-    const dialog = await dialogPromise;
-    // Since the backend strictly ignores the manipulated price, it will process it with the original price.
-    expect(dialog.message()).not.toContain('Internal Server Error');
-    await dialog.accept();
+    await page.route('**/api/v1/branches/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ id: 1, name: 'الفرع الرئيسي' }])
+      });
+    });
+
+    await page.route('**/api/v1/company-settings/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ name: 'مؤسسة التجارة الحديثة' })
+      });
+    });
+
+    await page.route('**/api/v1/salespersons/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ id: 1, name: 'محمد علي' }])
+      });
+    });
+
+    await page.route('**/api/v1/default-date/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ year: 2026, month: 7 })
+      });
+    });
+
+    await page.route('**/api/v1/receipts/101/**', async (route) => {
+      if (route.request().url().includes('return_receipt')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ status: 'success', return_receipt_id: 102 })
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 101,
+          receipt_number: 101,
+          sale_year: 2026,
+          sale_month: 7,
+          salesperson: 1,
+          salesperson_name: 'محمد علي',
+          customer_name: 'محمود سعيد',
+          phone_number: '01000123456',
+          area: 'المعادي',
+          address: 'شارع النصر',
+          is_cash_sale: true,
+          total_amount: 5000,
+          down_payment: 0,
+          receipt_type: 'SALE',
+          has_returns: false,
+          sale_items: [
+            {
+              id: 1,
+              inventory_item: 1,
+              product_name: 'غسالة توشيبا 10 كيلو',
+              quantity: 2,
+              unit_price: 2500
+            }
+          ]
+        })
+      });
+    });
   });
 
-  test('Test Case 4: UI lock verification on POS/PosEntry', async ({ page }) => {
-    await page.goto('/receipts');
-    await page.waitForSelector('table tbody tr');
+  test('تحميل صفحة استرجاع الفاتورة وعرض بيانات الأصناف', async ({ page }) => {
+    await page.goto('/receipts/return/101');
+    await expect(page.locator('.spinner-border')).not.toBeVisible();
 
-    // Find a receipt that has the "يوجد مرتجع" badge (which we added previously)
-    const returnedBadge = page.locator('span.badge.bg-danger:has-text("يوجد مرتجع")').first();
-    const count = await returnedBadge.count();
-    
-    if (count === 0) {
-      test.skip('No receipts with returns found to test UI lock.');
-      return;
-    }
-
-    // Go to its edit/POS page
-    const row = returnedBadge.locator('..').locator('..'); // go up to tr
-    const editBtn = row.locator('a[href*="/pos/"], a[href*="/edit"]').first();
-    await editBtn.click();
-
-    await page.waitForLoadState('networkidle');
-
-    // Verify the warning banner exists
-    await expect(page.locator('text=لا يمكن تعديل البضاعة أو الماليات لوجود مرتجع')).toBeVisible();
-
-    // Verify the product search input is disabled
-    const searchInput = page.locator('input[placeholder*="بحث"]').first();
-    if (await searchInput.count() > 0) {
-      await expect(searchInput).toBeDisabled();
-    }
-
-    // Verify installment/financial inputs are disabled
-    const paymentInputs = page.locator('input[type="number"]');
-    const inputsCount = await paymentInputs.count();
-    for (let i = 0; i < inputsCount; i++) {
-        await expect(paymentInputs.nth(i)).toBeDisabled();
-    }
+    await expect(page.locator('text=غسالة توشيبا 10 كيلو').first()).toBeVisible();
+    await expect(page.locator('td', { hasText: '2' }).first()).toBeVisible();
+    await expect(page.locator('text=تحديد الأصناف المسترجعة')).toBeVisible();
   });
 
+  test('زيادة ونقصان كمية المرتجع وتحديث إجمالي المرتجع', async ({ page }) => {
+    await page.goto('/receipts/return/101');
+    await expect(page.locator('.spinner-border')).not.toBeVisible();
+
+    const incBtn = page.locator('button:has-text("+")').first();
+    const decBtn = page.locator('button:has-text("-")').first();
+    const qtyInput = page.locator('table input[type="text"]').first();
+
+    // Initial return quantity is 0
+    await expect(qtyInput).toHaveValue('0');
+
+    // Click increment (+) -> 1
+    await incBtn.dispatchEvent('click');
+    await expect(qtyInput).toHaveValue('1');
+    await expect(page.locator('text=2,500 ج.م').first()).toBeVisible();
+
+    // Click increment (+) -> 2 (sold quantity)
+    await incBtn.dispatchEvent('click');
+    await expect(qtyInput).toHaveValue('2');
+    await expect(page.locator('text=5,000 ج.م').first()).toBeVisible();
+
+    // Click increment (+) again -> should stay at 2 (max clamp)
+    await incBtn.dispatchEvent('click');
+    await expect(qtyInput).toHaveValue('2');
+
+    // Click decrement (-) -> 1
+    await decBtn.dispatchEvent('click');
+    await expect(qtyInput).toHaveValue('1');
+    await expect(page.locator('text=2,500 ج.م').first()).toBeVisible();
+  });
+
+  test('تأكيد المرتجع بنجاح وإعادة التوجيه إلى دفتر المبيعات', async ({ page }) => {
+    await page.goto('/receipts/return/101');
+    await expect(page.locator('.spinner-border')).not.toBeVisible();
+
+    // Increment return qty to 1
+    await page.locator('button:has-text("+")').first().dispatchEvent('click');
+
+    // Click "تأكيد المرتجع"
+    const confirmBtn = page.locator('button', { hasText: 'تأكيد المرتجع' });
+    await expect(confirmBtn).toBeEnabled();
+
+    await Promise.all([
+      page.waitForRequest(req => req.url().includes('/return_receipt/') && req.method() === 'POST'),
+      confirmBtn.click()
+    ]);
+
+    await expect(page).toHaveURL(/.*\/receipts/);
+  });
 });

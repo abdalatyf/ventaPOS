@@ -425,7 +425,7 @@ export default function ReportTable({
           className="table-responsive hide-vertical-scroll report-table-container flex-grow-1 rounded-bottom focus-ring-none" 
           style={{ outline: 'none' }}
         >
-        <table className="table table-bordered table-vcenter table-hover mb-0 text-nowrap table-sticky-header">
+        <table className="table table-bordered table-vcenter table-hover mb-0 text-nowrap table-sticky-header tabular-nums">
           {children ? (
             children
           ) : (

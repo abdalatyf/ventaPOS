@@ -28,6 +28,7 @@ export default function ReceiptsTable({
 }) {
   const isAllMatchingSelected = globalAllIds.length > 0 && selectedIds.length === globalAllIds.length;
   const isCurrentPageSelected = receipts.length > 0 && selectedIds.length === receipts.length;
+  const isPartiallySelected = selectedIds.length > 0 && !isAllMatchingSelected && !isCurrentPageSelected;
 
   return (
     <div className="card shadow-sm border-secondary-subtle mb-0 flex-grow-1">
@@ -109,7 +110,8 @@ export default function ReceiptsTable({
                 <input 
                   type="checkbox" 
                   className="form-check-input" 
-                  checked={receipts.length > 0 && (isCurrentPageSelected || isAllMatchingSelected)} 
+                  checked={receipts.length > 0 && (isCurrentPageSelected || isAllMatchingSelected)}
+                  ref={el => { if (el) el.indeterminate = isPartiallySelected; }}
                   onChange={toggleSelectAll} 
                 />
               </th>

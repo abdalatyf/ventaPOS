@@ -76,7 +76,8 @@ export default function InventoryTab() {
     try {
       setLoading(true);
       const res = await api.get('/inventory-items/', { params: { branch_id: currentBranchId } });
-      setItems(res.data.results || res.data);
+      const list = Array.isArray(res.data?.results) ? res.data.results : (Array.isArray(res.data) ? res.data : []);
+      setItems(list);
       setError(null);
     } catch (err) {
       console.error('Error fetching inventory items:', err);
@@ -91,7 +92,8 @@ export default function InventoryTab() {
   }, [currentBranchId]);
 
   const filteredItems = useMemo(() => {
-    let filtered = items.filter(i => (i.name || '').toLowerCase().includes(searchQuery.toLowerCase()));
+    const list = Array.isArray(items) ? items : [];
+    let filtered = list.filter(i => (i.name || '').toLowerCase().includes(searchQuery.toLowerCase()));
     
     filtered.sort((a, b) => {
       let valA, valB;
