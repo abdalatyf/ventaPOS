@@ -2,6 +2,7 @@ import React from 'react';
 import { IconShoppingCart } from '@tabler/icons-react';
 import SuggestionList from './SuggestionList';
 import api from '../../api';
+import { parseValidMonthYear } from '../../utils/formatUtils';
 
 export default function PurchaseItemForm({
   prodQueryRef,
@@ -63,8 +64,9 @@ export default function PurchaseItemForm({
                   const exactMatch = products.find(p => p.name === productQuery.trim());
                   if (exactMatch) {
                     setSelectedProduct(exactMatch);
-                    if (invoiceType === 'RETURN') {
-                      api.get(`/inventory-items/${exactMatch.id}/stock/?month=${invoiceMonth}&year=${invoiceYear}`)
+                    const validDate = parseValidMonthYear(invoiceMonth, invoiceYear, { minYear: 2025, maxYear: 2100 });
+                    if (invoiceType === 'RETURN' && validDate) {
+                      api.get(`/inventory-items/${exactMatch.id}/stock/?month=${validDate.month}&year=${validDate.year}`)
                         .then(res => {
                           if (res.data && res.data.safe_available_qty !== undefined) {
                             const existing = items.find(i => i.inventory_item === exactMatch.id);
@@ -138,6 +140,7 @@ export default function PurchaseItemForm({
 
         <div className="col-auto">
           <button 
+            type="button"
             className="btn btn-primary fw-bold fs-4 d-flex align-items-center gap-1" 
             onClick={handleAddItem}
             style={{ padding: '0.375rem 1rem' }}

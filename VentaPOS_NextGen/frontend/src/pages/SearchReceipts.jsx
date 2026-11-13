@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import useSmartScroll from '../hooks/useSmartScroll';
+import { useActiveBranch } from '../hooks/useActiveBranch';
 import api from '../api';
 import { IconReceipt, IconPlus } from '@tabler/icons-react';
 import ReceiptsFilterToolbar, { ReceiptsFilterRow1, ReceiptsFilterRow2 } from '../components/receipts/ReceiptsFilterToolbar';
@@ -12,6 +13,7 @@ import StandardTablePageLayout from '../components/common/StandardTablePageLayou
 
 export default function SearchReceipts() {
   const { setTableRef } = useSmartScroll();
+  const { branchId } = useActiveBranch();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -49,6 +51,9 @@ export default function SearchReceipts() {
   const [loading, setLoading] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const filterTimeout = useRef(null);
+  const deletingRef = useRef(false);
+  const fetchGenRef = useRef(0);
+  const prevBranchIdRef = useRef(branchId);
 
   const [totalInvoicesCount, setTotalInvoicesCount] = useState(0);
   const [totalAmountSum, setTotalAmountSum] = useState(0);
@@ -69,27 +74,30 @@ export default function SearchReceipts() {
   };
 
   const fetchSalespersons = async () => {
+    const reqGen = fetchGenRef.current;
     try {
-      const currentBranchId = localStorage.getItem('branchId');
+      const currentBranchId = branchId || localStorage.getItem('branchId');
       const params = currentBranchId ? { branch_id: currentBranchId } : {};
       const res = await api.get('/salespersons/', { params });
+      if (reqGen !== fetchGenRef.current) return;
       if (res.data && res.data.results) {
         setSalespersons(res.data.results);
       } else if (Array.isArray(res.data)) {
         setSalespersons(res.data);
       }
     } catch (error) {
-      console.error('Error fetching salespersons:', error);
+      if (reqGen === fetchGenRef.current) console.error('Error fetching salespersons:', error);
     }
   };
 
   const fetchReceipts = async (currentFilters) => {
+    const reqGen = ++fetchGenRef.current;
     setLoading(true);
     setReceipts([]);
     setSelectedIds([]);
     try {
       const params = new URLSearchParams();
-      const currentBranchId = localStorage.getItem('branchId');
+      const currentBranchId = branchId || localStorage.getItem('branchId');
       if (currentBranchId) params.append('branch_id', currentBranchId);
       if (currentFilters.month) params.append('month', currentFilters.month);
       if (currentFilters.year) params.append('year', currentFilters.year);
@@ -108,6 +116,7 @@ export default function SearchReceipts() {
       }
 
       const res = await api.get(`/receipts/?${params.toString()}`);
+      if (reqGen !== fetchGenRef.current) return;
       if (res.data && res.data.results) {
         setReceipts(res.data.results);
         setNextPageUrl(res.data.next);
@@ -120,25 +129,27 @@ export default function SearchReceipts() {
         setSelectedIds(allIds.length > 0 ? allIds : res.data.results.map(r => r.id));
       }
     } catch (error) {
-      console.error('Error fetching receipts:', error);
+      if (reqGen === fetchGenRef.current) console.error('Error fetching receipts:', error);
     } finally {
-      setLoading(false);
+      if (reqGen === fetchGenRef.current) setLoading(false);
     }
   };
 
   const loadMoreReceipts = async () => {
     if (!nextPageUrl || loadingMore) return;
+    const reqGen = fetchGenRef.current;
     setLoadingMore(true);
     try {
       const res = await api.get(nextPageUrl);
+      if (reqGen !== fetchGenRef.current) return;
       if (res.data && res.data.results) {
         setReceipts(prev => [...prev, ...res.data.results]);
         setNextPageUrl(res.data.next);
       }
     } catch (error) {
-      console.error('Error loading more receipts:', error);
+      if (reqGen === fetchGenRef.current) console.error('Error loading more receipts:', error);
     } finally {
-      setLoadingMore(false);
+      if (reqGen === fetchGenRef.current) setLoadingMore(false);
     }
   };
 
@@ -149,8 +160,23 @@ export default function SearchReceipts() {
   };
 
   useEffect(() => {
+    const prevBranch = prevBranchIdRef.current;
+    if (prevBranch !== branchId) {
+      prevBranchIdRef.current = branchId;
+      setContextMenu(null);
+      setPrintModalOpen(false);
+      setPrintModalIds([]);
+      setSelectedIds([]);
+      setGlobalAllIds([]);
+      setGlobalInstallmentIds([]);
+      setReceipts([]);
+      setNextPageUrl(null);
+      setSalespersonName('');
+      if (filterTimeout.current) clearTimeout(filterTimeout.current);
+    }
+
+    fetchReceipts(filters);
     fetchSalespersons();
-    fetchReceipts(initialFilters);
 
     const handleClick = () => setContextMenu(null);
     window.addEventListener('click', handleClick);
@@ -158,7 +184,7 @@ export default function SearchReceipts() {
       window.removeEventListener('click', handleClick);
       if (filterTimeout.current) clearTimeout(filterTimeout.current);
     };
-  }, []);
+  }, [branchId]);
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
@@ -209,51 +235,64 @@ export default function SearchReceipts() {
   };
 
   const handleBulkDelete = async () => {
-    if (selectedIds.length === 0) return;
-    const result = await Swal.fire({
-      title: 'هل أنت متأكد؟',
-      text: `هل تريد حذف ${selectedIds.length} فاتورة؟`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'نعم، احذف',
-      cancelButtonText: 'إلغاء',
-      confirmButtonColor: '#d33',
-      cancelButtonColor: '#6c757d',
-    });
+    if (selectedIds.length === 0 || deletingRef.current) return;
+    deletingRef.current = true;
 
-    if (result.isConfirmed) {
-      try {
-        await api.post('/receipts/bulk_delete/', { receipt_ids: selectedIds });
-        Swal.fire('تم الحذف!', 'تم حذف الفواتير بنجاح.', 'success');
-        fetchReceipts(filters);
-      } catch (error) {
-        console.error('Error deleting receipts:', error);
-        Swal.fire('خطأ', error.response?.data?.message || 'حدث خطأ أثناء الحذف.', 'error');
+    try {
+      const result = await Swal.fire({
+        title: 'هل أنت متأكد؟',
+        text: `هل تريد حذف ${selectedIds.length} فاتورة؟`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، احذف',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+      });
+
+      if (result.isConfirmed) {
+        try {
+          await api.post('/receipts/bulk_delete/', { receipt_ids: selectedIds });
+          Swal.fire('تم الحذف!', 'تم حذف الفواتير بنجاح.', 'success');
+          fetchReceipts(filters);
+        } catch (error) {
+          console.error('Error deleting receipts:', error);
+          Swal.fire('خطأ', error.response?.data?.message || 'حدث خطأ أثناء الحذف.', 'error');
+        }
       }
+    } finally {
+      deletingRef.current = false;
     }
   };
 
   const handleDeleteSingle = async (id, num) => {
-    const result = await Swal.fire({
-      title: 'هل أنت متأكد؟',
-      text: `هل تريد حذف الفاتورة رقم ${num}؟`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'نعم، احذف',
-      cancelButtonText: 'إلغاء',
-      confirmButtonColor: '#d33',
-      cancelButtonColor: '#6c757d',
-    });
+    if (deletingRef.current) return;
+    deletingRef.current = true;
 
-    if (result.isConfirmed) {
-      try {
-        await api.delete(`/receipts/${id}/`);
-        Swal.fire('تم الحذف!', 'تم حذف الفاتورة بنجاح.', 'success');
-        fetchReceipts(filters);
-      } catch (error) {
-        console.error('Error deleting receipt:', error);
-        Swal.fire('خطأ', 'حدث خطأ أثناء الحذف.', 'error');
+    try {
+      const result = await Swal.fire({
+        title: 'هل أنت متأكد؟',
+        text: `هل تريد حذف الفاتورة رقم ${num}؟`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، احذف',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+      });
+
+      if (result.isConfirmed) {
+        try {
+          await api.delete(`/receipts/${id}/`);
+          Swal.fire('تم الحذف!', 'تم حذف الفاتورة بنجاح.', 'success');
+          fetchReceipts(filters);
+        } catch (error) {
+          console.error('Error deleting receipt:', error);
+          Swal.fire('خطأ', 'حدث خطأ أثناء الحذف.', 'error');
+        }
       }
+    } finally {
+      deletingRef.current = false;
     }
   };
 

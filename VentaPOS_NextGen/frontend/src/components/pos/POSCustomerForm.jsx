@@ -51,16 +51,12 @@ export default function POSCustomerForm({
           </div>
           <div className="col-2">
             <input 
-              type="number" 
+              type="text"
+              inputMode="numeric"
               className="form-control py-1 fs-3 border-secondary-subtle fw-bold text-center" 
               value={saleMonth} 
-              min="1" 
-              max="12" 
-              onChange={e => {
-                const v = parseInt(e.target.value);
-                if (v >= 1 && v <= 12) setSaleMonth(v);
-                else if (e.target.value === '') setSaleMonth('');
-              }} 
+              dir="ltr"
+              onChange={e => setSaleMonth(e.target.value)} 
               style={{ borderColor: '#adb5bd' }} 
             />
           </div>
@@ -69,10 +65,11 @@ export default function POSCustomerForm({
           </div>
           <div className="col-2">
             <input 
-              type="number" 
+              type="text"
+              inputMode="numeric"
               className="form-control py-1 fs-3 border-secondary-subtle fw-bold text-center" 
               value={saleYear} 
-              min="2020" 
+              dir="ltr"
               onChange={e => setSaleYear(e.target.value)} 
               style={{ borderColor: '#adb5bd' }} 
             />

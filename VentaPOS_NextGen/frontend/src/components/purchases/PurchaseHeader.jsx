@@ -113,16 +113,12 @@ export default function PurchaseHeader({
           <div className="col-1">
             <input 
               ref={monthRef}
-              type="number" 
+              type="text"
+              inputMode="numeric"
+              dir="ltr"
               className="form-control py-1 fs-3 border-secondary-subtle fw-bold text-center" 
               value={invoiceMonth} 
-              min="1"
-              max="12"
-              onChange={(e) => {
-                const v = parseInt(e.target.value);
-                if (v >= 1 && v <= 12) setInvoiceMonth(v);
-                else if (e.target.value === '') setInvoiceMonth('');
-              }} 
+              onChange={(e) => setInvoiceMonth(e.target.value)} 
               onKeyDown={(e) => handleCartKD(e, yearRef)}
               style={{ borderColor: '#adb5bd' }} 
             />
@@ -133,10 +129,11 @@ export default function PurchaseHeader({
           <div className="col-1">
             <input 
               ref={yearRef}
-              type="number" 
+              type="text"
+              inputMode="numeric"
+              dir="ltr"
               className="form-control py-1 fs-3 border-secondary-subtle fw-bold text-center" 
               value={invoiceYear} 
-              min="2000"
               onChange={(e) => setInvoiceYear(e.target.value)} 
               onKeyDown={(e) => handleCartKD(e, prodQueryRef)}
               style={{ borderColor: '#adb5bd' }} 

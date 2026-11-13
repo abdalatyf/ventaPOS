@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
+import { setActiveBranch } from '../hooks/useActiveBranch';
 import { IconBuildingStore, IconPlus, IconEdit, IconCheck, IconTrash } from '@tabler/icons-react';
 import { confirmDialog, alertDialog } from '../utils/dialogUtils';
 
@@ -13,6 +14,10 @@ export default function BranchSelection() {
   const [showModal, setShowModal] = useState(false);
   const [editingBranch, setEditingBranch] = useState(null);
   const [branchName, setBranchName] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const submittingRef = useRef(false);
+  const deletingRef = useRef(false);
 
   const navigate = useNavigate();
 
@@ -30,8 +35,7 @@ export default function BranchSelection() {
       if (fetchedBranches.length === 1 && !localStorage.getItem('branchId')) {
         handleSelectBranch(fetchedBranches[0]);
       } else if (fetchedBranches.length === 0) {
-        localStorage.removeItem('branchId');
-        localStorage.removeItem('branchName');
+        setActiveBranch(null, '');
         setShowModal(true);
       }
     } catch (err) {
@@ -42,20 +46,29 @@ export default function BranchSelection() {
   };
 
   const handleSelectBranch = (branch) => {
-    localStorage.setItem('branchId', branch.id);
-    localStorage.setItem('branchName', branch.name);
+    setActiveBranch(branch.id, branch.name);
     navigate('/');
   };
 
   const handleSaveBranch = async (e) => {
     e.preventDefault();
-    if (!branchName.trim()) return;
+    if (submittingRef.current) return;
+    const cleanName = branchName.trim();
+    if (!cleanName) {
+      alertDialog({ title: 'تنبيه', text: 'يرجى إدخال اسم الفرع.', icon: 'warning' });
+      return;
+    }
 
+    submittingRef.current = true;
+    setSaving(true);
     try {
       if (editingBranch) {
-        await api.patch(`/branches/${editingBranch.id}/`, { name: branchName });
+        await api.patch(`/branches/${editingBranch.id}/`, { name: cleanName });
+        if (String(localStorage.getItem('branchId')) === String(editingBranch.id)) {
+          setActiveBranch(editingBranch.id, cleanName);
+        }
       } else {
-        await api.post('/branches/', { name: branchName });
+        await api.post('/branches/', { name: cleanName });
       }
       setShowModal(false);
       setEditingBranch(null);
@@ -63,27 +76,33 @@ export default function BranchSelection() {
       fetchBranches();
     } catch (err) {
       alertDialog({ title: 'خطأ', text: 'حدث خطأ أثناء حفظ الفرع.', icon: 'error' });
+    } finally {
+      submittingRef.current = false;
+      setSaving(false);
     }
   };
 
   const handleDeleteBranch = async (e, branch) => {
     e.stopPropagation();
-    const confirmed = await confirmDialog({
-      title: 'تأكيد حذف الفرع',
-      text: `هل أنت متأكد من حذف فرع "${branch.name}"؟ سيتم حذف جميع الفواتير والمنتجات والمصروفات المتعلقة بهذا الفرع نهائياً ولا يمكن التراجع عن هذه الخطوة!`,
-      confirmButtonText: 'نعم، احذف الفرع'
-    });
-    if (confirmed) {
-      try {
+    if (deletingRef.current) return;
+    deletingRef.current = true;
+    try {
+      const confirmed = await confirmDialog({
+        title: 'تأكيد حذف الفرع',
+        text: `هل أنت متأكد من حذف فرع "${branch.name}"؟ سيتم حذف جميع الفواتير والمنتجات والمصروفات المتعلقة بهذا الفرع نهائياً ولا يمكن التراجع عن هذه الخطوة!`,
+        confirmButtonText: 'نعم، احذف الفرع'
+      });
+      if (confirmed) {
         await api.delete(`/branches/${branch.id}/`);
         fetchBranches();
-        if (localStorage.getItem('branchId') == branch.id) {
-          localStorage.removeItem('branchId');
-          localStorage.removeItem('branchName');
+        if (String(localStorage.getItem('branchId')) === String(branch.id)) {
+          setActiveBranch(null, '');
         }
-      } catch (err) {
-        alertDialog({ title: 'خطأ', text: 'حدث خطأ أثناء الحذف.', icon: 'error' });
       }
+    } catch (err) {
+      alertDialog({ title: 'خطأ', text: 'حدث خطأ أثناء الحذف.', icon: 'error' });
+    } finally {
+      deletingRef.current = false;
     }
   };
 
@@ -195,11 +214,11 @@ export default function BranchSelection() {
                   </div>
                 </div>
                 <div className="modal-footer bg-light border-0 py-3" style={{ borderRadius: '0 0 12px 12px' }}>
-                  <button type="button" className="btn btn-link link-secondary" onClick={() => setShowModal(false)}>
+                  <button type="button" className="btn btn-link link-secondary" onClick={() => setShowModal(false)} disabled={saving}>
                     إلغاء
                   </button>
-                  <button type="submit" className="btn btn-primary ms-auto fw-bold">
-                    <IconCheck className="me-2" size={18} /> حفظ
+                  <button type="submit" className="btn btn-primary ms-auto fw-bold" disabled={saving}>
+                    <IconCheck className="me-2" size={18} /> {saving ? 'جاري الحفظ...' : 'حفظ'}
                   </button>
                 </div>
               </form>

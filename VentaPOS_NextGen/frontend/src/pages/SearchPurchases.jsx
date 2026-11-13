@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import api from '../api';
+import { useActiveBranch } from '../hooks/useActiveBranch';
 import { IconReceipt, IconPlus } from '@tabler/icons-react';
 import { PurchaseFilterRow1, PurchaseFilterRow2 } from '../components/purchases/PurchaseFilterToolbar';
 import PurchaseTable from '../components/purchases/PurchaseTable';
@@ -12,6 +13,8 @@ import StandardTablePageLayout from '../components/common/StandardTablePageLayou
 import { fetchSuppliersList, fetchProductsMap } from '../components/purchases/purchaseUtils';
 
 export default function SearchPurchases() {
+  const { branchId } = useActiveBranch();
+
   const formatCurrency = (val) => {
     if (val === undefined || val === null || val === '') return '0';
     return Math.round(Number(val) || 0).toLocaleString('en-US');
@@ -29,6 +32,9 @@ export default function SearchPurchases() {
   const [loading, setLoading] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const filterTimeout = useRef(null);
+  const deletingRef = useRef(false);
+  const fetchGenRef = useRef(0);
+  const prevBranchIdRef = useRef(branchId);
   
   const [totalInvoicesCount, setTotalInvoicesCount] = useState(0);
   const [totalAmountSum, setTotalAmountSum] = useState(0);
@@ -56,20 +62,6 @@ export default function SearchPurchases() {
     if (node) observer.current.observe(node);
   }, [loadingMore, nextPageUrl]);
 
-  useEffect(() => {
-    const branchId = localStorage.getItem('branchId');
-    fetchSuppliersList(branchId).then(setSuppliers);
-    fetchProductsMap(branchId).then(setProductsMap);
-    fetchInvoices(initialFilters);
-
-    const handleClick = () => setContextMenu(null);
-    window.addEventListener('click', handleClick);
-    return () => {
-      window.removeEventListener('click', handleClick);
-      if (filterTimeout.current) clearTimeout(filterTimeout.current);
-    };
-  }, []);
-
   const getSupplierName = (sp) => {
     if (!sp) return 'غير محدد';
     if (typeof sp === 'object') return sp.name || 'غير محدد';
@@ -77,13 +69,14 @@ export default function SearchPurchases() {
     return found ? found.name : `مورد #${sp}`;
   };
 
-  const fetchInvoices = async (currentFilters) => {
+  const fetchInvoices = async (currentFilters, targetBranchId = branchId) => {
+    const reqGen = ++fetchGenRef.current;
     setLoading(true);
     setInvoices([]);
     setSelectedIds([]);
     try {
       const params = new URLSearchParams();
-      const currentBranchId = localStorage.getItem('branchId');
+      const currentBranchId = targetBranchId || localStorage.getItem('branchId');
       if (currentBranchId) params.append('branch_id', currentBranchId);
       if (currentFilters.month) params.append('month', currentFilters.month);
       if (currentFilters.year) params.append('year', currentFilters.year);
@@ -94,6 +87,7 @@ export default function SearchPurchases() {
       }
 
       const res = await api.get(`/purchase-invoices/?${params.toString()}`);
+      if (reqGen !== fetchGenRef.current) return;
       if (res.data && res.data.results) {
         const enrichedInvoices = res.data.results.map(inv => ({
           ...inv,
@@ -111,11 +105,43 @@ export default function SearchPurchases() {
         setSelectedIds(allIds.length > 0 ? allIds : enrichedInvoices.map(r => r.id));
       }
     } catch (error) {
-      console.error('Error fetching purchase invoices:', error);
+      if (reqGen === fetchGenRef.current) console.error('Error fetching purchase invoices:', error);
     } finally {
-      setLoading(false);
+      if (reqGen === fetchGenRef.current) setLoading(false);
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    const activeBranchId = branchId || localStorage.getItem('branchId');
+    const prevBranch = prevBranchIdRef.current;
+    if (prevBranch !== branchId) {
+      prevBranchIdRef.current = branchId;
+      setContextMenu(null);
+      setPrintModalOpen(false);
+      setPrintModalIds([]);
+      setSelectedIds([]);
+      setGlobalAllIds([]);
+      setInvoices([]);
+      setNextPageUrl(null);
+      setSuppliers([]);
+      setProductsMap({});
+      setSupplierSearchQuery('');
+      if (filterTimeout.current) clearTimeout(filterTimeout.current);
+    }
+
+    fetchSuppliersList(activeBranchId).then(list => { if (!cancelled) setSuppliers(list); });
+    fetchProductsMap(activeBranchId).then(map => { if (!cancelled) setProductsMap(map); });
+    fetchInvoices(filters, activeBranchId);
+
+    const handleClick = () => setContextMenu(null);
+    window.addEventListener('click', handleClick);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('click', handleClick);
+      if (filterTimeout.current) clearTimeout(filterTimeout.current);
+    };
+  }, [branchId]);
 
   useEffect(() => {
     if (invoices.length > 0 && Object.keys(productsMap).length > 0) {
@@ -131,9 +157,11 @@ export default function SearchPurchases() {
 
   const loadMoreInvoices = async () => {
     if (!nextPageUrl || loadingMore) return;
+    const reqGen = fetchGenRef.current;
     setLoadingMore(true);
     try {
       const res = await api.get(nextPageUrl);
+      if (reqGen !== fetchGenRef.current) return;
       if (res.data && res.data.results) {
         const enrichedInvoices = res.data.results.map(inv => ({
           ...inv,
@@ -146,9 +174,9 @@ export default function SearchPurchases() {
         setNextPageUrl(res.data.next);
       }
     } catch (error) {
-      console.error('Error loading more invoices:', error);
+      if (reqGen === fetchGenRef.current) console.error('Error loading more invoices:', error);
     } finally {
-      setLoadingMore(false);
+      if (reqGen === fetchGenRef.current) setLoadingMore(false);
     }
   };
 
@@ -176,8 +204,8 @@ export default function SearchPurchases() {
   const fetchSupplierSuggestions = async (query) => {
     if (!query) return [];
     try {
-      const branchId = localStorage.getItem('branchId');
-      const res = await api.get('/suppliers/', { params: { branch_id: branchId, search: query } });
+      const activeBranchId = branchId || localStorage.getItem('branchId');
+      const res = await api.get('/suppliers/', { params: { branch_id: activeBranchId, search: query } });
       const results = res.data?.results || res.data;
       if (Array.isArray(results) && results.length > 0) return results;
       return suppliers.filter(s => s.name && s.name.toLowerCase().includes(query.toLowerCase()));
@@ -236,51 +264,64 @@ export default function SearchPurchases() {
   };
 
   const handleBulkDelete = async () => {
-    if (selectedIds.length === 0) return;
-    const result = await Swal.fire({
-      title: 'هل أنت متأكد؟',
-      text: `هل تريد حذف ${selectedIds.length} فاتورة؟`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'نعم، احذف',
-      cancelButtonText: 'إلغاء',
-      confirmButtonColor: '#d33',
-      cancelButtonColor: '#6c757d',
-    });
+    if (selectedIds.length === 0 || deletingRef.current) return;
+    deletingRef.current = true;
 
-    if (result.isConfirmed) {
-      try {
-        for (const id of selectedIds) {
-          await api.delete(`/purchase-invoices/${id}/`);
+    try {
+      const result = await Swal.fire({
+        title: 'هل أنت متأكد؟',
+        text: `هل تريد حذف ${selectedIds.length} فاتورة؟`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، احذف',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+      });
+
+      if (result.isConfirmed) {
+        try {
+          for (const id of selectedIds) {
+            await api.delete(`/purchase-invoices/${id}/`);
+          }
+          toast.success('تم حذف الفواتير بنجاح.');
+          fetchInvoices(filters);
+        } catch (error) {
+          toast.error('حدث خطأ أثناء الحذف.');
         }
-        toast.success('تم حذف الفواتير بنجاح.');
-        fetchInvoices(filters);
-      } catch (error) {
-        toast.error('حدث خطأ أثناء الحذف.');
       }
+    } finally {
+      deletingRef.current = false;
     }
   };
 
   const handleDeleteSingle = async (id, num) => {
-    const result = await Swal.fire({
-      title: 'هل أنت متأكد؟',
-      text: `هل تريد حذف الفاتورة رقم ${num}؟`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'نعم، احذف',
-      cancelButtonText: 'إلغاء',
-      confirmButtonColor: '#d33',
-      cancelButtonColor: '#6c757d',
-    });
+    if (deletingRef.current) return;
+    deletingRef.current = true;
 
-    if (result.isConfirmed) {
-      try {
-        await api.delete(`/purchase-invoices/${id}/`);
-        toast.success('تم حذف الفاتورة بنجاح.');
-        fetchInvoices(filters);
-      } catch (error) {
-        toast.error('حدث خطأ أثناء الحذف.');
+    try {
+      const result = await Swal.fire({
+        title: 'هل أنت متأكد؟',
+        text: `هل تريد حذف الفاتورة رقم ${num}؟`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، احذف',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+      });
+
+      if (result.isConfirmed) {
+        try {
+          await api.delete(`/purchase-invoices/${id}/`);
+          toast.success('تم حذف الفاتورة بنجاح.');
+          fetchInvoices(filters);
+        } catch (error) {
+          toast.error('حدث خطأ أثناء الحذف.');
+        }
       }
+    } finally {
+      deletingRef.current = false;
     }
   };
 

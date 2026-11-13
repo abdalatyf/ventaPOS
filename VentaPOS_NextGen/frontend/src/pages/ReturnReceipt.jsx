@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../api';
+import { useActiveBranch } from '../hooks/useActiveBranch';
+import { parseStrictInt, parseWholeMoney, parseValidMonthYear } from '../utils/formatUtils';
 import { IconArrowLeft, IconReceiptRefund, IconCheck } from '@tabler/icons-react';
 
 export default function ReturnReceipt() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { branchId } = useActiveBranch();
 
   const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -14,6 +17,8 @@ export default function ReturnReceipt() {
   // Object mapping sale_item index (or id) to return quantity
   const [returnedItems, setReturnedItems] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const prevBranchIdRef = useRef(branchId);
 
   const [returnMonth, setReturnMonth] = useState(new Date().getMonth() + 1);
   const [returnYear, setReturnYear] = useState(new Date().getFullYear());
@@ -26,12 +31,31 @@ export default function ReturnReceipt() {
   ]);
   const [schedule, setSchedule] = useState([]);
 
+  // Redirect if branch switches mid-return
+  useEffect(() => {
+    const prevBranch = prevBranchIdRef.current;
+    if (prevBranch === branchId) return;
+    prevBranchIdRef.current = branchId;
+    if (prevBranch !== null) {
+      toast.error('تم تغيير الفرع — تم الخروج من شاشة المرتجع.');
+      navigate('/receipts', { replace: true });
+    }
+  }, [branchId, navigate]);
+
   // Fetch receipt
   useEffect(() => {
+    let cancelled = false;
     const fetchReceipt = async () => {
       try {
         const res = await api.get(`/receipts/${id}/`);
+        if (cancelled) return;
         const fetchedReceipt = res.data;
+        const activeBranch = branchId || localStorage.getItem('branchId');
+        if (fetchedReceipt.branch && activeBranch && String(fetchedReceipt.branch) !== String(activeBranch)) {
+          toast.error('الفاتورة تنتمي لفرع آخر.');
+          navigate('/receipts', { replace: true });
+          return;
+        }
         setReceipt(fetchedReceipt);
         
         let minM = fetchedReceipt.sale_month + 1;
@@ -51,15 +75,18 @@ export default function ReturnReceipt() {
           setReturnYear(minY);
         }
       } catch (err) {
-        console.error(err);
-        toast.error('حدث خطأ أثناء جلب تفاصيل الفاتورة');
-        navigate(-1);
+        if (!cancelled) {
+          console.error(err);
+          toast.error('حدث خطأ أثناء جلب تفاصيل الفاتورة');
+          navigate(-1);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     fetchReceipt();
-  }, [id, navigate]);
+    return () => { cancelled = true; };
+  }, [id, navigate, branchId]);
 
   const toEnglish = (str) => {
     if (str === undefined || str === null) return '';
@@ -76,8 +103,6 @@ export default function ReturnReceipt() {
     return isNaN(p) ? 0 : p;
   };
 
-  
-
   const formatCurrency = val => {
     if (val === undefined || val === null || val === '') return '0 ج.م';
     const num = parseFloat(val);
@@ -86,18 +111,24 @@ export default function ReturnReceipt() {
 
   // Generate Schedule based on groups
   useEffect(() => {
+    const validDate = parseValidMonthYear(returnMonth, returnYear, { minYear: 2000, maxYear: 2100 });
+    if (!validDate) {
+      setSchedule([]);
+      return;
+    }
+
     const newSchedule = [];
-    let cMonth = returnMonth + 1;
-    let cYear = returnYear;
+    let cMonth = validDate.month + 1;
+    let cYear = validDate.year;
     if (cMonth > 12) {
       cMonth = 1;
       cYear++;
     }
 
     groups.forEach(g => {
-      const amt = fmt(g.amount);
-      const cnt = fmt(g.count);
-      if (amt > 0 && cnt > 0) {
+      const amt = parseWholeMoney(g.amount, { min: 1 });
+      const cnt = parseStrictInt(g.count, { min: 1, max: 360 });
+      if (amt !== null && cnt !== null) {
         for (let i = 0; i < cnt; i++) {
           newSchedule.push({ month: cMonth, year: cYear, amount: amt });
           cMonth++;
@@ -112,9 +143,7 @@ export default function ReturnReceipt() {
   }, [groups, returnMonth, returnYear]);
 
   const handleGroupChange = (index, field, value) => {
-    const newGroups = [...groups];
-    newGroups[index][field] = value;
-    setGroups(newGroups);
+    setGroups(prev => prev.map((g, idx) => (idx === index ? { ...g, [field]: value } : g)));
   };
 
   const handleIncrement = (idx, maxQty) => {
@@ -160,16 +189,21 @@ export default function ReturnReceipt() {
     }
   });
 
+  const parsedRetDate = parseValidMonthYear(returnMonth, returnYear, { minYear: 2000, maxYear: 2100 });
+  const cmpMonth = parsedRetDate ? parsedRetDate.month : 0;
+  const cmpYear = parsedRetDate ? parsedRetDate.year : 0;
+
   // Calculate Paid So Far (Downpayment + Past Installments)
   const isPastInstallment = (inst) => {
+    if (!parsedRetDate) return false;
     if (!inst.payment_date) {
-      if (inst.payment_year < returnYear) return true;
-      if (inst.payment_year === returnYear && inst.payment_month < returnMonth) return true;
+      if (inst.payment_year < cmpYear) return true;
+      if (inst.payment_year === cmpYear && inst.payment_month < cmpMonth) return true;
       return false;
     }
     const d = new Date(inst.payment_date);
-    if (d.getFullYear() < returnYear) return true;
-    if (d.getFullYear() === returnYear && (d.getMonth() + 1) < returnMonth) return true;
+    if (d.getFullYear() < cmpYear) return true;
+    if (d.getFullYear() === cmpYear && (d.getMonth() + 1) < cmpMonth) return true;
     return false;
   };
 
@@ -184,55 +218,77 @@ export default function ReturnReceipt() {
   const totalNewInstallments = schedule.reduce((sum, item) => sum + item.amount, 0);
   
   const handleSubmit = async () => {
-    if (itemsToReturn.length === 0) {
-      toast.error('لم يتم تحديد أي أصناف للإرجاع!');
-      return;
-    }
+    if (submittingRef.current) return;
+    submittingRef.current = true;
 
-    let minM = receipt.sale_month + 1;
-    let minY = receipt.sale_year;
-    if (minM > 12) {
-      minM = 1;
-      minY++;
-    }
-
-    if (returnYear < minY || (returnYear === minY && returnMonth < minM)) {
-      toast.error(`تاريخ المرتجع لا يمكن أن يكون قبل الشهر التالي لتاريخ البيع (${minM}/${minY})`);
-      return;
-    }
-
-    if (!receipt.is_cash_sale && newDebt > 0) {
-      if (Math.abs(totalNewInstallments - newDebt) > 0.01) {
-        toast.error(`يجب أن يتطابق إجمالي الأقساط الجديدة (${totalNewInstallments}) مع المديونية المتبقية (${newDebt}).`);
+    try {
+      if (itemsToReturn.length === 0) {
+        toast.error('لم يتم تحديد أي أصناف للإرجاع!');
         return;
       }
-    }
 
-    const activeGroups = groups.filter(g => fmt(g.count) > 0 && fmt(g.amount) > 0);
-    const installmentSystemStr = activeGroups.map(g => `${fmt(g.amount)}*${fmt(g.count)}`).join(" + ");
+      const validDate = parseValidMonthYear(returnMonth, returnYear, { minYear: 2000, maxYear: 2100 });
+      if (!validDate) {
+        toast.error('أدخل شهر وسنة مرتجع صحيحين.');
+        return;
+      }
 
-    const payload = {
-      returned_items: itemsToReturn,
-      return_value: totalReturnValue,
-      return_month: returnMonth,
-      return_year: returnYear,
-      new_installments: newDebt > 0 ? schedule.map(s => ({
-        payment_month: s.month,
-        payment_year: s.year,
-        amount: s.amount
-      })) : [],
-      new_installment_system: newDebt > 0 ? installmentSystemStr : ""
-    };
+      let minM = receipt.sale_month + 1;
+      let minY = receipt.sale_year;
+      if (minM > 12) {
+        minM = 1;
+        minY++;
+      }
 
-    setSubmitting(true);
-    try {
-      await api.post(`/receipts/${id}/return_receipt/`, payload);
-      toast.success('تم تسجيل المرتجع بنجاح!');
-      navigate('/receipts');
-    } catch (err) {
-      console.error(err);
-      toast.error('حدث خطأ: ' + (err.response?.data?.error || err.message));
+      if (validDate.year < minY || (validDate.year === minY && validDate.month < minM)) {
+        toast.error(`تاريخ المرتجع لا يمكن أن يكون قبل الشهر التالي لتاريخ البيع (${minM}/${minY})`);
+        return;
+      }
+
+      if (!receipt.is_cash_sale && newDebt > 0) {
+        for (const g of groups) {
+          const hasAmt = String(g.amount ?? '').trim() !== '';
+          const hasCnt = String(g.count ?? '').trim() !== '';
+          if ((hasAmt || hasCnt) && (parseWholeMoney(g.amount, { min: 1 }) === null || parseStrictInt(g.count, { min: 1, max: 360 }) === null)) {
+            toast.error('أدخل قيمة قسط وعدد شهور صحيحين (أكبر من صفر).');
+            return;
+          }
+        }
+        if (Math.abs(totalNewInstallments - newDebt) > 0.01) {
+          toast.error(`يجب أن يتطابق إجمالي الأقساط الجديدة (${totalNewInstallments}) مع المديونية المتبقية (${newDebt}).`);
+          return;
+        }
+      }
+
+      const activeGroups = groups
+        .map(g => ({ amount: parseWholeMoney(g.amount, { min: 1 }), count: parseStrictInt(g.count, { min: 1, max: 360 }) }))
+        .filter(g => g.amount !== null && g.count !== null);
+      const installmentSystemStr = activeGroups.map(g => `${g.amount}*${g.count}`).join(" + ");
+
+      const payload = {
+        returned_items: itemsToReturn,
+        return_value: Math.round(totalReturnValue),
+        return_month: validDate.month,
+        return_year: validDate.year,
+        new_installments: newDebt > 0 ? schedule.map(s => ({
+          payment_month: s.month,
+          payment_year: s.year,
+          amount: Math.round(s.amount)
+        })) : [],
+        new_installment_system: newDebt > 0 ? installmentSystemStr : ""
+      };
+
+      setSubmitting(true);
+      try {
+        await api.post(`/receipts/${id}/return_receipt/`, payload);
+        toast.success('تم تسجيل المرتجع بنجاح!');
+        navigate('/receipts');
+      } catch (err) {
+        console.error(err);
+        toast.error('حدث خطأ: ' + (err.response?.data?.error || err.message));
+      }
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -324,26 +380,26 @@ export default function ReturnReceipt() {
                 <div className="col-6">
                   <label className="form-label fw-bold">شهر المرتجع</label>
                   <input 
-                    type="number" 
+                    type="text"
+                    inputMode="numeric"
+                    dir="ltr"
                     className="form-control text-center fw-bold" 
                     value={returnMonth} 
-                    min="1" 
-                    max="12" 
                     placeholder="شهر" 
-                    onChange={(e) => setReturnMonth(e.target.value === '' ? '' : Number(e.target.value))} 
+                    onChange={(e) => setReturnMonth(e.target.value)} 
                     required 
                   />
                 </div>
                 <div className="col-6">
                   <label className="form-label fw-bold">سنة المرتجع</label>
                   <input 
-                    type="number" 
+                    type="text"
+                    inputMode="numeric"
+                    dir="ltr"
                     className="form-control text-center fw-bold" 
                     value={returnYear} 
-                    min="2000" 
-                    max="2100" 
                     placeholder="سنة" 
-                    onChange={(e) => setReturnYear(e.target.value === '' ? '' : Number(e.target.value))} 
+                    onChange={(e) => setReturnYear(e.target.value)} 
                     required 
                   />
                 </div>

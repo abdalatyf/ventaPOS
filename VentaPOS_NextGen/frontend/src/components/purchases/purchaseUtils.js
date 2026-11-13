@@ -1,18 +1,18 @@
 import api from '../../api';
+import { toEnglish as baseToEnglish, parseValidMonthYear } from '../../utils/formatUtils';
 
-export const toEnglish = (str) => {
-  if (str === undefined || str === null) return '';
-  return String(str)
-    .replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
-    .replace(/×/g, '*')
-    .replace(/،/g, ',');
-};
+export const toEnglish = (str) => baseToEnglish(str).replace(/×/g, '*');
 
 export const checkSafeStockForReturn = async (productId, reqQty, month, year, existingQty = 0) => {
+  const validDate = parseValidMonthYear(month, year, { minYear: 2025, maxYear: 2100 });
+  if (!validDate) {
+    return { ok: false, safeQty: undefined, error: 'أدخل شهر وسنة صحيحين (2025 فأحدث).' };
+  }
+
   let retries = 3;
   while (retries > 0) {
     try {
-      const res = await api.get(`/inventory-items/${productId}/stock/?month=${month}&year=${year}`);
+      const res = await api.get(`/inventory-items/${productId}/stock/?month=${validDate.month}&year=${validDate.year}`);
       if (res.data && res.data.safe_available_qty !== undefined) {
         const remaining = res.data.safe_available_qty + existingQty;
         return {

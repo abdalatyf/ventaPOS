@@ -56,6 +56,7 @@ class PurchaseInvoiceViewSet(SoftDeleteModelViewSet):
     pagination_class = PurchaseInvoicePagination
 
     def get_queryset(self):
+        from .base import to_english_numerals
         qs = super().get_queryset().order_by("-created_at")
         supplier_id = self.request.query_params.get("supplier")
         invoice_number = self.request.query_params.get("invoice_number")
@@ -63,16 +64,32 @@ class PurchaseInvoiceViewSet(SoftDeleteModelViewSet):
         year = self.request.query_params.get("year")
         invoice_type = self.request.query_params.get("invoice_type")
 
-        if supplier_id:
-            qs = qs.filter(supplier_id=supplier_id)
-        if invoice_number:
-            qs = qs.filter(invoice_number=invoice_number)
-        if month:
-            qs = qs.filter(invoice_month=month)
-        if year:
-            qs = qs.filter(invoice_year=year)
-        if invoice_type and invoice_type != "ALL":
-            qs = qs.filter(invoice_type=invoice_type)
+        def _parse_filter_int(raw):
+            clean = to_english_numerals(str(raw).strip()).translate(str.maketrans('۰۱۲۳۴۵۶۷۸۹', '0123456789'))
+            return int(clean)
+
+        if supplier_id and str(supplier_id).strip():
+            try:
+                qs = qs.filter(supplier_id=_parse_filter_int(supplier_id))
+            except ValueError:
+                return qs.none()
+        if invoice_number and str(invoice_number).strip():
+            try:
+                qs = qs.filter(invoice_number=_parse_filter_int(invoice_number))
+            except ValueError:
+                return qs.none()
+        if month and str(month).strip():
+            try:
+                qs = qs.filter(invoice_month=_parse_filter_int(month))
+            except ValueError:
+                return qs.none()
+        if year and str(year).strip():
+            try:
+                qs = qs.filter(invoice_year=_parse_filter_int(year))
+            except ValueError:
+                return qs.none()
+        if invoice_type and str(invoice_type).strip() and str(invoice_type).strip().upper() != "ALL":
+            qs = qs.filter(invoice_type=str(invoice_type).strip().upper())
 
         branch_id = get_request_branch_id(self.request)
         if branch_id:
@@ -121,7 +138,16 @@ class PurchaseInvoiceViewSet(SoftDeleteModelViewSet):
         if not isinstance(invoice_ids, list) or not invoice_ids:
             return Response({"error": "invoice_ids must be a non-empty list"}, status=status.HTTP_400_BAD_REQUEST)
 
-        invoices = self.get_queryset().filter(id__in=invoice_ids).select_related('supplier', 'branch').prefetch_related('items__inventory_item')
+        clean_ids = []
+        for raw_id in invoice_ids:
+            if isinstance(raw_id, bool):
+                return Response({"error": "invoice_ids must contain valid integers"}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                clean_ids.append(int(raw_id))
+            except (ValueError, TypeError):
+                return Response({"error": "invoice_ids must contain valid integers"}, status=status.HTTP_400_BAD_REQUEST)
+
+        invoices = self.get_queryset().filter(id__in=clean_ids).select_related('supplier', 'branch').prefetch_related('items__inventory_item')
         if not invoices.exists():
             return Response({"error": "No valid purchase invoices found"}, status=status.HTTP_404_NOT_FOUND)
 

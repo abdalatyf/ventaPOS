@@ -54,12 +54,14 @@ export default function Login() {
         setCheckingInit(false);
       });
 
-      // Try to get the real company name for display
-      api.get('/company-settings/').then(res => {
-        if (res.data.name) setCompanyName(res.data.name);
-      }).catch(e => {
-        // Ignore 401s since we are logged out
-      });
+      // Try to get the real company name for display when already authenticated
+      if (localStorage.getItem('token')) {
+        api.get('/company-settings/').then(res => {
+          if (res.data.name) setCompanyName(res.data.name);
+        }).catch(() => {
+          // Ignore 401s if token is expired
+        });
+      }
     });
 
     const searchParams = new URLSearchParams(location.search);

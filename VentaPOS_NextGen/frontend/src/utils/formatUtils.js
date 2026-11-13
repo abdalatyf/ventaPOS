@@ -29,9 +29,53 @@ export const toEnglish = (val) => {
   const map = {
     '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
     '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4', '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
-    '٫': '.', '،': ','
+    '٫': '.', '،': ',', '٬': ','
   };
-  return String(val).replace(/[٠-٩۰-۹٫،]/g, (d) => map[d] || d);
+  return String(val).replace(/[٠-٩۰-۹٫،٬]/g, (d) => map[d] || d);
+};
+
+/**
+ * Normalizes Arabic-Indic/Persian numerals into trimmed ASCII numeric string without commas.
+ */
+export const normalizeArabicDigits = (val) => {
+  if (val === null || val === undefined) return '';
+  return toEnglish(String(val)).replace(/,/g, '').trim();
+};
+
+/**
+ * Strictly parses an integer (Arabic-Indic or Western digits). Returns null if invalid, empty,
+ * fractional, or outside optional [min, max] bounds.
+ */
+export const parseStrictInt = (val, { min = -Infinity, max = Infinity } = {}) => {
+  if (val === null || val === undefined || typeof val === 'boolean') return null;
+  const cleaned = normalizeArabicDigits(val);
+  if (!cleaned || !/^-?\d+$/.test(cleaned)) return null;
+  const parsed = Number(cleaned);
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) return null;
+  return parsed;
+};
+
+/**
+ * Parses monetary input (whole integer in app UI per GEMINI.md §4.4).
+ * Rejects empty/non-numeric strings and out-of-bounds values; rounds valid numeric inputs.
+ */
+export const parseWholeMoney = (val, { min = 0, max = Infinity } = {}) => {
+  if (val === null || val === undefined || typeof val === 'boolean') return null;
+  const cleaned = normalizeArabicDigits(val);
+  if (!cleaned || !/^-?\d+(\.\d+)?$/.test(cleaned)) return null;
+  const parsed = Math.round(Number(cleaned));
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) return null;
+  return parsed;
+};
+
+/**
+ * Validates dual numeric month (1..12) and year bounds. Returns parsed { month, year } or null.
+ */
+export const parseValidMonthYear = (monthVal, yearVal, { minYear = 2000, maxYear = 2100 } = {}) => {
+  const month = parseStrictInt(monthVal, { min: 1, max: 12 });
+  const year = parseStrictInt(yearVal, { min: minYear, max: maxYear });
+  if (month === null || year === null) return null;
+  return { month, year };
 };
 
 /**
@@ -113,6 +157,10 @@ export const fmt = fmtNum;
 export default {
   toArabic,
   toEnglish,
+  normalizeArabicDigits,
+  parseStrictInt,
+  parseWholeMoney,
+  parseValidMonthYear,
   parseNumber,
   fmtNum,
   formatMMYYYY,

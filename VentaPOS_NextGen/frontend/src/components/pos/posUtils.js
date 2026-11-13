@@ -1,26 +1,34 @@
 import api from '../../api';
+import {
+  toEnglish as baseToEnglish,
+  parseStrictInt,
+  parseWholeMoney,
+  parseValidMonthYear,
+} from '../../utils/formatUtils';
 
 export const fmt = (n) => Math.round(parseFloat(n) || 0).toLocaleString('en-US');
 
+export const toEnglish = (str) => baseToEnglish(str).replace(/×/g, '*');
+
 export function genSchedule(count, amount, startMonth, startYear) {
+  const validDate = parseValidMonthYear(startMonth, startYear, { minYear: 2000, maxYear: 2100 });
+  const countInt = parseStrictInt(count, { min: 1, max: 360 });
+  const amtInt = parseWholeMoney(amount, { min: 1 });
+  if (!validDate || countInt === null || amtInt === null) return [];
+
   const rows = [];
-  let m = parseInt(startMonth), y = parseInt(startYear);
-  let countInt = parseInt(count || 0);
-  if (countInt > 360) countInt = 360;
+  let m = validDate.month;
+  let y = validDate.year;
   for (let i = 0; i < countInt; i++) {
-    m++; if (m > 12) { m = 1; y++; }
-    if (parseFloat(amount) > 0) rows.push({ payment_month: m, payment_year: y, amount: parseFloat(amount) });
+    m++;
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
+    rows.push({ payment_month: m, payment_year: y, amount: amtInt });
   }
   return rows;
 }
-
-export const toEnglish = (str) => {
-  if (str === undefined || str === null) return '';
-  return String(str)
-    .replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
-    .replace(/×/g, '*')
-    .replace(/،/g, ',');
-};
 
 export const parseInstallmentTextToBoxes = (textVal) => {
   const cleanText = toEnglish(textVal);
@@ -35,8 +43,8 @@ export const parseInstallmentTextToBoxes = (textVal) => {
     if (index >= 3) return;
     let [val1, val2] = part.trim().split('*');
     if (val1 && val2) {
-      let v1 = parseInt(val1) || 0;
-      let v2 = parseInt(val2) || 0;
+      let v1 = parseInt(val1, 10) || 0;
+      let v2 = parseInt(val2, 10) || 0;
       let amount, count;
       if (v2 > v1 && v1 <= 60) {
         amount = v2;
@@ -56,8 +64,12 @@ export const parseInstallmentTextToBoxes = (textVal) => {
 
 export const formatBoxesToInstallmentText = (sysArray) => {
   const parts = sysArray
-    .filter(s => s.count && s.amount && parseInt(toEnglish(s.count)) !== 0 && parseFloat(toEnglish(s.amount)) !== 0)
-    .map(s => `${toEnglish(s.amount)}*${toEnglish(s.count)}`);
+    .map((s) => ({
+      count: parseStrictInt(s.count, { min: 1 }),
+      amount: parseWholeMoney(s.amount, { min: 1 }),
+    }))
+    .filter((s) => s.count !== null && s.amount !== null)
+    .map((s) => `${s.amount}*${s.count}`);
   return parts.join('+');
 };
 
@@ -75,74 +87,107 @@ export const addItemToCart = async ({
   setSelectedProduct,
   setQuantity,
   setSellPrice,
-  prodQueryRef
+  prodQueryRef,
+  addingItemRef,
 }) => {
-  setItemError('');
-  let currentProduct = selectedProduct;
-  if (!currentProduct && productQuery.trim() !== '') {
-    try {
-      const bId = localStorage.getItem('branchId') || '';
-      const res = await api.get(`/product-suggestions/?term=${encodeURIComponent(productQuery.trim())}&month=${saleMonth}&year=${saleYear}&branch_id=${bId}`);
-      const exactMatch = res.data.find(p => p.value === productQuery.trim());
-      if (exactMatch) {
-        currentProduct = exactMatch;
-      } else {
-        setItemError('يرجى اختيار منتج أولاً أو كتابة اسمه بدقة.');
+  if (addingItemRef?.current) return;
+  if (addingItemRef) addingItemRef.current = true;
+
+  try {
+    setItemError('');
+    const validDate = parseValidMonthYear(saleMonth, saleYear, { minYear: 2000, maxYear: 2100 });
+    if (!validDate) {
+      setItemError('أدخل شهر وسنة صحيحين.');
+      return;
+    }
+
+    let currentProduct = selectedProduct;
+    if (!currentProduct && productQuery.trim() !== '') {
+      try {
+        const bId = localStorage.getItem('branchId') || '';
+        const res = await api.get(`/product-suggestions/?term=${encodeURIComponent(productQuery.trim())}&month=${validDate.month}&year=${validDate.year}&branch_id=${bId}`);
+        const list = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+        const exactMatch = list.find(p => p.value === productQuery.trim());
+        if (exactMatch) {
+          currentProduct = exactMatch;
+        } else {
+          setItemError('يرجى اختيار منتج أولاً أو كتابة اسمه بدقة.');
+          return;
+        }
+      } catch {
+        setItemError('خطأ في الاتصال أثناء التحقق من المنتج.');
         return;
       }
-    } catch {
-      setItemError('خطأ في الاتصال أثناء التحقق من المنتج.');
+    } else if (!currentProduct) {
+      setItemError('يرجى اختيار منتج أولاً أو كتابة اسمه بدقة.');
       return;
     }
-  } else if (!currentProduct) {
-    setItemError('يرجى اختيار منتج أولاً أو كتابة اسمه بدقة.');
-    return;
-  }
-  if (!quantity || quantity < 1) { setItemError('الكمية يجب أن تكون 1 على الأقل.'); return; }
-  if (!sellPrice || parseFloat(sellPrice) <= 0) { setItemError('أدخل سعر صحيح.'); return; }
 
-  const existing = items.find(i => i.inventory_item === currentProduct.id);
-  const reqQty = parseInt(quantity) + (existing ? existing.quantity : 0);
-  let safeQty = currentProduct.safe_qty;
-
-  if (safeQty !== undefined) {
-    if (reqQty > safeQty) {
-      setItemError(`الكمية المطلوبة أكبر من المتاح بأمان: ${safeQty}`);
+    const qtyInt = parseStrictInt(quantity, { min: 1 });
+    if (qtyInt === null) {
+      setItemError('الكمية يجب أن تكون رقمًا صحيحًا (1 على الأقل).');
       return;
     }
-  } else {
-    let retries = 3;
-    while (retries > 0) {
-      try {
-        const res = await api.get(`/inventory-items/${currentProduct.id}/stock/?month=${saleMonth}&year=${saleYear}`);
-        if (res.data && res.data.safe_available_qty !== undefined) {
-          safeQty = res.data.safe_available_qty;
-          if (reqQty > safeQty) {
-            setItemError(`الكمية المطلوبة أكبر من المتاح بأمان: ${safeQty}`);
-            return;
+
+    const priceInt = parseWholeMoney(sellPrice, { min: 1 });
+    if (priceInt === null) {
+      setItemError('أدخل سعر بيع صحيح (1 على الأقل).');
+      return;
+    }
+
+    const existing = items.find(i => i.inventory_item === currentProduct.id);
+    const reqQty = qtyInt + (existing ? existing.quantity : 0);
+    let safeQty = currentProduct.safe_qty;
+
+    if (safeQty !== undefined) {
+      if (reqQty > safeQty) {
+        setItemError(`الكمية المطلوبة أكبر من المتاح بأمان: ${safeQty}`);
+        return;
+      }
+    } else {
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          const res = await api.get(`/inventory-items/${currentProduct.id}/stock/?month=${validDate.month}&year=${validDate.year}`);
+          if (res.data && res.data.safe_available_qty !== undefined) {
+            safeQty = res.data.safe_available_qty;
+            if (reqQty > safeQty) {
+              setItemError(`الكمية المطلوبة أكبر من المتاح بأمان: ${safeQty}`);
+              return;
+            }
           }
+          break;
+        } catch {
+          retries--;
+          if (retries > 0) await new Promise(r => setTimeout(r, 50));
         }
-        break;
-      } catch {
-        retries--;
-        if (retries > 0) await new Promise(r => setTimeout(r, 50));
       }
     }
-  }
 
-  if (existing) {
-    setItems(items.map(i => i.inventory_item === currentProduct.id
-      ? { ...i, quantity: reqQty, sell_price: parseFloat(sellPrice), safe_qty: safeQty !== undefined ? safeQty : i.safe_qty } : i));
-  } else {
-    setItems([...items, {
-      id: Date.now(), 
-      inventory_item: currentProduct.id,
-      productName: currentProduct.value,
-      quantity: parseInt(quantity), 
-      sell_price: parseFloat(sellPrice),
-      safe_qty: safeQty,
-    }]);
+    setItems(prev => {
+      const prevExisting = prev.find(i => i.inventory_item === currentProduct.id);
+      if (prevExisting) {
+        const nextQty = prevExisting.quantity + qtyInt;
+        if (safeQty !== undefined && nextQty > safeQty) {
+          return prev;
+        }
+        return prev.map(i => i.inventory_item === currentProduct.id
+          ? { ...i, quantity: nextQty, sell_price: priceInt, safe_qty: safeQty !== undefined ? safeQty : i.safe_qty }
+          : i
+        );
+      }
+      return [...prev, {
+        id: Date.now(),
+        inventory_item: currentProduct.id,
+        productName: currentProduct.value,
+        quantity: qtyInt,
+        sell_price: priceInt,
+        safe_qty: safeQty,
+      }];
+    });
+    setProductQuery(''); setSelectedProduct(null); setQuantity(1); setSellPrice('');
+    setTimeout(() => prodQueryRef.current?.focus(), 50);
+  } finally {
+    if (addingItemRef) addingItemRef.current = false;
   }
-  setProductQuery(''); setSelectedProduct(null); setQuantity(1); setSellPrice('');
-  setTimeout(() => prodQueryRef.current?.focus(), 50);
 };

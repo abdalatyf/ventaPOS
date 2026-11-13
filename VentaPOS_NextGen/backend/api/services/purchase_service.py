@@ -142,6 +142,21 @@ def validate_items_stock_integrity(items, default_year=None, default_month=None)
                 curr_y += 1
 
 
+def _validate_purchase_fk_integrity(branch, supplier, items_data, instance=None):
+    if instance and branch and branch.id != instance.branch_id:
+        raise ValidationError({"branch": "لا يمكن نقل فاتورة الشراء لفرع آخر."})
+    if supplier and branch and supplier.branch_id is not None and supplier.branch_id != branch.id:
+        raise ValidationError({"supplier": "المورد المحدد لا يتبع هذا الفرع."})
+    for item_data in (items_data or []):
+        item = item_data["inventory_item"]
+        if branch and item.branch_id != branch.id:
+            raise ValidationError({"items": f"الصنف '{item.name}' لا يتبع هذا الفرع."})
+        if item_data.get("quantity", 0) <= 0:
+            raise ValidationError({"items": f"الكمية للصنف '{item.name}' يجب أن تكون أكبر من صفر."})
+        if item_data.get("purchase_price", 0) <= 0:
+            raise ValidationError({"items": f"سعر الشراء للصنف '{item.name}' يجب أن يكون أكبر من صفر."})
+
+
 def create_purchase_invoice(validated_data, items_data):
     """
     Creates a PurchaseInvoice with its child PurchaseInvoiceItems atomically,
@@ -151,6 +166,9 @@ def create_purchase_invoice(validated_data, items_data):
     from api.views.base import get_default_date
 
     branch = validated_data.get("branch")
+    supplier = validated_data.get("supplier")
+    _validate_purchase_fk_integrity(branch, supplier, items_data)
+
     invoice_type = validated_data.get("invoice_type", "PURCHASE")
     target_year = validated_data.get("invoice_year")
     target_month = validated_data.get("invoice_month")
@@ -202,6 +220,10 @@ def update_purchase_invoice(instance, validated_data, items_data):
     from api.views.base import get_default_date
 
     branch = instance.branch
+    target_branch = validated_data.get("branch", branch)
+    target_supplier = validated_data.get("supplier", instance.supplier)
+    _validate_purchase_fk_integrity(target_branch, target_supplier, items_data, instance=instance)
+
     default_year, default_month = get_default_date(branch_id=branch.id if branch else None)
 
     with transaction.atomic():

@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../api';
+import { useActiveBranch } from '../hooks/useActiveBranch';
+import { parseStrictInt, parseWholeMoney, parseValidMonthYear } from '../utils/formatUtils';
+import { scheduleIdleFocus } from '../utils/focusUtils';
 import { IconFileInvoice } from '@tabler/icons-react';
 import PurchaseHeader from '../components/purchases/PurchaseHeader';
 import PurchaseItemForm from '../components/purchases/PurchaseItemForm';
@@ -15,6 +18,7 @@ import {
 const PurchaseEntry = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { branchId } = useActiveBranch();
   
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -43,6 +47,11 @@ const PurchaseEntry = () => {
   const [activeIndex, setActiveIndex] = useState(-1);
   const blurTimerRef = useRef(null);
 
+  // Locks & Branch Transition Guards
+  const submittingRef = useRef(false);
+  const addingItemRef = useRef(false);
+  const prevBranchIdRef = useRef(branchId);
+
   // Refs for Keyboard Navigation
   const supplierRef = useRef(null);
   const monthRef = useRef(null);
@@ -51,12 +60,51 @@ const PurchaseEntry = () => {
   const qtyRef = useRef(null);
   const priceRef = useRef(null);
 
+  // Reset form state and exit edit mode immediately on branch switch
   useEffect(() => {
-    fetchPurchaseEntryInitialData(id).then(({ supps, prods, invoiceData }) => {
+    const prevBranch = prevBranchIdRef.current;
+    if (prevBranch === branchId) return;
+    prevBranchIdRef.current = branchId;
+    if (prevBranch === null) return;
+
+    setItems([]);
+    setSupplierId('');
+    setSupplierQuery('');
+    setSelectedProduct(null);
+    setProductQuery('');
+    setQuantity('');
+    setPurchasePrice('');
+    setSuggestions([]);
+    setActiveInput('');
+    setActiveIndex(-1);
+    if (id) {
+      navigate('/purchases/new', { replace: true });
+    }
+  }, [branchId, id, navigate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let focusTimer = null;
+    const activeBranchId = branchId || localStorage.getItem('branchId');
+    if (!activeBranchId) {
+      setSuppliers([]);
+      setProducts([]);
+      setLoadingInitial(false);
+      return;
+    }
+
+    setLoadingInitial(true);
+    fetchPurchaseEntryInitialData(id, activeBranchId).then(({ supps, prods, invoiceData }) => {
+      if (cancelled) return;
       setSuppliers(supps);
       setProducts(prods);
 
       if (invoiceData) {
+        if (invoiceData.branch && String(invoiceData.branch) !== String(activeBranchId)) {
+          toast.error('الفاتورة تنتمي لفرع آخر.');
+          navigate('/purchases/new', { replace: true });
+          return;
+        }
         setInvoiceType(invoiceData.invoice_type || 'PURCHASE');
         setSupplierId(invoiceData.supplier || '');
         const existingSupplier = supps.find(s => s.id === invoiceData.supplier);
@@ -79,12 +127,21 @@ const PurchaseEntry = () => {
         }
       }
     }).catch(err => {
-      console.error("Error fetching initial data", err);
+      if (!cancelled) {
+        console.error("Error fetching initial data", err);
+        toast.error('فشل في جلب بيانات الفاتورة.');
+      }
     }).finally(() => {
+      if (cancelled) return;
       setLoadingInitial(false);
-      setTimeout(() => { supplierRef.current?.focus(); }, 150);
+      focusTimer = scheduleIdleFocus(supplierRef, 150, () => cancelled);
     });
-  }, [id]);
+
+    return () => {
+      cancelled = true;
+      if (focusTimer) clearTimeout(focusTimer);
+    };
+  }, [id, branchId, navigate]);
 
   const triggerSuggestions = (val, fieldType) => {
     clearTimeout(blurTimerRef.current);
@@ -112,8 +169,9 @@ const PurchaseEntry = () => {
       setSelectedProduct(item);
       setProductQuery(item.name);
       
-      if (invoiceType === 'RETURN') {
-        api.get(`/inventory-items/${item.id}/stock/?month=${invoiceMonth}&year=${invoiceYear}`)
+      const validDate = parseValidMonthYear(invoiceMonth, invoiceYear, { minYear: 2025, maxYear: 2100 });
+      if (invoiceType === 'RETURN' && validDate) {
+        api.get(`/inventory-items/${item.id}/stock/?month=${validDate.month}&year=${validDate.year}`)
            .then(res => {
              if (res.data && res.data.safe_available_qty !== undefined) {
                const existing = items.find(i => i.inventory_item === item.id);
@@ -162,119 +220,157 @@ const PurchaseEntry = () => {
   };
 
   const handleAddItem = async () => {
-    const qtyEng = toEnglish(quantity);
-    const priceEng = toEnglish(purchasePrice);
+    if (addingItemRef.current) return;
+    addingItemRef.current = true;
 
-    let currentProduct = selectedProduct;
-    if (!currentProduct && productQuery.trim() !== '') {
-      const exactMatch = products.find(p => p.name === productQuery.trim());
-      if (exactMatch) {
-        currentProduct = exactMatch;
-      } else {
+    try {
+      const validDate = parseValidMonthYear(invoiceMonth, invoiceYear, { minYear: 2025, maxYear: 2100 });
+      if (!validDate) {
+        toast.error('أدخل شهر وسنة صحيحين (2025 فأحدث).');
+        monthRef.current?.focus();
+        return;
+      }
+
+      let currentProduct = selectedProduct;
+      if (!currentProduct && productQuery.trim() !== '') {
+        const exactMatch = products.find(p => p.name === productQuery.trim());
+        if (exactMatch) {
+          currentProduct = exactMatch;
+        } else {
+          toast.error('يرجى اختيار منتج مسجل أولاً.');
+          prodQueryRef.current?.focus();
+          return;
+        }
+      } else if (!currentProduct) {
         toast.error('يرجى اختيار منتج مسجل أولاً.');
         prodQueryRef.current?.focus();
         return;
       }
-    } else if (!currentProduct) {
-      toast.error('يرجى اختيار منتج مسجل أولاً.');
-      prodQueryRef.current?.focus();
-      return;
-    }
 
-    if (!qtyEng || parseInt(qtyEng) < 1) {
-      toast.error('الكمية يجب أن تكون 1 على الأقل.');
-      qtyRef.current?.focus();
-      return;
-    }
+      const reqQty = parseStrictInt(quantity, { min: 1 });
+      if (reqQty === null) {
+        toast.error('الكمية يجب أن تكون رقمًا صحيحًا (1 على الأقل).');
+        qtyRef.current?.focus();
+        return;
+      }
 
-    if (!priceEng || parseFloat(priceEng) <= 0) {
-      toast.error('أدخل سعر صحيح.');
-      priceRef.current?.focus();
-      return;
-    }
+      const priceInt = parseWholeMoney(purchasePrice, { min: 1 });
+      if (priceInt === null) {
+        toast.error('أدخل سعر شراء صحيح (1 على الأقل).');
+        priceRef.current?.focus();
+        return;
+      }
 
-    const reqQty = parseInt(qtyEng);
-    const existing = items.find(i => i.inventory_item === currentProduct.id);
+      const existing = items.find(i => i.inventory_item === currentProduct.id);
 
-    if (invoiceType === 'RETURN') {
-      if (currentProduct.safe_qty !== undefined) {
-        if (reqQty > currentProduct.safe_qty) {
-          toast.error(`الكمية المطلوبة أكبر من المتاح: ${currentProduct.safe_qty}`);
-          return;
-        }
-      } else {
-        const check = await checkSafeStockForReturn(currentProduct.id, reqQty, invoiceMonth, invoiceYear, existing ? existing.quantity : 0);
-        if (!check.ok) {
-          toast.error(check.error);
-          return;
+      if (invoiceType === 'RETURN') {
+        if (currentProduct.safe_qty !== undefined) {
+          if (reqQty > currentProduct.safe_qty) {
+            toast.error(`الكمية المطلوبة أكبر من المتاح: ${currentProduct.safe_qty}`);
+            return;
+          }
+        } else {
+          const check = await checkSafeStockForReturn(currentProduct.id, reqQty, validDate.month, validDate.year, existing ? existing.quantity : 0);
+          if (!check.ok) {
+            toast.error(check.error);
+            return;
+          }
         }
       }
-    }
 
-    if (existing) {
-      setItems(items.map(i => i.inventory_item === currentProduct.id
-        ? { ...i, quantity: reqQty + i.quantity, purchase_price: parseFloat(priceEng) } : i));
-    } else {
-      setItems([...items, {
-        id: Date.now(),
-        inventory_item: currentProduct.id,
-        productName: currentProduct.name,
-        quantity: reqQty,
-        purchase_price: parseFloat(priceEng)
-      }]);
+      setItems(prev => {
+        const prevExisting = prev.find(i => i.inventory_item === currentProduct.id);
+        if (prevExisting) {
+          return prev.map(i => i.inventory_item === currentProduct.id
+            ? { ...i, quantity: reqQty + i.quantity, purchase_price: priceInt }
+            : i
+          );
+        }
+        return [...prev, {
+          id: Date.now(),
+          inventory_item: currentProduct.id,
+          productName: currentProduct.name,
+          quantity: reqQty,
+          purchase_price: priceInt
+        }];
+      });
+
+      setSelectedProduct(null);
+      setProductQuery('');
+      setQuantity('');
+      setPurchasePrice('');
+      setTimeout(() => prodQueryRef.current?.focus(), 50);
+    } finally {
+      addingItemRef.current = false;
     }
-    
-    setSelectedProduct(null);
-    setProductQuery('');
-    setQuantity('');
-    setPurchasePrice('');
-    setTimeout(() => prodQueryRef.current?.focus(), 50);
   };
 
   const handleRemoveItem = (itemId) => {
-    setItems(items.filter(item => item.id !== itemId));
+    setItems(prev => prev.filter(item => item.id !== itemId));
   };
 
   const totalAmount = items.reduce((sum, item) => sum + (item.quantity * item.purchase_price), 0);
 
   const handleSaveInvoice = async () => {
-    if (!supplierId) {
-      toast.error('برجاء اختيار المورد.');
-      supplierRef.current?.focus();
-      return;
-    }
-    if (items.length === 0) {
-      toast.error('برجاء إضافة أصناف للفاتورة.');
-      prodQueryRef.current?.focus();
-      return;
-    }
-
-    const payload = {
-      supplier: parseInt(supplierId),
-      invoice_type: invoiceType,
-      invoice_month: parseInt(toEnglish(invoiceMonth)),
-      invoice_year: parseInt(toEnglish(invoiceYear)),
-      items: items.map(item => ({
-        inventory_item: item.inventory_item,
-        quantity: item.quantity,
-        purchase_price: item.purchase_price
-      }))
-    };
+    if (submittingRef.current) return;
+    submittingRef.current = true;
 
     try {
-      setSaving(true);
-      if (id) {
-        await api.put(`/purchase-invoices/${id}/`, payload);
-        toast.success('تم تحديث الفاتورة بنجاح');
-      } else {
-        await api.post('/purchase-invoices/', payload);
-        toast.success('تم حفظ الفاتورة بنجاح');
+      const activeBranchId = parseStrictInt(branchId ?? localStorage.getItem('branchId'), { min: 1 });
+      if (activeBranchId === null) {
+        toast.error('اختر الفرع أولاً.');
+        return;
       }
-      navigate('/search-purchases');
-    } catch (err) {
-      console.error("Error saving invoice", err);
-      toast.error(err.response?.data?.error || 'حصل مشكلة أثناء حفظ الفاتورة.');
+
+      const validSupplier = parseStrictInt(supplierId, { min: 1 });
+      if (validSupplier === null) {
+        toast.error('برجاء اختيار المورد.');
+        supplierRef.current?.focus();
+        return;
+      }
+
+      const validDate = parseValidMonthYear(invoiceMonth, invoiceYear, { minYear: 2025, maxYear: 2100 });
+      if (!validDate) {
+        toast.error('أدخل شهر وسنة صحيحين (2025 فأحدث).');
+        monthRef.current?.focus();
+        return;
+      }
+
+      if (items.length === 0) {
+        toast.error('برجاء إضافة أصناف للفاتورة.');
+        prodQueryRef.current?.focus();
+        return;
+      }
+
+      const payload = {
+        branch: activeBranchId,
+        supplier: validSupplier,
+        invoice_type: invoiceType,
+        invoice_month: validDate.month,
+        invoice_year: validDate.year,
+        items: items.map(item => ({
+          inventory_item: item.inventory_item,
+          quantity: item.quantity,
+          purchase_price: item.purchase_price
+        }))
+      };
+
+      try {
+        setSaving(true);
+        if (id) {
+          await api.put(`/purchase-invoices/${id}/`, payload);
+          toast.success('تم تحديث الفاتورة بنجاح');
+        } else {
+          await api.post('/purchase-invoices/', payload);
+          toast.success('تم حفظ الفاتورة بنجاح');
+        }
+        navigate('/search-purchases');
+      } catch (err) {
+        console.error("Error saving invoice", err);
+        toast.error(err.response?.data?.error || err.response?.data?.detail || 'حصل مشكلة أثناء حفظ الفاتورة.');
+      }
     } finally {
+      submittingRef.current = false;
       setSaving(false);
     }
   };

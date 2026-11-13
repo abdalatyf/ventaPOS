@@ -51,9 +51,15 @@ api.interceptors.response.use(
       );
       window.dispatchEvent(new CustomEvent('subscription_expired'));
     } else if (error.response && error.response.status === 401) {
-      // 401 Unauthorized: Token is invalid (e.g. database wiped)
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+      const requestUrl = String(error.config?.url || '');
+      const pathname = window.location?.pathname || '';
+      const isOnLoginPage = pathname === '/login' || pathname.startsWith('/login/');
+      const isAuthAttempt = requestUrl.includes('/auth/local') || requestUrl.includes('/auth/demo');
+      if (!isOnLoginPage && !isAuthAttempt) {
+        // 401 Unauthorized: Token is invalid (e.g. database wiped)
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

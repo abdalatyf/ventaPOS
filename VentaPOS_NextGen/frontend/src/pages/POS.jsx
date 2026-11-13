@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import api, { getLicenseStatus } from '../api';
+import { useActiveBranch } from '../hooks/useActiveBranch';
+import { parseStrictInt, parseWholeMoney, parseValidMonthYear } from '../utils/formatUtils';
 
 import POSCustomerForm from '../components/pos/POSCustomerForm';
 import POSItemsTable from '../components/pos/POSItemsTable';
@@ -21,6 +24,7 @@ const POS = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('edit');
+  const { branchId } = useActiveBranch();
 
   const [salespersons, setSalespersons] = useState([]);
   const [products, setProducts] = useState([]);
@@ -77,13 +81,13 @@ const POS = () => {
   }, []);
 
   const isPreLicenseDate = useMemo(() => {
-    if (!licenseInfo.licStartDate || !saleYear || !saleMonth) return false;
+    if (!licenseInfo.licStartDate) return false;
+    const validDate = parseValidMonthYear(saleMonth, saleYear, { minYear: 2000, maxYear: 2100 });
+    if (!validDate) return false;
     try {
       const [licY, licM] = licenseInfo.licStartDate.split('-').map(Number);
-      const sY = Number(saleYear);
-      const sM = Number(saleMonth);
-      if (sY < licY) return true;
-      if (sY === licY && sM < licM) return true;
+      if (validDate.year < licY) return true;
+      if (validDate.year === licY && validDate.month < licM) return true;
       return false;
     } catch {
       return false;
@@ -93,28 +97,32 @@ const POS = () => {
   const isFreeTextMode = licenseInfo.isPrintOnly || isPreLicenseDate;
 
   // History tracking hook
-  usePOSHistory({
+  const { setHistoryCursors } = usePOSHistory({
     setCustomerName,
     setPhoneNumber,
     setArea,
     setAddress
   });
 
-  const currentBranchId = localStorage.getItem('branchId') || 1;
+  const currentBranchId = branchId || 1;
   const [nextReceiptNumber, setNextReceiptNumber] = useState(null);
+  const nextNumGenRef = useRef(0);
 
-  const fetchNextNumber = async () => {
+  const fetchNextNumber = useCallback(async () => {
+    const reqGen = ++nextNumGenRef.current;
     try {
       const res = await api.get('receipts-next-number/', { params: { branch_id: currentBranchId } });
-      setNextReceiptNumber(res.data.next_receipt_number);
+      if (reqGen === nextNumGenRef.current) {
+        setNextReceiptNumber(res.data.next_receipt_number);
+      }
     } catch (err) {
       console.error('Failed to fetch next receipt number', err);
     }
-  };
+  }, [currentBranchId]);
 
   useEffect(() => {
     fetchNextNumber();
-  }, [currentBranchId]);
+  }, [fetchNextNumber]);
 
   // Payment
   const [downPayment, setDownPayment] = useState('');
@@ -126,19 +134,28 @@ const POS = () => {
   ]);
 
   const isEditingRef = useRef(false);
+  const addingItemRef = useRef(false);
+  const prevBranchIdRef = useRef(branchId);
   const qtyRef = useRef(null);
   const priceRef = useRef(null);
   const prodQueryRef = useRef(null);
   const custNameRef = useRef(null);
 
+  const handleCrossBranchEdit = useCallback(() => {
+    toast.error('الفاتورة تنتمي لفرع آخر.');
+    navigate('/pos', { replace: true });
+  }, [navigate]);
+
   // Fetch Initial Data via Hook
   usePOSDataLoader({
+    branchId,
     editId,
     setSalespersons,
     setProducts,
     setSaleMonth,
     setSaleYear,
     setSalespersonId,
+    setSalespersonQuery,
     setIsCashSale,
     setCustomerName,
     setPhoneNumber,
@@ -153,7 +170,8 @@ const POS = () => {
     setLoadingInitial,
     setError: () => {},
     salespersonRef,
-    isEditingRef
+    isEditingRef,
+    onCrossBranchEdit: handleCrossBranchEdit,
   });
 
   // Autocomplete suggestions hook
@@ -166,6 +184,7 @@ const POS = () => {
     triggerSuggestions,
     handleKeyDown,
     handleSuggestionSelect,
+    resetSuggestions,
     blurTimerRef
   } = usePOSSuggestions({
     salespersons,
@@ -190,19 +209,66 @@ const POS = () => {
     qtyRef
   });
 
+  // Isolate POS form state immediately when switching branch mid-entry
+  useEffect(() => {
+    const prevBranch = prevBranchIdRef.current;
+    if (prevBranch === branchId) return;
+    prevBranchIdRef.current = branchId;
+    if (prevBranch === null) return;
+
+    setItems([]);
+    setSelectedProduct(null);
+    setProductQuery('');
+    setQuantity(1);
+    setSellPrice('');
+    setItemError('');
+    setSalespersonId('');
+    setSalespersonQuery('');
+    setCustomerName('');
+    setPhoneNumber('');
+    setArea('');
+    setAddress('');
+    setDownPayment('');
+    setInstallmentDesc('');
+    setSystems([{ count: '', amount: '' }, { count: '', amount: '' }, { count: '', amount: '' }]);
+    setProductsText('');
+    setManualTotalAmount('');
+    setHistoryCursors({ name: null, phone: null, area: null, address: null });
+    resetSuggestions();
+    isEditingRef.current = false;
+    if (editId) {
+      navigate('/pos', { replace: true });
+    }
+  }, [branchId, editId, navigate, resetSuggestions, setHistoryCursors]);
+
   // Derived Values
   const totalAmount = useMemo(() => {
     if (isFreeTextMode) {
-      return parseFloat(toEnglish(manualTotalAmount)) || 0;
+      return parseWholeMoney(manualTotalAmount, { min: 0 }) ?? 0;
     }
     return items.reduce((s, i) => s + i.quantity * i.sell_price, 0);
   }, [isFreeTextMode, manualTotalAmount, items]);
 
+  const hasInvalidPaymentInputs = useMemo(() => {
+    if (isCashSale) return false;
+    const trimmedDown = String(downPayment ?? '').trim();
+    if (trimmedDown !== '' && parseWholeMoney(trimmedDown, { min: 0 }) === null) return true;
+    for (const sys of systems) {
+      const hasCount = String(sys.count ?? '').trim() !== '';
+      const hasAmount = String(sys.amount ?? '').trim() !== '';
+      if ((hasCount || hasAmount) && (parseStrictInt(sys.count, { min: 1, max: 360 }) === null || parseWholeMoney(sys.amount, { min: 1 }) === null)) {
+        return true;
+      }
+    }
+    return false;
+  }, [isCashSale, downPayment, systems]);
+
   const totalPayments = useMemo(() => {
-    const down = parseFloat(toEnglish(downPayment)) || 0;
+    const trimmedDown = String(downPayment ?? '').trim();
+    const down = trimmedDown === '' ? 0 : (parseWholeMoney(trimmedDown, { min: 0 }) ?? 0);
     const sysTotal = systems.reduce((s, sys) => {
-      const count = parseInt(toEnglish(sys.count)) || 0;
-      const amount = parseFloat(toEnglish(sys.amount)) || 0;
+      const count = parseStrictInt(sys.count, { min: 1, max: 360 }) ?? 0;
+      const amount = parseWholeMoney(sys.amount, { min: 1 }) ?? 0;
       return s + (count * amount);
     }, 0);
     return down + sysTotal;
@@ -216,18 +282,27 @@ const POS = () => {
     return items.length > 0;
   }, [isFreeTextMode, productsText, totalAmount, items]);
 
-  const isBalanced = useMemo(() => !isCashSale && hasItems && Math.abs(diff) <= 5.01, [isCashSale, hasItems, diff]);
-  const isUnbalanced = useMemo(() => !isCashSale && hasItems && !isBalanced, [isCashSale, hasItems, isBalanced]);
+  const isBalanced = useMemo(
+    () => !isCashSale && hasItems && !hasInvalidPaymentInputs && Math.abs(diff) <= 5.01,
+    [isCashSale, hasItems, hasInvalidPaymentInputs, diff]
+  );
+  const isUnbalanced = useMemo(
+    () => !isCashSale && hasItems && !isBalanced,
+    [isCashSale, hasItems, isBalanced]
+  );
   
   const allInstallments = useMemo(() => {
+    const validDate = parseValidMonthYear(saleMonth, saleYear, { minYear: 2000, maxYear: 2100 });
+    if (!validDate) return [];
+
     const rows = [];
-    let m = parseInt(saleMonth);
-    let y = parseInt(saleYear);
+    let m = validDate.month;
+    let y = validDate.year;
 
     systems.forEach(sys => {
-      const countInt = Math.min(360, parseInt(toEnglish(sys.count)) || 0);
-      const amt = parseFloat(toEnglish(sys.amount)) || 0;
-      if (amt > 0 && countInt > 0) {
+      const countInt = parseStrictInt(sys.count, { min: 1, max: 360 });
+      const amt = parseWholeMoney(sys.amount, { min: 1 });
+      if (countInt !== null && amt !== null) {
         for (let i = 0; i < countInt; i++) {
           m++;
           if (m > 12) { m = 1; y++; }
@@ -240,6 +315,7 @@ const POS = () => {
 
   // Save hook
   const { handleSave, saving, error } = usePOSSave({
+    branchId,
     items,
     setItems,
     salespersonId,
@@ -261,6 +337,7 @@ const POS = () => {
     setDownPayment,
     installmentDesc,
     setInstallmentDesc,
+    systems,
     setSystems,
     totalAmount,
     totalPayments,
@@ -310,7 +387,8 @@ const POS = () => {
       setSelectedProduct,
       setQuantity,
       setSellPrice,
-      prodQueryRef
+      prodQueryRef,
+      addingItemRef,
     });
   };
 
@@ -403,9 +481,9 @@ const POS = () => {
                   </div>
                   <div className="col-4">
                     <input
-                      type="number"
-                      min="1"
-                      step="1"
+                      type="text"
+                      inputMode="numeric"
+                      dir="ltr"
                       className="form-control py-1 fs-3 border-secondary-subtle text-danger fw-bold text-center"
                       value={manualTotalAmount}
                       onChange={(e) => setManualTotalAmount(e.target.value)}

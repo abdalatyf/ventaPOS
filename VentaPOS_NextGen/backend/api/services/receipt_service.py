@@ -37,6 +37,22 @@ def get_next_receipt_number(branch, select_for_update=False):
     return (last.receipt_number + 1) if last else 1
 
 
+def _parse_int_or_error(val, field_label, min_val=None, max_val=None):
+    from api.views.base import to_english_numerals
+    if isinstance(val, bool) or val is None or str(val).strip() == "":
+        raise ReceiptServiceError(f"قيمة {field_label} غير صحيحة.", status_code=400)
+    cleaned = to_english_numerals(str(val).strip()).translate(str.maketrans('۰۱۲۳۴۵۶۷۸۹', '0123456789'))
+    try:
+        parsed = int(cleaned)
+    except (ValueError, TypeError):
+        raise ReceiptServiceError(f"قيمة {field_label} غير صحيحة.", status_code=400)
+    if min_val is not None and parsed < min_val:
+        raise ReceiptServiceError(f"قيمة {field_label} لا يمكن أن تقل عن {min_val}.", status_code=400)
+    if max_val is not None and parsed > max_val:
+        raise ReceiptServiceError(f"قيمة {field_label} لا يمكن أن تزيد عن {max_val}.", status_code=400)
+    return parsed
+
+
 def process_return_receipt(original_receipt, data):
     """
     Processes a customer return against an existing original receipt.
@@ -48,17 +64,22 @@ def process_return_receipt(original_receipt, data):
     {"status": "success", "return_receipt_id": return_receipt.id}
     """
     from api.models import Receipt, SaleItem, InstallmentPayment
+    from api.views.base import to_english_numerals
 
     returned_items_data = data.get("returned_items", [])
     new_installments_data = data.get("new_installments", [])
     new_installment_system = data.get("new_installment_system", "")
 
-    if not returned_items_data:
+    if not isinstance(returned_items_data, list) or not returned_items_data:
         raise ReceiptServiceError("لا توجد عناصر للإرجاع", status_code=400)
+    if new_installments_data is None:
+        new_installments_data = []
+    if not isinstance(new_installments_data, list):
+        raise ReceiptServiceError("تنسيق الأقساط الجديدة غير صحيح", status_code=400)
 
     now = timezone.now()
-    return_month = int(data.get("return_month", now.month))
-    return_year = int(data.get("return_year", now.year))
+    return_month = _parse_int_or_error(data.get("return_month", now.month), "شهر المرتجع", 1, 12)
+    return_year = _parse_int_or_error(data.get("return_year", now.year), "سنة المرتجع", 2000, 2100)
 
     min_month = original_receipt.sale_month + 1
     min_year = original_receipt.sale_year
@@ -87,10 +108,12 @@ def process_return_receipt(original_receipt, data):
         validated_returned_items = []
 
         for item_data in returned_items_data:
-            inv_id = item_data.get('inventory_item_id')
-            req_qty = item_data.get('quantity', 0)
+            if not isinstance(item_data, dict):
+                raise ReceiptServiceError("بيانات الصنف المرتجع غير صحيحة", status_code=400)
+            inv_id = _parse_int_or_error(item_data.get('inventory_item_id'), "معرف الصنف")
+            req_qty = _parse_int_or_error(item_data.get('quantity', 0), "الكمية المرتجعة", min_val=0)
 
-            if req_qty <= 0:
+            if req_qty == 0:
                 continue
 
             orig_item = original_items_map.get(inv_id)
@@ -118,6 +141,7 @@ def process_return_receipt(original_receipt, data):
             raise ReceiptServiceError("لا توجد عناصر صالحة للإرجاع", status_code=400)
 
         new_debt = 0
+        parsed_new_installments = []
         if not original_receipt.is_cash_sale:
             current_date = datetime.date(return_year, return_month, 1)
 
@@ -131,7 +155,30 @@ def process_return_receipt(original_receipt, data):
             new_debt = original_receipt.total_amount - calculated_return_value - paid_so_far
 
             if new_debt > 0:
-                total_new_installments = sum(float(inst.get("amount", 0)) for inst in new_installments_data)
+                total_new_installments = 0.0
+                for inst in new_installments_data:
+                    if not isinstance(inst, dict):
+                        raise ReceiptServiceError("بيانات القسط الجديد غير صحيحة.", status_code=400)
+                    raw_amt = to_english_numerals(str(inst.get("amount", "")).strip()).replace('٬', '').replace(',', '').replace('٫', '.')
+                    try:
+                        inst_amount = float(raw_amt)
+                    except (ValueError, TypeError):
+                        raise ReceiptServiceError("قيمة القسط الجديد غير صحيحة.", status_code=400)
+                    if inst_amount <= 0:
+                        raise ReceiptServiceError("قيمة كل قسط جديد يجب أن تكون أكبر من صفر.", status_code=400)
+
+                    payment_date = inst.get("payment_date")
+                    if not payment_date:
+                        p_month = _parse_int_or_error(inst.get("payment_month", now.month), "شهر القسط", 1, 12)
+                        p_year = _parse_int_or_error(inst.get("payment_year", now.year), "سنة القسط", 2000, 2100)
+                        payment_date = datetime.date(p_year, p_month, 25)
+
+                    total_new_installments += inst_amount
+                    parsed_new_installments.append({
+                        "amount": inst_amount,
+                        "payment_date": payment_date,
+                    })
+
                 if abs(float(new_debt) - total_new_installments) > 0.01:
                     raise ReceiptServiceError(
                         f"إجمالي الأقساط الجديدة ({total_new_installments}) لا يتطابق مع المديونية المتبقية ({new_debt}).",
@@ -200,17 +247,11 @@ def process_return_receipt(original_receipt, data):
             ).update(is_deleted=True)
 
             if new_debt > 0:
-                for inst_data in new_installments_data:
-                    payment_month = int(inst_data.get("payment_month", now.month))
-                    payment_year = int(inst_data.get("payment_year", now.year))
-                    payment_date = inst_data.get("payment_date")
-                    if not payment_date:
-                        payment_date = datetime.date(payment_year, payment_month, 25)
-
+                for inst_data in parsed_new_installments:
                     InstallmentPayment.objects.create(
                         receipt=original_receipt,
                         amount=inst_data["amount"],
-                        payment_date=payment_date
+                        payment_date=inst_data["payment_date"]
                     )
 
             original_receipt.installment_system = new_installment_system
@@ -268,6 +309,30 @@ def get_license_date_bounds(active_lic=None):
     return start_date, last_allowed_month, grace_end
 
 
+def _validate_receipt_fk_integrity(branch, salesperson, items_data, installments_data, instance=None):
+    from rest_framework.exceptions import ValidationError
+    if instance and branch and branch.id != instance.branch_id:
+        raise ValidationError({"branch": "لا يمكن نقل الفاتورة لفرع آخر."})
+    if salesperson and branch and salesperson.branch_id != branch.id:
+        raise ValidationError({"salesperson": "المندوب المحدد لا يتبع هذا الفرع."})
+    for item_data in (items_data or []):
+        item = item_data["inventory_item"]
+        if branch and item.branch_id != branch.id:
+            raise ValidationError({"items": f"الصنف '{item.name}' لا يتبع هذا الفرع."})
+        if item_data.get("quantity", 0) <= 0:
+            raise ValidationError({"items": f"الكمية للصنف '{item.name}' يجب أن تكون أكبر من صفر."})
+        if item_data.get("unit_price", 0) <= 0:
+            raise ValidationError({"items": f"سعر البيع للصنف '{item.name}' يجب أن يكون أكبر من صفر."})
+    for inst_data in (installments_data or []):
+        if inst_data.get("amount", 0) <= 0:
+            raise ValidationError({"installment_payments": "قيمة كل قسط يجب أن تكون أكبر من صفر."})
+        if "payment_date" not in inst_data:
+            pm = inst_data.get("payment_month")
+            py = inst_data.get("payment_year")
+            if pm is None or py is None or not (1 <= int(pm) <= 12) or not (2000 <= int(py) <= 2100):
+                raise ValidationError({"installment_payments": "تاريخ استحقاق القسط غير صحيح."})
+
+
 def create_receipt(validated_data, items_data, installments_data):
     """
     Atomically creates a Receipt and its SaleItems & InstallmentPayments.
@@ -278,6 +343,10 @@ def create_receipt(validated_data, items_data, installments_data):
     from api.utils.security_utils import generate_receipt_signature, generate_record_signature
     from api.views.base import get_default_date
     from rest_framework.exceptions import ValidationError
+
+    branch = validated_data.get("branch")
+    salesperson = validated_data.get("salesperson")
+    _validate_receipt_fk_integrity(branch, salesperson, items_data, installments_data)
 
     is_cash_sale = validated_data.get("is_cash_sale", False)
     if not is_cash_sale:
@@ -410,6 +479,10 @@ def update_receipt(instance, validated_data, items_data, installments_data):
 
     if instance.receipt_type == "RETURN":
         raise ValidationError({"error": "لا يمكن تعديل فواتير المرتجعات. برجاء إنشاء مرتجع جديد أو حذفه وإعادة إنشائه."})
+
+    target_branch = validated_data.get("branch", instance.branch)
+    target_salesperson = validated_data.get("salesperson", instance.salesperson)
+    _validate_receipt_fk_integrity(target_branch, target_salesperson, items_data, installments_data, instance=instance)
 
     # Strict Financial Balance Validation for Installment Sales
     is_cash_sale = validated_data.get("is_cash_sale", instance.is_cash_sale)

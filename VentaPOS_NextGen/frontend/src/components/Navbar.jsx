@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import api, { getLicenseStatus } from '../api';
+import { useActiveBranch } from '../hooks/useActiveBranch';
 import logo from '../assets/venta.png';
 import QuickRestoreModal from './common/QuickRestoreModal';
 import UpdateModal from './common/UpdateModal';
@@ -24,7 +26,9 @@ import {
 export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [branchName, setBranchName] = useState('');
+  const { branchId, branchName: activeBranchName, setActiveBranch } = useActiveBranch();
+  const branchName = activeBranchName || 'الفرع الرئيسي';
+  const [branches, setBranches] = useState([]);
   
   // Tabler mobile menu toggle state
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -145,10 +149,31 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    // Read from localStorage (simulate for now if empty)
-    const storedBranch = localStorage.getItem('branchName') || 'الفرع الرئيسي';
-    setBranchName(storedBranch);
-  }, []);
+    let mounted = true;
+    const loadBranches = async () => {
+      try {
+        const res = await api.get('/branches/');
+        const data = res?.data;
+        const list = Array.isArray(data) ? data : (data?.results || []);
+        if (mounted && Array.isArray(list)) {
+          setBranches(list);
+        }
+      } catch {
+        // Safely ignore in isolated unit tests or before authentication
+      }
+    };
+    loadBranches();
+    return () => {
+      mounted = false;
+    };
+  }, [branchId]);
+
+  const handleQuickSwitchBranch = (b) => {
+    setActiveBranch(b.id, b.name);
+    setOpenDropdown(null);
+    setIsMenuOpen(false);
+    toast.success(`تم التبديل إلى: ${b.name}`);
+  };
 
   // Close dropdowns when navigating
   useEffect(() => {
@@ -158,8 +183,7 @@ export default function Navbar() {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    localStorage.removeItem('branchId');
-    localStorage.removeItem('branchName');
+    setActiveBranch(null, '');
     localStorage.removeItem('company_name');
     navigate('/login');
   };
@@ -237,6 +261,23 @@ export default function Navbar() {
               </div>
             </a>
             <div className={`dropdown-menu dropdown-menu-end dropdown-menu-arrow ${openDropdown === 'user' ? 'show' : ''}`} data-bs-popper={openDropdown === 'user' ? 'static' : undefined}>
+              {branches.length > 0 && (
+                <>
+                  <div className="dropdown-header small">تبديل سريع للفرع</div>
+                  {branches.map((b) => (
+                    <button
+                      key={b.id}
+                      type="button"
+                      className={`dropdown-item d-flex align-items-center justify-content-between ${String(b.id) === String(branchId) ? 'active fw-bold' : ''}`}
+                      onClick={() => handleQuickSwitchBranch(b)}
+                    >
+                      <span>{b.name}</span>
+                      {String(b.id) === String(branchId) && <span className="badge bg-success-lt text-success ms-2">نشط</span>}
+                    </button>
+                  ))}
+                  <div className="dropdown-divider" />
+                </>
+              )}
               <Link to="/select-branch" className="dropdown-item">
                 <IconBuildingStore className="icon me-2 text-primary" stroke={1.5} />
                 تغيير الفرع

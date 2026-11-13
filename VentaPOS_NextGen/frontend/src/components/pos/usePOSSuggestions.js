@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import api from '../../api';
 import { toEnglish } from './posUtils';
+import { parseValidMonthYear } from '../../utils/formatUtils';
 
 export default function usePOSSuggestions({
   salespersons,
@@ -30,6 +31,17 @@ export default function usePOSSuggestions({
   const suggestTimerRef = useRef(null);
   const blurTimerRef = useRef(null);
   const activeRequestFieldRef = useRef(null);
+  const requestGenRef = useRef(0);
+
+  const resetSuggestions = useCallback(() => {
+    clearTimeout(suggestTimerRef.current);
+    clearTimeout(blurTimerRef.current);
+    requestGenRef.current += 1;
+    activeRequestFieldRef.current = null;
+    setSuggestions([]);
+    setActiveInput('');
+    setActiveIndex(-1);
+  }, []);
 
   const triggerSuggestions = (val, fieldType) => {
     clearTimeout(suggestTimerRef.current);
@@ -46,12 +58,18 @@ export default function usePOSSuggestions({
     }
 
     activeRequestFieldRef.current = fieldType;
+    const reqGen = ++requestGenRef.current;
     suggestTimerRef.current = setTimeout(async () => {
       try {
         let url = '';
         const bId = localStorage.getItem('branchId') || '';
         if (fieldType === 'product') {
-          url = `/product-suggestions/?term=${encodeURIComponent(term)}&month=${saleMonth}&year=${saleYear}&branch_id=${bId}`;
+          const validDate = parseValidMonthYear(saleMonth, saleYear, { minYear: 2000, maxYear: 2100 });
+          if (!validDate) {
+            if (reqGen === requestGenRef.current) setSuggestions([]);
+            return;
+          }
+          url = `/product-suggestions/?term=${encodeURIComponent(term)}&month=${validDate.month}&year=${validDate.year}&branch_id=${bId}`;
         } else {
           const currentArea = toEnglish(area);
           const currentName = toEnglish(customerName);
@@ -59,7 +77,7 @@ export default function usePOSSuggestions({
         }
 
         const res = await api.get(url);
-        if (activeRequestFieldRef.current !== fieldType) return;
+        if (activeRequestFieldRef.current !== fieldType || reqGen !== requestGenRef.current) return;
         
         const data = res.data?.results || res.data;
         const list = Array.isArray(data) ? data : [];
@@ -73,7 +91,7 @@ export default function usePOSSuggestions({
         setActiveInput(fieldType);
         setActiveIndex(-1);
       } catch {
-        setSuggestions([]);
+        if (reqGen === requestGenRef.current) setSuggestions([]);
       }
     }, 300);
   };
@@ -106,19 +124,24 @@ export default function usePOSSuggestions({
       setProductQuery(item.value);
       setSellPrice(isCashSale ? (item.cash_price || '') : (item.installment_price || ''));
       setTimeout(() => qtyRef.current?.focus(), 50);
-      api.get(`/inventory-items/${item.id}/stock/?month=${saleMonth}&year=${saleYear}`)
-         .then(res => {
-           if (res.data && res.data.safe_available_qty !== undefined) {
-             const existing = items.find(i => i.inventory_item === item.id);
-             const remaining = res.data.safe_available_qty - (existing ? existing.quantity : 0);
-             setSelectedProduct(prev => prev && prev.id === item.id ? { 
-               ...prev, 
-               safe_qty: remaining,
-               bottleneck_month: res.data.bottleneck_month,
-               bottleneck_year: res.data.bottleneck_year
-             } : prev);
-           }
-         }).catch(() => {});
+      const validDate = parseValidMonthYear(saleMonth, saleYear, { minYear: 2000, maxYear: 2100 });
+      if (validDate) {
+        const reqGen = requestGenRef.current;
+        api.get(`/inventory-items/${item.id}/stock/?month=${validDate.month}&year=${validDate.year}`)
+           .then(res => {
+             if (reqGen !== requestGenRef.current) return;
+             if (res.data && res.data.safe_available_qty !== undefined) {
+               const existing = items.find(i => i.inventory_item === item.id);
+               const remaining = res.data.safe_available_qty - (existing ? existing.quantity : 0);
+               setSelectedProduct(prev => prev && prev.id === item.id ? { 
+                 ...prev, 
+                 safe_qty: remaining,
+                 bottleneck_month: res.data.bottleneck_month,
+                 bottleneck_year: res.data.bottleneck_year
+               } : prev);
+             }
+           }).catch(() => {});
+      }
     } else {
       const arabicVal = item.value;
       if (fieldType === 'name') setCustomerName(arabicVal);
@@ -140,6 +163,7 @@ export default function usePOSSuggestions({
     triggerSuggestions,
     handleKeyDown,
     handleSuggestionSelect,
+    resetSuggestions,
     blurTimerRef
   };
 }

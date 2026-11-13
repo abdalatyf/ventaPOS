@@ -3,10 +3,12 @@ import { IconTrash, IconPlus, IconEdit, IconCheck, IconX, IconLoader, IconSortAs
 import toast from 'react-hot-toast';
 import api from '../api';
 import useSmartScroll from '../hooks/useSmartScroll';
+import { useActiveBranch } from '../hooks/useActiveBranch';
 import { useStandardTableSlots } from './common/StandardTablePageLayout';
 
 export default function SalespersonsTab() {
   const { setTableRef } = useSmartScroll();
+  const { branchId, branchName } = useActiveBranch();
   const [salespersons, setSalespersons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -17,8 +19,14 @@ export default function SalespersonsTab() {
     setTimeout(() => setError(null), 5000);
   };
   
-  const currentBranchId = localStorage.getItem('branchId') || 1;
-  const currentBranchName = localStorage.getItem('branchName') || 'الفرع الرئيسي';
+  const currentBranchId = branchId || 1;
+  const currentBranchName = branchName || 'الفرع الرئيسي';
+
+  const submittingRef = useRef(false);
+  const editSavingRef = useRef(false);
+  const deletingRef = useRef(false);
+  const fetchGenRef = useRef(0);
+  const prevBranchIdRef = useRef(branchId);
 
   // Add state
   const nameInputRef = useRef(null);
@@ -67,47 +75,71 @@ export default function SalespersonsTab() {
   }, [salespersons, searchQuery, sortColumn, sortDirection]);
 
   const fetchSalespersons = async () => {
+    const reqGen = ++fetchGenRef.current;
     try {
       setLoading(true);
       const res = await api.get('/salespersons/', { params: { branch_id: currentBranchId } });
-      setSalespersons(res.data.results || res.data);
+      if (reqGen !== fetchGenRef.current) return;
+      setSalespersons(res.data.results || res.data || []);
       setError(null);
     } catch (err) {
+      if (reqGen !== fetchGenRef.current) return;
       console.error('Error fetching salespersons:', err);
       setError('فشل في جلب المناديب. يرجى التأكد من اتصال الخادم.');
     } finally {
-      setLoading(false);
+      if (reqGen === fetchGenRef.current) setLoading(false);
     }
   };
 
   useEffect(() => {
+    const prevBranch = prevBranchIdRef.current;
+    if (prevBranch !== branchId) {
+      prevBranchIdRef.current = branchId;
+      setEditingId(null);
+      setEditName('');
+      setDeleteModalOpen(false);
+      setSpToDelete(null);
+      setSearchQuery('');
+      setNewName('');
+      setSalespersons([]);
+    }
     fetchSalespersons();
-  }, [currentBranchId]);
+  }, [currentBranchId, branchId]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
-    if (!newName.trim()) return;
-    
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     try {
-      setSubmitting(true);
-      const payload = {
-        name: newName.trim(),
-      };
-      if (currentBranchId) {
-        payload.branch = currentBranchId;
+      const cleanName = newName.trim();
+      if (!cleanName) {
+        const msg = 'اسم المندوب مطلوب.';
+        showError(msg);
+        toast.error(msg);
+        return;
       }
-      
-      const res = await api.post('/salespersons/', payload);
-      setSalespersons([...salespersons, res.data]);
-      setNewName('');
-      toast.success('تم الحفظ بنجاح');
-      nameInputRef.current?.focus();
-    } catch (err) {
-      console.error('Error adding salesperson:', err);
-      const errorMsg = err.response?.data?.detail || err.response?.data?.name?.[0] || 'حدث خطأ أثناء الإضافة.';
-      showError(errorMsg);
-      toast.error(errorMsg);
+
+      try {
+        setSubmitting(true);
+        const payload = {
+          name: cleanName,
+          branch: Number(currentBranchId),
+        };
+
+        const res = await api.post('/salespersons/', payload);
+        setSalespersons(prev => [...prev, res.data]);
+        setNewName('');
+        toast.success('تم الحفظ بنجاح');
+        nameInputRef.current?.focus();
+      } catch (err) {
+        console.error('Error adding salesperson:', err);
+        const errorMsg = err.response?.data?.detail || err.response?.data?.name?.[0] || 'حدث خطأ أثناء الإضافة.';
+        showError(errorMsg);
+        toast.error(errorMsg);
+      }
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -122,15 +154,23 @@ export default function SalespersonsTab() {
   };
 
   const saveEdit = async (id) => {
-    if (!editName.trim()) return;
-    
+    if (editSavingRef.current) return;
+    const cleanName = editName.trim();
+    if (!cleanName) {
+      toast.error('اسم المندوب مطلوب.');
+      return;
+    }
+
+    editSavingRef.current = true;
     try {
-      const res = await api.put(`/salespersons/${id}/`, { name: editName.trim() });
-      setSalespersons(salespersons.map(sp => sp.id === id ? res.data : sp));
+      const res = await api.put(`/salespersons/${id}/`, { name: cleanName, branch: Number(currentBranchId) });
+      setSalespersons(prev => prev.map(sp => sp.id === id ? res.data : sp));
       setEditingId(null);
     } catch (err) {
       console.error('Error updating salesperson:', err);
       showError(err.response?.data?.detail || 'حدث خطأ أثناء التحديث.');
+    } finally {
+      editSavingRef.current = false;
     }
   };
 
@@ -140,24 +180,28 @@ export default function SalespersonsTab() {
   };
 
   const handleDelete = async () => {
-    if (!spToDelete) return;
+    if (!spToDelete || deletingRef.current) return;
+    deletingRef.current = true;
 
     try {
       await api.delete(`/salespersons/${spToDelete.id}/`);
-      setSalespersons(salespersons.filter(sp => sp.id !== spToDelete.id));
+      const deletedId = spToDelete.id;
+      setSalespersons(prev => prev.filter(sp => sp.id !== deletedId));
       setDeleteModalOpen(false);
       setSpToDelete(null);
     } catch (err) {
       console.error('Error deleting salesperson:', err);
       setDeleteModalOpen(false);
       showError(err.response?.data?.detail || 'لا يمكن حذف هذا المندوب لارتباطه ببيانات أخرى.');
+    } finally {
+      deletingRef.current = false;
     }
   };
 
   // Slot injection into StandardTablePageLayout
   const slotPortals = useStandardTableSlots({
     row2: (
-      <form onSubmit={handleAdd} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
+      <form noValidate onSubmit={handleAdd} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
         <div className="flex-grow-1" style={{ minWidth: '200px' }}>
           <input 
             ref={nameInputRef} 
@@ -166,7 +210,6 @@ export default function SalespersonsTab() {
             value={newName} 
             onChange={(e) => setNewName(e.target.value)} 
             placeholder="اسم المندوب الجديد... *" 
-            required 
             autoFocus 
             disabled={submitting || loading} 
           />

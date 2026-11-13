@@ -3,10 +3,12 @@ import { IconTrash, IconPlus, IconLoader, IconEdit, IconCheck, IconX, IconSortAs
 import toast from 'react-hot-toast';
 import api from '../api';
 import useSmartScroll from '../hooks/useSmartScroll';
+import { useActiveBranch } from '../hooks/useActiveBranch';
 import { useStandardTableSlots } from './common/StandardTablePageLayout';
 
 export default function SuppliersTab() {
   const { setTableRef } = useSmartScroll();
+  const { branchId, branchName } = useActiveBranch();
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -16,6 +18,15 @@ export default function SuppliersTab() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setTimeout(() => setError(null), 5000);
   };
+
+  const currentBranchId = branchId || 1;
+  const currentBranchName = branchName || 'الفرع الرئيسي';
+
+  const submittingRef = useRef(false);
+  const editSavingRef = useRef(false);
+  const deletingRef = useRef(false);
+  const fetchGenRef = useRef(0);
+  const prevBranchIdRef = useRef(branchId);
 
   const nameInputRef = useRef(null);
   const [newSupplierName, setNewSupplierName] = useState('');
@@ -60,43 +71,67 @@ export default function SuppliersTab() {
     return filtered;
   }, [suppliers, searchQuery, sortColumn, sortDirection]);
 
-  const currentBranchId = localStorage.getItem('branchId') || 1;
-
   const fetchSuppliers = async () => {
+    const reqGen = ++fetchGenRef.current;
     try {
       setLoading(true);
       const res = await api.get('/suppliers/', { params: { branch_id: currentBranchId } });
-      setSuppliers(res.data.results || res.data);
+      if (reqGen !== fetchGenRef.current) return;
+      setSuppliers(res.data.results || res.data || []);
       setError(null);
     } catch (err) {
+      if (reqGen !== fetchGenRef.current) return;
       console.error('Error fetching suppliers:', err);
       setError('فشل في جلب الموردين. يرجى التأكد من اتصال الخادم.');
     } finally {
-      setLoading(false);
+      if (reqGen === fetchGenRef.current) setLoading(false);
     }
   };
 
   useEffect(() => {
+    const prevBranch = prevBranchIdRef.current;
+    if (prevBranch !== branchId) {
+      prevBranchIdRef.current = branchId;
+      setEditingId(null);
+      setEditName('');
+      setDeleteModalOpen(false);
+      setSupplierToDelete(null);
+      setSearchQuery('');
+      setNewSupplierName('');
+      setSuppliers([]);
+    }
     fetchSuppliers();
-  }, [currentBranchId]);
+  }, [currentBranchId, branchId]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
-    if (!newSupplierName.trim()) return;
-    
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     try {
-      setSubmitting(true);
-      const res = await api.post('/suppliers/', { name: newSupplierName.trim(), branch: currentBranchId });
-      setSuppliers([...suppliers, res.data]);
-      setNewSupplierName('');
-      toast.success('تم الحفظ بنجاح');
-      nameInputRef.current?.focus();
-    } catch (err) {
-      console.error('Error adding supplier:', err);
-      const errorMsg = err.response?.data?.detail || err.response?.data?.name?.[0] || 'حدث خطأ أثناء الإضافة.';
-      showError(errorMsg);
-      toast.error(errorMsg);
+      const cleanName = newSupplierName.trim();
+      if (!cleanName) {
+        const msg = 'اسم المورد مطلوب.';
+        showError(msg);
+        toast.error(msg);
+        return;
+      }
+
+      try {
+        setSubmitting(true);
+        const res = await api.post('/suppliers/', { name: cleanName, branch: Number(currentBranchId) });
+        setSuppliers(prev => [...prev, res.data]);
+        setNewSupplierName('');
+        toast.success('تم الحفظ بنجاح');
+        nameInputRef.current?.focus();
+      } catch (err) {
+        console.error('Error adding supplier:', err);
+        const errorMsg = err.response?.data?.detail || err.response?.data?.name?.[0] || 'حدث خطأ أثناء الإضافة.';
+        showError(errorMsg);
+        toast.error(errorMsg);
+      }
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -111,14 +146,23 @@ export default function SuppliersTab() {
   };
 
   const saveEdit = async (id) => {
-    if (!editName.trim()) return;
+    if (editSavingRef.current) return;
+    const cleanName = editName.trim();
+    if (!cleanName) {
+      toast.error('اسم المورد مطلوب.');
+      return;
+    }
+
+    editSavingRef.current = true;
     try {
-      const res = await api.put(`/suppliers/${id}/`, { name: editName.trim(), branch: currentBranchId });
-      setSuppliers(suppliers.map(s => s.id === id ? res.data : s));
+      const res = await api.put(`/suppliers/${id}/`, { name: cleanName, branch: Number(currentBranchId) });
+      setSuppliers(prev => prev.map(s => s.id === id ? res.data : s));
       setEditingId(null);
     } catch (err) {
       console.error('Error updating supplier:', err);
       showError(err.response?.data?.detail || 'حدث خطأ أثناء التحديث.');
+    } finally {
+      editSavingRef.current = false;
     }
   };
 
@@ -128,26 +172,28 @@ export default function SuppliersTab() {
   };
 
   const handleDelete = async () => {
-    if (!supplierToDelete) return;
+    if (!supplierToDelete || deletingRef.current) return;
+    deletingRef.current = true;
 
     try {
       await api.delete(`/suppliers/${supplierToDelete.id}/`);
-      setSuppliers(suppliers.filter(s => s.id !== supplierToDelete.id));
+      const deletedId = supplierToDelete.id;
+      setSuppliers(prev => prev.filter(s => s.id !== deletedId));
       setDeleteModalOpen(false);
       setSupplierToDelete(null);
     } catch (err) {
       console.error('Error deleting supplier:', err);
       setDeleteModalOpen(false);
       showError(err.response?.data?.detail || 'لا يمكن حذف هذا المورد لارتباطه ببيانات أخرى.');
+    } finally {
+      deletingRef.current = false;
     }
   };
-
-  const currentBranchName = localStorage.getItem('branchName') || 'الفرع الرئيسي';
 
   // Slot injection into StandardTablePageLayout
   const slotPortals = useStandardTableSlots({
     row2: (
-      <form onSubmit={handleAdd} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
+      <form noValidate onSubmit={handleAdd} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
         <div className="flex-grow-1" style={{ minWidth: '200px' }}>
           <input 
             ref={nameInputRef} 
@@ -156,7 +202,6 @@ export default function SuppliersTab() {
             value={newSupplierName} 
             onChange={(e) => setNewSupplierName(e.target.value)} 
             placeholder="اسم المورد / المصنع الجديد... *" 
-            required 
             autoFocus 
             disabled={submitting || loading} 
           />

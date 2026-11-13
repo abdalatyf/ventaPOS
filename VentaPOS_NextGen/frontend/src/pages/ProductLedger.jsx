@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { IconPackage } from '@tabler/icons-react';
 import toast from 'react-hot-toast';
 import api from '../api';
 import { useDefaultDate } from '../hooks/useDefaultDate';
-import { parseNumber } from '../utils/formatUtils';
+import { useActiveBranch } from '../hooks/useActiveBranch';
+import { parseStrictInt, parseWholeMoney, parseValidMonthYear } from '../utils/formatUtils';
 
 import LedgerHeader from '../components/ledger/LedgerHeader';
 import LedgerMetricsCards from '../components/ledger/LedgerMetricsCards';
@@ -15,6 +16,7 @@ import LedgerTimelineTable from '../components/ledger/LedgerTimelineTable';
 export default function ProductLedger() {
   const { id: paramId } = useParams();
   const navigate = useNavigate();
+  const { branchId } = useActiveBranch();
 
   const [allProducts, setAllProducts] = useState([]);
   const [selectedProductId, setSelectedProductId] = useState(paramId || '');
@@ -24,8 +26,13 @@ export default function ProductLedger() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const currentBranchId = localStorage.getItem('branchId') || 1;
+  const currentBranchId = branchId || 1;
   const { defaultYear, defaultMonth } = useDefaultDate(currentBranchId);
+
+  const commSubmittingRef = useRef(false);
+  const deficitSubmittingRef = useRef(false);
+  const prevBranchIdRef = useRef(branchId);
+  const ledgerGenRef = useRef(0);
 
   // Commission Change Form State
   const [showCommissionForm, setShowCommissionForm] = useState(false);
@@ -46,6 +53,27 @@ export default function ProductLedger() {
     reason: '',
   });
 
+  // Reset selected product & forms when switching branches mid-session
+  useEffect(() => {
+    const prevBranch = prevBranchIdRef.current;
+    if (prevBranch === branchId) return;
+    prevBranchIdRef.current = branchId;
+    if (prevBranch === null) return;
+
+    ledgerGenRef.current += 1;
+    setSelectedProductId('');
+    setProductSearchQuery('');
+    setData(null);
+    setError(null);
+    setShowCommissionForm(false);
+    setShowDeficitForm(false);
+    setCommForm(prev => ({ ...prev, amount: '' }));
+    setDeficitForm(prev => ({ ...prev, quantity: '', reason: '' }));
+    if (paramId) {
+      navigate('/product-ledger', { replace: true });
+    }
+  }, [branchId, paramId, navigate]);
+
   // Keep form dates in sync when defaultDate is loaded
   useEffect(() => {
     if (defaultMonth && defaultYear) {
@@ -59,9 +87,11 @@ export default function ProductLedger() {
 
   // Load all products for the autocomplete selector
   useEffect(() => {
+    let cancelled = false;
     const fetchProducts = async () => {
       try {
         const res = await api.get('/inventory-items/', { params: { branch_id: currentBranchId } });
+        if (cancelled) return;
         const list = Array.isArray(res.data?.results) ? res.data.results : (Array.isArray(res.data) ? res.data : []);
         setAllProducts(list);
         
@@ -72,10 +102,11 @@ export default function ProductLedger() {
           }
         }
       } catch (err) {
-        console.error('Error fetching products list:', err);
+        if (!cancelled) console.error('Error fetching products list:', err);
       }
     };
     fetchProducts();
+    return () => { cancelled = true; };
   }, [paramId, currentBranchId]);
 
   // Sync state if URL param changes
@@ -93,20 +124,31 @@ export default function ProductLedger() {
       return;
     }
 
+    const reqGen = ++ledgerGenRef.current;
     try {
       setLoading(true);
       setError(null);
       const res = await api.get(`/inventory-items/${idToFetch}/ledger/`);
+      if (reqGen !== ledgerGenRef.current) return;
+      if (res.data?.item?.branch && String(res.data.item.branch) !== String(currentBranchId)) {
+        toast.error('الصنف ينتمي لفرع آخر.');
+        setSelectedProductId('');
+        setProductSearchQuery('');
+        setData(null);
+        navigate('/product-ledger', { replace: true });
+        return;
+      }
       setData(res.data);
       if (res.data?.item) {
         setProductSearchQuery(res.data.item.name);
       }
     } catch (err) {
+      if (reqGen !== ledgerGenRef.current) return;
       console.error('Error fetching ledger:', err);
       setError('حدث خطأ أثناء تحميل سجل حياة الصنف. يرجى التأكد من اختيار صنف صالح.');
       setData(null);
     } finally {
-      setLoading(false);
+      if (reqGen === ledgerGenRef.current) setLoading(false);
     }
   };
 
@@ -116,7 +158,7 @@ export default function ProductLedger() {
     } else {
       setData(null);
     }
-  }, [selectedProductId]);
+  }, [selectedProductId, currentBranchId]);
 
   // Product selector handler
   const handleSelectProduct = (prod) => {
@@ -135,35 +177,42 @@ export default function ProductLedger() {
   // Commission update submit
   const handleCommissionSubmit = async (e) => {
     e.preventDefault();
-    if (!commForm.amount || !commForm.month || !commForm.year) {
-      toast.error('يرجى إدخال قيمة المندبة والشهر والسنة.');
-      return;
-    }
-
-    const cleanAmount = parseNumber(commForm.amount);
-    if (cleanAmount < 0) {
-      toast.error('قيمة المندبة لا يمكن أن تكون سالبة.');
-      return;
-    }
+    if (commSubmittingRef.current) return;
+    commSubmittingRef.current = true;
 
     try {
-      setCommSubmitting(true);
-      await api.post('/commission-histories/', {
-        item: selectedProductId,
-        commission_amount: cleanAmount,
-        activation_month: Math.round(parseNumber(commForm.month)),
-        activation_year: Math.round(parseNumber(commForm.year)),
-      });
+      const cleanAmount = parseWholeMoney(commForm.amount, { min: 0 });
+      if (cleanAmount === null) {
+        toast.error('يرجى إدخال قيمة مندبة صحيحة (0 أو أكثر).');
+        return;
+      }
 
-      toast.success('تم تسجيل المندبة الجديدة بنجاح');
-      setShowCommissionForm(false);
-      setCommForm(prev => ({ ...prev, amount: '' }));
-      fetchLedger(selectedProductId);
-    } catch (err) {
-      console.error('Error saving commission:', err);
-      const msg = err.response?.data?.detail || err.response?.data?.error || 'فشل في حفظ المندبة الجديدة.';
-      toast.error(msg);
+      const validDate = parseValidMonthYear(commForm.month, commForm.year, { minYear: 2025, maxYear: 2100 });
+      if (!validDate) {
+        toast.error('يرجى إدخال شهر وسنة صحيحين (2025 فأحدث).');
+        return;
+      }
+
+      try {
+        setCommSubmitting(true);
+        await api.post('/commission-histories/', {
+          item: selectedProductId,
+          commission_amount: cleanAmount,
+          activation_month: validDate.month,
+          activation_year: validDate.year,
+        });
+
+        toast.success('تم تسجيل المندبة الجديدة بنجاح');
+        setShowCommissionForm(false);
+        setCommForm(prev => ({ ...prev, amount: '' }));
+        fetchLedger(selectedProductId);
+      } catch (err) {
+        console.error('Error saving commission:', err);
+        const msg = err.response?.data?.detail || err.response?.data?.error || 'فشل في حفظ المندبة الجديدة.';
+        toast.error(msg);
+      }
     } finally {
+      commSubmittingRef.current = false;
       setCommSubmitting(false);
     }
   };
@@ -171,37 +220,44 @@ export default function ProductLedger() {
   // Deficit update submit
   const handleDeficitSubmit = async (e) => {
     e.preventDefault();
-    if (!deficitForm.quantity || !deficitForm.month || !deficitForm.year) {
-      toast.error('يرجى إدخال كمية العجز والشهر والسنة.');
-      return;
-    }
-
-    const cleanQty = Math.round(parseNumber(deficitForm.quantity));
-    if (cleanQty <= 0) {
-      toast.error('الكمية يجب أن تكون أكبر من صفر.');
-      return;
-    }
+    if (deficitSubmittingRef.current) return;
+    deficitSubmittingRef.current = true;
 
     try {
-      setDeficitSubmitting(true);
-      await api.post('/inventory-adjustments/', {
-        item: selectedProductId,
-        adjustment_type: 'DEFICIT',
-        quantity: cleanQty,
-        month: Math.round(parseNumber(deficitForm.month)),
-        year: Math.round(parseNumber(deficitForm.year)),
-        reason: deficitForm.reason.trim() || 'عجز مخزن',
-      });
+      const cleanQty = parseStrictInt(deficitForm.quantity, { min: 1 });
+      if (cleanQty === null) {
+        toast.error('كمية العجز يجب أن تكون رقمًا صحيحًا أكبر من صفر.');
+        return;
+      }
 
-      toast.success('تم تسجيل العجز بنجاح وتحديث كارت الصنف');
-      setShowDeficitForm(false);
-      setDeficitForm(prev => ({ ...prev, quantity: '', reason: '' }));
-      fetchLedger(selectedProductId);
-    } catch (err) {
-      console.error('Error recording deficit:', err);
-      const msg = err.response?.data?.detail || err.response?.data?.error || 'فشل في تسجيل العجز.';
-      toast.error(msg);
+      const validDate = parseValidMonthYear(deficitForm.month, deficitForm.year, { minYear: 2025, maxYear: 2100 });
+      if (!validDate) {
+        toast.error('يرجى إدخال شهر وسنة صحيحين (2025 فأحدث).');
+        return;
+      }
+
+      try {
+        setDeficitSubmitting(true);
+        await api.post('/inventory-adjustments/', {
+          item: selectedProductId,
+          adjustment_type: 'DEFICIT',
+          quantity: cleanQty,
+          month: validDate.month,
+          year: validDate.year,
+          reason: deficitForm.reason.trim() || 'عجز مخزن',
+        });
+
+        toast.success('تم تسجيل العجز بنجاح وتحديث كارت الصنف');
+        setShowDeficitForm(false);
+        setDeficitForm(prev => ({ ...prev, quantity: '', reason: '' }));
+        fetchLedger(selectedProductId);
+      } catch (err) {
+        console.error('Error recording deficit:', err);
+        const msg = err.response?.data?.detail || err.response?.data?.error || 'فشل في تسجيل العجز.';
+        toast.error(msg);
+      }
     } finally {
+      deficitSubmittingRef.current = false;
       setDeficitSubmitting(false);
     }
   };

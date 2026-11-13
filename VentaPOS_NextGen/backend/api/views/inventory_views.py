@@ -67,13 +67,22 @@ class InventoryItemViewSet(SoftDeleteModelViewSet):
     @action(detail=True, methods=["get"], url_path="stock")
     def safe_available_qty(self, request, pk=None):
         item = self.get_object()
+        from .base import to_english_numerals
 
         try:
-            req_month = int(request.query_params.get("month", timezone.now().month))
-            req_year = int(request.query_params.get("year", timezone.now().year))
-        except ValueError:
+            raw_m = to_english_numerals(str(request.query_params.get("month", timezone.now().month)).strip())
+            raw_y = to_english_numerals(str(request.query_params.get("year", timezone.now().year)).strip())
+            req_month = int(raw_m)
+            req_year = int(raw_y)
+        except (ValueError, TypeError):
             return Response(
                 {"error": "قيم الشهر أو السنة غير صحيحة، يرجى إدخال أرقام صحيحة."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not (1 <= req_month <= 12) or not (2000 <= req_year <= 2100):
+            return Response(
+                {"error": "الشهر يجب أن يكون بين 1 و 12 والسنة بين 2000 و 2100."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -397,34 +406,47 @@ class CommissionHistoryViewSet(SoftDeleteModelViewSet):
     serializer_class = CommissionHistorySerializer
 
     def create(self, request, *args, **kwargs):
-        item_id = request.data.get("item")
-        activation_month = request.data.get("activation_month")
-        activation_year = request.data.get("activation_year")
-        commission_amount = request.data.get("commission_amount")
+        from collections.abc import Mapping
+        from api.serializers import normalize_dirty_number_str
+        if not isinstance(request.data, Mapping):
+            return Response({"non_field_errors": ["تنسيق البيانات المرسلة غير صالح."]}, status=status.HTTP_400_BAD_REQUEST)
+        raw_data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        item_raw = normalize_dirty_number_str(raw_data.get("item"))
+        month_raw = normalize_dirty_number_str(raw_data.get("activation_month"))
+        year_raw = normalize_dirty_number_str(raw_data.get("activation_year"))
 
-        if item_id and activation_month and activation_year:
-            existing = CommissionHistory.all_objects.filter(
-                item_id=item_id,
-                activation_month=int(activation_month),
-                activation_year=int(activation_year)
-            ).first()
-            if existing:
-                existing.commission_amount = commission_amount
-                existing.is_deleted = False
-                existing.save()
-                serializer = self.get_serializer(existing)
-                return Response(serializer.data, status=status.HTTP_200_OK)
+        existing = None
+        if item_raw is not None and month_raw is not None and year_raw is not None:
+            try:
+                existing = CommissionHistory.all_objects.filter(
+                    item_id=int(item_raw),
+                    activation_month=int(month_raw),
+                    activation_year=int(year_raw),
+                ).first()
+            except (ValueError, TypeError):
+                existing = None
+
+        if existing:
+            serializer = self.get_serializer(existing, data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(is_deleted=False)
+            return Response(serializer.data, status=status.HTTP_200_OK)
 
         return super().create(request, *args, **kwargs)
 
     def get_queryset(self):
+        from .base import to_english_numerals
         qs = super().get_queryset().order_by("-activation_year", "-activation_month")
         branch_id = get_request_branch_id(self.request)
         if branch_id:
             qs = qs.filter(item__branch_id=branch_id)
         item_id = self.request.query_params.get("item_id")
-        if item_id:
-            qs = qs.filter(item__id=item_id)
+        if item_id and str(item_id).strip():
+            clean_id = to_english_numerals(str(item_id).strip())
+            try:
+                qs = qs.filter(item__id=int(clean_id))
+            except ValueError:
+                return qs.none()
         return qs
 
 
@@ -433,11 +455,16 @@ class InventoryAdjustmentViewSet(SoftDeleteModelViewSet):
     serializer_class = InventoryAdjustmentSerializer
 
     def get_queryset(self):
+        from .base import to_english_numerals
         qs = super().get_queryset()
         branch_id = get_request_branch_id(self.request)
         if branch_id:
             qs = qs.filter(item__branch_id=branch_id)
         item_id = self.request.query_params.get("item_id")
-        if item_id:
-            qs = qs.filter(item__id=item_id)
+        if item_id and str(item_id).strip():
+            clean_id = to_english_numerals(str(item_id).strip())
+            try:
+                qs = qs.filter(item__id=int(clean_id))
+            except ValueError:
+                return qs.none()
         return qs

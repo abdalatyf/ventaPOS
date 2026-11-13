@@ -4,11 +4,13 @@ import { IconTrash, IconPlus, IconEdit, IconLoader, IconSortAscending, IconSortD
 import toast from 'react-hot-toast';
 import api from '../api';
 import useSmartScroll from '../hooks/useSmartScroll';
-import { fmt, parseNumber } from '../utils/formatUtils';
+import { useActiveBranch } from '../hooks/useActiveBranch';
+import { fmt, parseNumber, parseStrictInt, parseWholeMoney, parseValidMonthYear } from '../utils/formatUtils';
 import { useStandardTableSlots } from './common/StandardTablePageLayout';
 
 export default function InventoryTab() {
   const { setTableRef } = useSmartScroll();
+  const { branchId, branchName } = useActiveBranch();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -19,7 +21,13 @@ export default function InventoryTab() {
     setTimeout(() => setError(null), 5000);
   };
   
-  const currentBranchId = localStorage.getItem('branchId') || 1;
+  const currentBranchId = branchId || 1;
+  const currentBranchName = branchName || 'الفرع الرئيسي';
+
+  const submittingRef = useRef(false);
+  const deletingRef = useRef(false);
+  const fetchGenRef = useRef(0);
+  const prevBranchIdRef = useRef(branchId);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [sortColumn, setSortColumn] = useState('id');
@@ -42,6 +50,7 @@ export default function InventoryTab() {
   // Form state
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     qty: '',
@@ -73,23 +82,43 @@ export default function InventoryTab() {
   };
 
   const fetchItems = async () => {
+    const reqGen = ++fetchGenRef.current;
     try {
       setLoading(true);
       const res = await api.get('/inventory-items/', { params: { branch_id: currentBranchId } });
+      if (reqGen !== fetchGenRef.current) return;
       const list = Array.isArray(res.data?.results) ? res.data.results : (Array.isArray(res.data) ? res.data : []);
       setItems(list);
       setError(null);
     } catch (err) {
+      if (reqGen !== fetchGenRef.current) return;
       console.error('Error fetching inventory items:', err);
       setError('فشل في جلب الأصناف. يرجى التأكد من اتصال الخادم.');
     } finally {
-      setLoading(false);
+      if (reqGen === fetchGenRef.current) setLoading(false);
     }
   };
 
   useEffect(() => {
+    const prevBranch = prevBranchIdRef.current;
+    if (prevBranch !== branchId) {
+      prevBranchIdRef.current = branchId;
+      setEditingId(null);
+      setDeleteModalOpen(false);
+      setItemToDelete(null);
+      setSearchQuery('');
+      setItems([]);
+      setFormData({
+        name: '',
+        qty: '',
+        price: '',
+        commission: '',
+        startMonth: new Date().getMonth() + 1,
+        startYear: new Date().getFullYear(),
+      });
+    }
     fetchItems();
-  }, [currentBranchId]);
+  }, [currentBranchId, branchId]);
 
   const filteredItems = useMemo(() => {
     const list = Array.isArray(items) ? items : [];
@@ -131,44 +160,83 @@ export default function InventoryTab() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.startMonth || !formData.startYear) {
-      const msg = 'البيانات الأساسية مطلوبة';
-      showError(msg);
-      toast.error(msg);
-      return;
-    }
-
-    const payload = {
-      name: formData.name.trim(),
-      initial_quantity: Math.round(parseNumber(formData.qty)) || 0,
-      initial_purchase_price: Math.round(parseNumber(formData.price)) || 0,
-      initial_commission_amount: Math.round(parseNumber(formData.commission)) || 0,
-      initial_month: Math.round(parseNumber(formData.startMonth)),
-      initial_year: Math.round(parseNumber(formData.startYear)),
-    };
-
-    if (currentBranchId) {
-      payload.branch = currentBranchId;
-    }
+    if (submittingRef.current) return;
+    submittingRef.current = true;
 
     try {
-      setSubmitting(true);
-      if (editingId) {
-        const res = await api.put(`/inventory-items/${editingId}/`, payload);
-        setItems(items.map(i => i.id === editingId ? res.data : i));
-        setEditingId(null);
-      } else {
-        const res = await api.post('/inventory-items/', payload);
-        setItems([...items, res.data]);
+      const cleanName = formData.name.trim();
+      if (!cleanName) {
+        const msg = 'اسم الصنف مطلوب.';
+        showError(msg);
+        toast.error(msg);
+        return;
       }
-      resetForm();
-      toast.success('تم الحفظ بنجاح');
-    } catch (err) {
-      console.error('Error saving item:', err);
-      const errorMsg = err.response?.data?.detail || err.message || 'حدث خطأ أثناء الحفظ.';
-      showError(errorMsg);
-      toast.error(errorMsg);
+
+      const validDate = parseValidMonthYear(formData.startMonth, formData.startYear, { minYear: 2025, maxYear: 2100 });
+      if (!validDate) {
+        const msg = 'أدخل شهر وسنة بداية صحيحين (2025 فأحدث).';
+        showError(msg);
+        toast.error(msg);
+        return;
+      }
+
+      const qtyTrimmed = String(formData.qty ?? '').trim();
+      const qtyVal = qtyTrimmed === '' ? 0 : parseStrictInt(qtyTrimmed, { min: 0 });
+      if (qtyVal === null) {
+        const msg = 'الكمية يجب أن تكون رقمًا صحيحًا (0 أو أكثر).';
+        showError(msg);
+        toast.error(msg);
+        return;
+      }
+
+      const priceTrimmed = String(formData.price ?? '').trim();
+      const priceVal = priceTrimmed === '' ? 0 : parseWholeMoney(priceTrimmed, { min: 0 });
+      if (priceVal === null) {
+        const msg = 'سعر الشراء يجب أن يكون رقمًا صحيحًا (0 أو أكثر).';
+        showError(msg);
+        toast.error(msg);
+        return;
+      }
+
+      const commTrimmed = String(formData.commission ?? '').trim();
+      const commVal = commTrimmed === '' ? 0 : parseWholeMoney(commTrimmed, { min: 0 });
+      if (commVal === null) {
+        const msg = 'المندبة يجب أن تكون رقمًا صحيحًا (0 أو أكثر).';
+        showError(msg);
+        toast.error(msg);
+        return;
+      }
+
+      const payload = {
+        name: cleanName,
+        initial_quantity: qtyVal,
+        initial_purchase_price: priceVal,
+        initial_commission_amount: commVal,
+        initial_month: validDate.month,
+        initial_year: validDate.year,
+        branch: Number(currentBranchId),
+      };
+
+      try {
+        setSubmitting(true);
+        if (editingId) {
+          const res = await api.put(`/inventory-items/${editingId}/`, payload);
+          setItems(prev => prev.map(i => i.id === editingId ? res.data : i));
+          setEditingId(null);
+        } else {
+          const res = await api.post('/inventory-items/', payload);
+          setItems(prev => [...prev, res.data]);
+        }
+        resetForm();
+        toast.success('تم الحفظ بنجاح');
+      } catch (err) {
+        console.error('Error saving item:', err);
+        const errorMsg = err.response?.data?.detail || err.response?.data?.name?.[0] || err.response?.data?.error || err.message || 'حدث خطأ أثناء الحفظ.';
+        showError(errorMsg);
+        toast.error(errorMsg);
+      }
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -205,27 +273,31 @@ export default function InventoryTab() {
   };
 
   const handleDelete = async () => {
-    if (!itemToDelete) return;
+    if (!itemToDelete || deletingRef.current) return;
+    deletingRef.current = true;
+    setDeleting(true);
 
     try {
       await api.delete(`/inventory-items/${itemToDelete.id}/`);
-      setItems(items.filter(i => i.id !== itemToDelete.id));
+      const deletedId = itemToDelete.id;
+      setItems(prev => prev.filter(i => i.id !== deletedId));
       setDeleteModalOpen(false);
       setItemToDelete(null);
-      if (editingId === itemToDelete.id) resetForm();
+      if (editingId === deletedId) resetForm();
     } catch (err) {
       console.error('Error deleting item:', err);
       setDeleteModalOpen(false);
       showError(err.response?.data?.detail || 'لا يمكن حذف هذا الصنف.');
+    } finally {
+      deletingRef.current = false;
+      setDeleting(false);
     }
   };
-
-  const currentBranchName = localStorage.getItem('branchName') || 'الفرع الرئيسي';
 
   // Slot injection into StandardTablePageLayout
   const slotPortals = useStandardTableSlots({
     row2: (
-      <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
+      <form noValidate onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
         {/* Item Name */}
         <div className="flex-grow-1" style={{ minWidth: '160px' }}>
           <input 
@@ -237,40 +309,43 @@ export default function InventoryTab() {
             value={formData.name} 
             onChange={handleInputChange} 
             disabled={submitting} 
-            required 
             autoFocus 
           />
         </div>
         {/* Qty */}
         <div style={{ width: '85px' }} className="flex-shrink-0">
           <input 
-            type="number" 
+            type="text"
+            inputMode="numeric"
+            dir="ltr"
             className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
             name="qty" 
             placeholder="الكمية" 
             value={formData.qty} 
             onChange={handleInputChange} 
-            min="0" 
             disabled={submitting} 
           />
         </div>
         {/* Price */}
         <div style={{ width: '100px' }} className="flex-shrink-0">
           <input 
-            type="number" 
+            type="text"
+            inputMode="numeric"
+            dir="ltr"
             className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
             name="price" 
             placeholder="سعر الشراء" 
             value={formData.price} 
             onChange={handleInputChange} 
-            min="0" 
             disabled={submitting} 
           />
         </div>
         {/* Commission */}
         <div style={{ width: '90px' }} className="flex-shrink-0">
           <input 
-            type="number" 
+            type="text"
+            inputMode="numeric"
+            dir="ltr"
             className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
             name="commission" 
             placeholder="المندبة" 
@@ -282,31 +357,29 @@ export default function InventoryTab() {
         {/* Month */}
         <div style={{ width: '70px' }} className="flex-shrink-0">
           <input 
-            type="number" 
+            type="text"
+            inputMode="numeric"
+            dir="ltr"
             className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
             name="startMonth" 
             placeholder="شهر" 
             value={formData.startMonth} 
-            min="1" 
-            max="12" 
             onChange={handleInputChange} 
             disabled={submitting} 
-            required 
           />
         </div>
         {/* Year */}
         <div style={{ width: '80px' }} className="flex-shrink-0">
           <input 
-            type="number" 
+            type="text"
+            inputMode="numeric"
+            dir="ltr"
             className="form-control form-control-sm border-secondary-subtle text-center fw-bold" 
             name="startYear" 
             placeholder="سنة" 
             value={formData.startYear} 
-            min="2000" 
-            max="2100" 
             onChange={handleInputChange} 
             disabled={submitting} 
-            required 
           />
         </div>
         {/* Submit / Cancel */}
@@ -397,10 +470,10 @@ export default function InventoryTab() {
                       <Link to={`/product-ledger/${item.id}`} className="btn btn-sm btn-ghost-info me-1" title="كارت الصنف وسجل العمليات">
                         <IconFileText size={18} /> كارت الصنف
                       </Link>
-                      <button className="btn btn-sm btn-ghost-primary me-1" title="تعديل الصنف" onClick={() => startEdit(item)}>
+                      <button type="button" className="btn btn-sm btn-ghost-primary me-1" title="تعديل الصنف" onClick={() => startEdit(item)} disabled={submitting || deleting}>
                         <IconEdit size={18} />
                       </button>
-                      <button className="btn btn-sm btn-ghost-danger" title="حذف الصنف" onClick={() => confirmDelete(item)}>
+                      <button type="button" className="btn btn-sm btn-ghost-danger" title="حذف الصنف" onClick={() => confirmDelete(item)} disabled={deleting}>
                         <IconTrash size={18} />
                       </button>
                     </td>
@@ -426,8 +499,8 @@ export default function InventoryTab() {
               <div className="modal-footer">
                 <div className="w-100">
                   <div className="row">
-                    <div className="col"><button className="btn w-100" onClick={() => setDeleteModalOpen(false)}>إلغاء</button></div>
-                    <div className="col"><button className="btn btn-danger w-100" onClick={handleDelete}>نعم، احذف</button></div>
+                    <div className="col"><button type="button" className="btn w-100" onClick={() => setDeleteModalOpen(false)} disabled={deleting}>إلغاء</button></div>
+                    <div className="col"><button type="button" className="btn btn-danger w-100" onClick={handleDelete} disabled={deleting}>{deleting ? 'جاري الحذف...' : 'نعم، احذف'}</button></div>
                   </div>
                 </div>
               </div>

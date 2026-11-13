@@ -119,11 +119,20 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
     @action(detail=False, methods=["post"])
     def bulk_delete(self, request):
         receipt_ids = request.data.get("receipt_ids", [])
-        if not isinstance(receipt_ids, list):
-            return Response({"error": "receipt_ids must be a list"}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(receipt_ids, list) or not receipt_ids:
+            return Response({"error": "receipt_ids must be a non-empty list"}, status=status.HTTP_400_BAD_REQUEST)
+
+        clean_ids = []
+        for raw_id in receipt_ids:
+            if isinstance(raw_id, bool):
+                return Response({"error": "receipt_ids must contain valid integers"}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                clean_ids.append(int(raw_id))
+            except (ValueError, TypeError):
+                return Response({"error": "receipt_ids must contain valid integers"}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
-            receipts_to_delete = list(Receipt.objects.filter(id__in=receipt_ids))
+            receipts_to_delete = list(self.get_queryset().filter(id__in=clean_ids))
             return_receipts = [r for r in receipts_to_delete if r.receipt_type == "RETURN"]
 
             if return_receipts:
@@ -212,7 +221,16 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
         if not isinstance(receipt_ids, list) or not receipt_ids:
             return Response({"error": "receipt_ids must be a non-empty list"}, status=status.HTTP_400_BAD_REQUEST)
 
-        receipts = self.get_queryset().filter(id__in=receipt_ids).prefetch_related('payments')
+        clean_ids = []
+        for raw_id in receipt_ids:
+            if isinstance(raw_id, bool):
+                return Response({"error": "receipt_ids must contain valid integers"}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                clean_ids.append(int(raw_id))
+            except (ValueError, TypeError):
+                return Response({"error": "receipt_ids must contain valid integers"}, status=status.HTTP_400_BAD_REQUEST)
+
+        receipts = self.get_queryset().filter(id__in=clean_ids).prefetch_related('payments')
         if not receipts.exists():
             return Response({"error": "No valid receipts found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -327,7 +345,7 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
                     uuid_val = int(clean_sp_id)
                     qs = qs.filter(salesperson_id=uuid_val)
                 except ValueError:
-                    qs = qs.filter(salesperson__id=clean_sp_id)
+                    return qs.none()
 
         if year := params.get("year"):
             if str(year).strip():

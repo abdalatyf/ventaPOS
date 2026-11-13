@@ -2,7 +2,7 @@ import React from 'react';
 import { IconTrash } from '@tabler/icons-react';
 import SuggestionList from '../purchases/SuggestionList';
 import api from '../../api';
-import { fmtNum } from '../../utils/formatUtils';
+import { fmtNum, parseValidMonthYear } from '../../utils/formatUtils';
 
 export default function POSItemsTable({
   itemError,
@@ -61,10 +61,11 @@ export default function POSItemsTable({
                 onKeyDown={e => handleKeyDown(e, 'product')}
                 onFocus={() => triggerSuggestions(productQuery, 'product')}
                 onBlur={() => { 
-                  if (!selectedProduct && productQuery.trim() !== '') {
+                  const validDate = parseValidMonthYear(saleMonth, saleYear, { minYear: 2000, maxYear: 2100 });
+                  if (!selectedProduct && productQuery.trim() !== '' && validDate) {
                     const exactMatch = suggestions.find(p => p.value === productQuery.trim());
                     const fetchStockForMatch = (match) => {
-                      api.get(`/inventory-items/${match.id}/stock/?month=${saleMonth}&year=${saleYear}`)
+                      api.get(`/inventory-items/${match.id}/stock/?month=${validDate.month}&year=${validDate.year}`)
                          .then(res => {
                            if (res.data && res.data.safe_available_qty !== undefined) {
                              const existing = items.find(i => i.inventory_item === match.id);
@@ -83,9 +84,10 @@ export default function POSItemsTable({
                       fetchStockForMatch(exactMatch);
                     } else {
                       const bId = localStorage.getItem('branchId') || '';
-                      api.get(`/product-suggestions/?term=${encodeURIComponent(productQuery.trim())}&month=${saleMonth}&year=${saleYear}&branch_id=${bId}`)
+                      api.get(`/product-suggestions/?term=${encodeURIComponent(productQuery.trim())}&month=${validDate.month}&year=${validDate.year}&branch_id=${bId}`)
                          .then(res => {
-                           const fallbackMatch = res.data.find(p => p.value === productQuery.trim());
+                           const list = Array.isArray(res.data) ? res.data : [];
+                           const fallbackMatch = list.find(p => p.value === productQuery.trim());
                            if (fallbackMatch) fetchStockForMatch(fallbackMatch);
                          }).catch(() => {});
                     }
@@ -108,10 +110,11 @@ export default function POSItemsTable({
           <div className="col-2 position-relative text-center">
             <input 
               ref={qtyRef} 
-              type="number" 
+              type="text"
+              inputMode="numeric"
+              dir="ltr"
               className="form-control py-1 fs-3 border-secondary-subtle text-center fw-bold"
               value={quantity} 
-              min="1"
               onChange={e => setQuantity(e.target.value)}
               onKeyDown={e => handleCartKD(e, priceRef)}
               style={{ borderColor: '#adb5bd' }} 
@@ -133,7 +136,9 @@ export default function POSItemsTable({
           <div className="col-2">
             <input 
               ref={priceRef} 
-              type="number" 
+              type="text"
+              inputMode="numeric"
+              dir="ltr"
               className="form-control py-1 fs-3 border-secondary-subtle text-danger fw-bold text-center"
               value={sellPrice}
               onChange={e => setSellPrice(e.target.value)}
@@ -143,6 +148,7 @@ export default function POSItemsTable({
           </div>
           <div className="col-auto">
             <button 
+              type="button"
               className="btn btn-success d-flex align-items-center justify-content-center fw-bold p-0" 
               onClick={handleAddItem} 
               style={{ width: '36px', height: '36px', fontSize: '1.5rem', border: '1px solid #adb5bd' }}
@@ -181,8 +187,9 @@ export default function POSItemsTable({
                   <td className="text-center text-primary fw-bold">{fmtNum(item.quantity * item.sell_price)}</td>
                   <td>
                     <button 
+                      type="button"
                       className="btn btn-outline-danger btn-icon btn-sm"
-                      onClick={() => setItems(items.filter(i => i.id !== item.id))}
+                      onClick={() => setItems(prev => prev.filter(i => i.id !== item.id))}
                     >
                       <IconTrash size={16} />
                     </button>

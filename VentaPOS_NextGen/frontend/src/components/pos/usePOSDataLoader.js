@@ -1,14 +1,17 @@
 import { useEffect } from 'react';
 import api from '../../api';
 import { parseInstallmentTextToBoxes } from './posUtils';
+import { scheduleIdleFocus } from '../../utils/focusUtils';
 
 export default function usePOSDataLoader({
+  branchId,
   editId,
   setSalespersons,
   setProducts,
   setSaleMonth,
   setSaleYear,
   setSalespersonId,
+  setSalespersonQuery,
   setIsCashSale,
   setCustomerName,
   setPhoneNumber,
@@ -23,16 +26,28 @@ export default function usePOSDataLoader({
   setLoadingInitial,
   setError,
   salespersonRef,
-  isEditingRef
+  isEditingRef,
+  onCrossBranchEdit
 }) {
   useEffect(() => {
-    const branchId = localStorage.getItem('branchId');
+    let cancelled = false;
+    let focusTimer = null;
+    const activeBranchId = branchId || localStorage.getItem('branchId');
+    if (!activeBranchId) {
+      setSalespersons([]);
+      setProducts([]);
+      setLoadingInitial(false);
+      return;
+    }
+
     setLoadingInitial(true);
     Promise.all([
-      api.get(`/salespersons/?branch_id=${branchId}`).catch(() => ({ data: [] })),
-      api.get(`/inventory-items/?branch_id=${branchId}`).catch(() => ({ data: [] })),
+      api.get(`/salespersons/?branch_id=${activeBranchId}`).catch(() => ({ data: [] })),
+      api.get(`/inventory-items/?branch_id=${activeBranchId}`).catch(() => ({ data: [] })),
       editId ? api.get(`/receipts/${editId}/`).catch(() => null) : Promise.resolve(null),
     ]).then(([sRes, pRes, editRes]) => {
+      if (cancelled) return;
+
       const sps = Array.isArray(sRes.data?.results || sRes.data) ? (sRes.data?.results || sRes.data) : [];
       setSalespersons(sps);
       const itemsList = Array.isArray(pRes.data?.results || pRes.data) ? (pRes.data?.results || pRes.data) : [];
@@ -40,9 +55,19 @@ export default function usePOSDataLoader({
 
       if (editRes && editRes.data) {
         const r = editRes.data;
+        if (r.branch && String(r.branch) !== String(activeBranchId)) {
+          isEditingRef.current = false;
+          if (onCrossBranchEdit) onCrossBranchEdit();
+          return;
+        }
         setSaleMonth(r.sale_month);
         setSaleYear(r.sale_year);
-        setSalespersonId(r.salesperson?.id || r.salesperson || '');
+        const spId = r.salesperson?.id || r.salesperson || '';
+        setSalespersonId(spId);
+        if (setSalespersonQuery) {
+          const matchedSp = sps.find(s => String(s.id) === String(spId));
+          setSalespersonQuery(matchedSp ? matchedSp.name : (r.salesperson?.name || ''));
+        }
         setIsCashSale(r.is_cash_sale);
         setCustomerName(r.customer_name);
         setPhoneNumber(r.phone_number);
@@ -75,16 +100,23 @@ export default function usePOSDataLoader({
           }));
         }
       }
-    }).catch(() => setError('فشل في جلب البيانات.')).finally(() => {
+    }).catch(() => {
+      if (!cancelled) setError('فشل في جلب البيانات.');
+    }).finally(() => {
+      if (cancelled) return;
       setLoadingInitial(false);
-      setTimeout(() => {
-        if (!editId) salespersonRef.current?.focus();
-      }, 150);
+      focusTimer = scheduleIdleFocus(salespersonRef, 150, () => cancelled || Boolean(editId));
     });
+
     if (editId) {
       isEditingRef.current = true;
     } else {
       isEditingRef.current = false;
     }
-  }, [editId]);
+
+    return () => {
+      cancelled = true;
+      if (focusTimer) clearTimeout(focusTimer);
+    };
+  }, [editId, branchId]);
 }

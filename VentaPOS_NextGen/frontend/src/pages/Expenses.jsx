@@ -6,6 +6,8 @@ import toast from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import useSmartScroll from '../hooks/useSmartScroll';
 import { useDefaultDate } from '../hooks/useDefaultDate';
+import { useActiveBranch } from '../hooks/useActiveBranch';
+import { parseWholeMoney, parseValidMonthYear } from '../utils/formatUtils';
 import StandardTablePageLayout from '../components/common/StandardTablePageLayout';
 
 const fmtNum = (val) => {
@@ -17,10 +19,14 @@ const CATEGORY_PRESETS = ['مصروفات عامة', 'إيجار', 'كهرباء
 
 export default function Expenses() {
   const { setTableRef } = useSmartScroll();
-  const branchId = localStorage.getItem('branchId');
+  const { branchId } = useActiveBranch();
   const { defaultMonth, defaultYear, loading: defaultLoading } = useDefaultDate(branchId);
   const [searchParams] = useSearchParams();
   const descInputRef = useRef(null);
+  const submittingRef = useRef(false);
+  const deletingRef = useRef(false);
+  const fetchGenRef = useRef(0);
+  const prevBranchIdRef = useRef(branchId);
 
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +88,22 @@ export default function Expenses() {
   const [expenseMonth, setExpenseMonth] = useState(searchParams.get('month') || '');
   const [expenseYear, setExpenseYear] = useState(searchParams.get('year') || '');
 
+  // Reset form state when switching branch
+  useEffect(() => {
+    const prevBranch = prevBranchIdRef.current;
+    if (prevBranch === branchId) return;
+    prevBranchIdRef.current = branchId;
+    if (prevBranch === null) return;
+
+    setEditingId(null);
+    setDescription('');
+    setAmount('');
+    setCategory('مصروفات عامة');
+    setCategoryFilter('');
+    setSearchQuery('');
+    setExpenses([]);
+  }, [branchId]);
+
   useEffect(() => {
     if (!defaultLoading && expenseMonth === '' && expenseYear === '') {
       setExpenseMonth(searchParams.get('month') || defaultMonth);
@@ -89,59 +111,92 @@ export default function Expenses() {
     }
   }, [defaultLoading, defaultMonth, defaultYear]);
 
-  useEffect(() => {
-    if (expenseMonth && expenseYear) {
-      fetchExpenses();
-    }
-  }, [expenseMonth, expenseYear]);
-
   const fetchExpenses = async () => {
+    const validDate = parseValidMonthYear(expenseMonth, expenseYear, { minYear: 2000, maxYear: 2100 });
+    if (!validDate) {
+      toast.error('أدخل شهر وسنة صحيحين للتصفية.');
+      return;
+    }
+
+    const reqGen = ++fetchGenRef.current;
     setLoading(true);
     try {
-      const res = await api.get(`/expenses/?month=${expenseMonth}&year=${expenseYear}`);
+      const res = await api.get(`/expenses/?month=${validDate.month}&year=${validDate.year}`);
+      if (reqGen !== fetchGenRef.current) return;
       const list = Array.isArray(res.data?.results) ? res.data.results : (Array.isArray(res.data) ? res.data : []);
       setExpenses(list);
       setError(null);
     } catch (err) {
+      if (reqGen !== fetchGenRef.current) return;
       console.error(err);
       setError('حدث خطأ أثناء جلب البيانات.');
     } finally {
-      setLoading(false);
+      if (reqGen === fetchGenRef.current) setLoading(false);
     }
   };
 
+  useEffect(() => {
+    if (expenseMonth && expenseYear) {
+      const validDate = parseValidMonthYear(expenseMonth, expenseYear, { minYear: 2000, maxYear: 2100 });
+      if (validDate) fetchExpenses();
+    }
+  }, [expenseMonth, expenseYear, branchId]);
+
   const handleAddExpense = async (e) => {
     e.preventDefault();
-    if (!description || !amount) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
 
     try {
-      setSubmitting(true);
-      const payload = {
-        description,
-        category: category || 'مصروفات عامة',
-        amount: String(amount).replace(/,/g, ''),
-        expense_month: expenseMonth,
-        expense_year: expenseYear
-      };
-
-      if (editingId) {
-        await api.put(`/expenses/${editingId}/`, payload);
-      } else {
-        await api.post('/expenses/', payload);
+      const cleanDesc = description.trim();
+      if (!cleanDesc) {
+        toast.error('أدخل بيان المصروف.');
+        descInputRef.current?.focus();
+        return;
       }
 
-      toast.success('تم الحفظ بنجاح');
-      setDescription('');
-      setAmount('');
-      setCategory('مصروفات عامة');
-      setEditingId(null);
-      
-      fetchExpenses();
-      descInputRef.current?.focus();
-    } catch (err) {
-      console.error(err);
-      toast.error('حدث خطأ أثناء حفظ المصروف.');
+      const validDate = parseValidMonthYear(expenseMonth, expenseYear, { minYear: 2000, maxYear: 2100 });
+      if (!validDate) {
+        toast.error('أدخل شهر وسنة صحيحين.');
+        return;
+      }
+
+      const cleanAmount = parseWholeMoney(amount, { min: 1 });
+      if (cleanAmount === null) {
+        toast.error('أدخل مبلغ مصروف صحيح (1 على الأقل).');
+        return;
+      }
+
+      try {
+        setSubmitting(true);
+        const payload = {
+          description: cleanDesc,
+          category: (category || '').trim() || 'مصروفات عامة',
+          amount: cleanAmount,
+          expense_month: validDate.month,
+          expense_year: validDate.year
+        };
+
+        if (editingId) {
+          await api.put(`/expenses/${editingId}/`, payload);
+        } else {
+          await api.post('/expenses/', payload);
+        }
+
+        toast.success('تم الحفظ بنجاح');
+        setDescription('');
+        setAmount('');
+        setCategory('مصروفات عامة');
+        setEditingId(null);
+
+        fetchExpenses();
+        descInputRef.current?.focus();
+      } catch (err) {
+        console.error(err);
+        toast.error(err.response?.data?.detail || err.response?.data?.error || 'حدث خطأ أثناء حفظ المصروف.');
+      }
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -149,7 +204,7 @@ export default function Expenses() {
   const handleEditClick = (exp) => {
     setEditingId(exp.id);
     setDescription(exp.description);
-    setAmount(exp.amount);
+    setAmount(Math.round(Number(exp.amount || 0)).toString());
     setCategory(exp.category || 'مصروفات عامة');
     descInputRef.current?.focus();
   };
@@ -162,35 +217,43 @@ export default function Expenses() {
   };
 
   const handleDelete = async (id) => {
-    Swal.fire({
-      title: 'هل أنت متأكد؟',
-      text: 'هل أنت متأكد من حذف هذا المصروف؟',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'نعم، احذف',
-      cancelButtonText: 'إلغاء'
-    }).then(async (result) => {
+    if (deletingRef.current) return;
+    deletingRef.current = true;
+
+    try {
+      const result = await Swal.fire({
+        title: 'هل أنت متأكد؟',
+        text: 'هل أنت متأكد من حذف هذا المصروف؟',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، احذف',
+        cancelButtonText: 'إلغاء'
+      });
+
       if (result.isConfirmed) {
         try {
           await api.delete(`/expenses/${id}/`);
-          setExpenses(expenses.filter(e => e.id !== id));
+          setExpenses(prev => prev.filter(e => e.id !== id));
+          if (editingId === id) handleCancelEdit();
           toast.success('تم حذف المصروف بنجاح');
         } catch (err) {
           console.error(err);
           toast.error('حدث خطأ أثناء الحذف.');
         }
       }
-    });
+    } finally {
+      deletingRef.current = false;
+    }
   };
 
-  const totalExpenses = expenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
+  const totalExpenses = expenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
 
   return (
     <StandardTablePageLayout
       title="المصروفات اليومية والشهرية"
       icon={IconReceipt}
       row1={
-        <form onSubmit={handleAddExpense} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
+        <form noValidate onSubmit={handleAddExpense} className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
           {/* Description */}
           <div className="flex-grow-1" style={{ minWidth: '180px' }}>
             <input 
@@ -200,7 +263,6 @@ export default function Expenses() {
               placeholder="البيان (اسم المصروف) *" 
               value={description} 
               onChange={(e) => setDescription(e.target.value)} 
-              required 
             />
           </div>
 
@@ -224,13 +286,13 @@ export default function Expenses() {
           {/* Amount */}
           <div style={{ width: '120px' }} className="flex-shrink-0">
             <input 
-              type="number" 
-              step="1" 
+              type="text"
+              inputMode="numeric"
+              dir="ltr"
               className="form-control form-control-sm fw-bold text-danger border-secondary-subtle text-center" 
               placeholder="المبلغ *" 
               value={amount} 
               onChange={(e) => setAmount(e.target.value)} 
-              required 
             />
           </div>
 
@@ -266,12 +328,12 @@ export default function Expenses() {
             <div className="input-group input-group-sm">
               <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">الشهر</span>
               <input 
-                type="number" 
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
                 className="form-control text-center fw-bold border-secondary-subtle px-1" 
                 value={expenseMonth} 
                 onChange={(e) => setExpenseMonth(e.target.value)} 
-                min="1" 
-                max="12" 
               />
             </div>
           </div>
@@ -281,18 +343,18 @@ export default function Expenses() {
             <div className="input-group input-group-sm">
               <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">السنة</span>
               <input 
-                type="number" 
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
                 className="form-control text-center fw-bold border-secondary-subtle px-1" 
                 value={expenseYear} 
                 onChange={(e) => setExpenseYear(e.target.value)} 
-                min="2020" 
-                max="2050" 
               />
             </div>
           </div>
 
           {/* Filter button */}
-          <button className="btn btn-primary btn-sm px-3 fw-bold border-secondary-subtle flex-shrink-0 d-flex align-items-center gap-1" onClick={fetchExpenses} disabled={loading}>
+          <button type="button" className="btn btn-primary btn-sm px-3 fw-bold border-secondary-subtle flex-shrink-0 d-flex align-items-center gap-1" onClick={fetchExpenses} disabled={loading}>
             <IconFilter size={14} />
             <span>تصفية</span>
           </button>

@@ -29,41 +29,39 @@ export default function LedgerCommissionForm({
 
       {showCommissionForm && (
         <div className="card-body bg-light-subtle p-3 border-top">
-          <form onSubmit={handleCommissionSubmit} className="row g-2 align-items-end">
+          <form noValidate onSubmit={handleCommissionSubmit} className="row g-2 align-items-end">
             <div className="col-4">
               <label className="form-label small mb-1 fw-bold">المندبة للقطعة <span className="text-danger">*</span></label>
               <input 
-                type="number" 
-                className="form-control form-control-sm" 
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
+                className="form-control form-control-sm text-center fw-bold" 
                 placeholder="مثال: 50"
-                min="0"
                 value={commForm.amount}
                 onChange={(e) => setCommForm({ ...commForm, amount: e.target.value })}
-                required
               />
             </div>
             <div className="col-2">
               <label className="form-label small mb-1 fw-bold">شهر <span className="text-danger">*</span></label>
               <input 
-                type="number" 
-                className="form-control form-control-sm" 
-                min="1" 
-                max="12"
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
+                className="form-control form-control-sm text-center fw-bold" 
                 value={commForm.month}
                 onChange={(e) => setCommForm({ ...commForm, month: e.target.value })}
-                required
               />
             </div>
             <div className="col-2">
               <label className="form-label small mb-1 fw-bold">سنة <span className="text-danger">*</span></label>
               <input 
-                type="number" 
-                className="form-control form-control-sm" 
-                min="2020" 
-                max="2100"
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
+                className="form-control form-control-sm text-center fw-bold" 
                 value={commForm.year}
                 onChange={(e) => setCommForm({ ...commForm, year: e.target.value })}
-                required
               />
             </div>
             <div className="col-4">
