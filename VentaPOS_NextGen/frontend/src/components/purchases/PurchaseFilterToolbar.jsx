@@ -46,10 +46,10 @@ export function PurchaseFilterRow1({
         <div className="input-group input-group-sm">
           <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">الشهر</span>
           <input
-            type="number"
-            min="1"
-            max="12"
-            className="form-control fw-bold border-secondary-subtle text-center px-1"
+            type="text"
+            inputMode="numeric"
+            dir="ltr"
+            className="form-control fw-bold border-secondary-subtle text-center px-1 hide-arrows"
             name="month"
             placeholder="الكل"
             value={filters.month}
@@ -63,10 +63,10 @@ export function PurchaseFilterRow1({
         <div className="input-group input-group-sm">
           <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">السنة</span>
           <input
-            type="number"
-            min="2000"
-            max="2100"
-            className="form-control fw-bold border-secondary-subtle text-center px-1"
+            type="text"
+            inputMode="numeric"
+            dir="ltr"
+            className="form-control fw-bold border-secondary-subtle text-center px-1 hide-arrows"
             name="year"
             placeholder="الكل"
             value={filters.year}

@@ -50,7 +50,7 @@ export default function QuickRestoreModal({ isOpen, onClose }) {
       localStorage.removeItem('branchName');
       localStorage.removeItem('company_name');
 
-      if (res.data?.pending_restart) {
+      if (res.data?.pending_restart || res.data?.status === 'pending_restart') {
         setSuccessMsg('تم تجهيز النسخة الاحتياطية بنجاح! يرجى إعادة تشغيل البرنامج لتطبيق التغييرات.');
       } else {
         setSuccessMsg(res.data?.message || 'تمت استعادة النسخة الاحتياطية بنجاح! سيتم الانتقال لتسجيل الدخول.');
@@ -109,7 +109,10 @@ export default function QuickRestoreModal({ isOpen, onClose }) {
               />
               {file && (
                 <div className="text-success small mt-1 fw-bold">
-                  الملف المحدد: {file.name} ({(file.size / (1024 * 1024)).toFixed(2)} ميجابايت)
+                  الملف المحدد: {file.name} (
+                  {file.size >= 1024 * 1024
+                    ? `${Math.round(file.size / (1024 * 1024))} ميجابايت`
+                    : `${Math.max(1, Math.round(file.size / 1024))} كيلوبايت`})
                 </div>
               )}
             </div>

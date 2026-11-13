@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { IconClockHour4, IconChevronUp, IconChevronDown, IconLoader, IconCheck } from '@tabler/icons-react';
 
 export default function LedgerCommissionForm({
@@ -9,6 +9,16 @@ export default function LedgerCommissionForm({
   handleCommissionSubmit,
   commSubmitting
 }) {
+  const monthRef = useRef(null);
+  const yearRef = useRef(null);
+
+  const handleEnterNext = (e, nextRef) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      nextRef?.current?.focus();
+    }
+  };
+
   return (
     <div className="card shadow-sm border-0 h-100">
       <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
@@ -40,22 +50,26 @@ export default function LedgerCommissionForm({
                 placeholder="مثال: 50"
                 value={commForm.amount}
                 onChange={(e) => setCommForm({ ...commForm, amount: e.target.value })}
+                onKeyDown={(e) => handleEnterNext(e, monthRef)}
               />
             </div>
             <div className="col-2">
               <label className="form-label small mb-1 fw-bold">شهر <span className="text-danger">*</span></label>
               <input 
+                ref={monthRef}
                 type="text"
                 inputMode="numeric"
                 dir="ltr"
                 className="form-control form-control-sm text-center fw-bold" 
                 value={commForm.month}
                 onChange={(e) => setCommForm({ ...commForm, month: e.target.value })}
+                onKeyDown={(e) => handleEnterNext(e, yearRef)}
               />
             </div>
             <div className="col-2">
               <label className="form-label small mb-1 fw-bold">سنة <span className="text-danger">*</span></label>
               <input 
+                ref={yearRef}
                 type="text"
                 inputMode="numeric"
                 dir="ltr"

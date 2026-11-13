@@ -2,7 +2,7 @@ import React from 'react';
 import { IconTrash } from '@tabler/icons-react';
 import SuggestionList from '../purchases/SuggestionList';
 import api from '../../api';
-import { fmtNum, parseValidMonthYear } from '../../utils/formatUtils';
+import { fmtNum, parseValidMonthYear, formatMMYYYY } from '../../utils/formatUtils';
 
 export default function POSItemsTable({
   itemError,
@@ -121,10 +121,10 @@ export default function POSItemsTable({
             />
             {selectedProduct && selectedProduct.safe_qty !== undefined && (
               <div className="position-absolute text-success fw-bold mt-1" style={{ fontSize: '0.8rem', whiteSpace: 'nowrap', left: '50%', transform: 'translateX(-50%)' }}>
-                متاح: {selectedProduct.safe_qty}
+                متاح: {fmtNum(selectedProduct.safe_qty)}
                 {selectedProduct.bottleneck_month && (
                   <span className="text-warning ms-1">
-                    (مقيد بسبب كمية شهر {selectedProduct.bottleneck_month}/{selectedProduct.bottleneck_year})
+                    (مقيد بسبب كمية شهر <span dir="ltr">{formatMMYYYY(selectedProduct.bottleneck_month, selectedProduct.bottleneck_year)}</span>)
                   </span>
                 )}
               </div>

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { IconWallet, IconTrendingUp } from '@tabler/icons-react';
 import api from '../../api';
 import { ReportsContext } from './ReportsLayout';
-import { fmtNum } from '../../utils/formatUtils';
+import { fmtNum, formatMMYYYY } from '../../utils/formatUtils';
 import { useStandardTableSlots } from '../../components/common/StandardTablePageLayout';
 import ReportAutocomplete from '../../components/ReportAutocomplete';
 
@@ -20,7 +21,10 @@ export default function DashboardReport() {
     if (!branchId) return;
     api.get('/salespersons/', { params: { branch_id: branchId } })
       .then(res => setSalespersons(res.data.results || res.data || []))
-      .catch(() => {});
+      .catch((err) => {
+        console.error('Error fetching salespersons:', err);
+        toast.error('تعذر تحميل قائمة المناديب');
+      });
   }, [branchId]);
 
   const slotPortals = useStandardTableSlots({
@@ -88,7 +92,7 @@ export default function DashboardReport() {
     ),
     row2: (
       <div className="text-muted fw-bold small d-flex align-items-center justify-content-between w-100">
-        <span>الفترة المحددة: {year}/{String(month).padStart(2, '0')}</span>
+        <span>الفترة المحددة: {year && month ? formatMMYYYY(month, year) : ''}</span>
         <span>ملخص الأداء المالي والتشغيلي الشامل للفرع</span>
       </div>
     )

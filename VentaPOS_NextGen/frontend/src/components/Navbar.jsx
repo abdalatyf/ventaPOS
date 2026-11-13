@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api, { getLicenseStatus } from '../api';
@@ -37,6 +37,8 @@ export default function Navbar() {
   
   const [zoomLevel, setZoomLevel] = useState(parseFloat(localStorage.getItem('appZoomLevel')) || 1.0);
   const [companySettingId, setCompanySettingId] = useState(null);
+  const companySettingIdRef = useRef(null);
+  const headerRef = useRef(null);
   const [isPrintOnly, setIsPrintOnly] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -61,12 +63,29 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
+    const syncNavbarHeight = () => {
+      if (headerRef.current) {
+        const h = headerRef.current.offsetHeight;
+        if (h > 0) {
+          document.documentElement.style.setProperty('--navbar-height', `${h}px`);
+        }
+      }
+    };
+
+    syncNavbarHeight();
+    let navbarObserver = null;
+    if (typeof ResizeObserver !== 'undefined' && headerRef.current) {
+      navbarObserver = new ResizeObserver(syncNavbarHeight);
+      navbarObserver.observe(headerRef.current);
+    }
+
     // Fetch initial zoom from DB
     const fetchZoom = async () => {
       try {
         const res = await api.get('/company-settings/');
         if (res.data && res.data.results && res.data.results.length > 0) {
           const setting = res.data.results[0];
+          companySettingIdRef.current = setting.id;
           setCompanySettingId(setting.id);
           if (setting.zoom_level) {
             const level = Math.max(0.70, Math.min(1.50, Math.round(parseFloat(setting.zoom_level) * 100) / 100));
@@ -74,6 +93,7 @@ export default function Navbar() {
             document.documentElement.style.setProperty('--app-zoom', level);
             localStorage.setItem('appZoomLevel', level);
             setZoomLevel(level);
+            syncNavbarHeight();
             window.dispatchEvent(new CustomEvent('app-zoom-changed', { detail: { zoom: level } }));
             window.dispatchEvent(new Event('resize'));
           }
@@ -90,19 +110,21 @@ export default function Navbar() {
       document.documentElement.style.setProperty('--app-zoom', roundedLevel);
       localStorage.setItem('appZoomLevel', roundedLevel);
       setZoomLevel(roundedLevel);
-      
+      syncNavbarHeight();
+
       window.dispatchEvent(new CustomEvent('app-zoom-changed', { detail: { zoom: roundedLevel } }));
       window.dispatchEvent(new Event('resize'));
-      
+
       // Save to DB
       try {
-        let id = companySettingId;
+        let id = companySettingIdRef.current;
         if (!id) {
-            const res = await api.get('/company-settings/');
-            if (res.data?.results?.length > 0) {
-                id = res.data.results[0].id;
-                setCompanySettingId(id);
-            }
+          const res = await api.get('/company-settings/');
+          if (res.data?.results?.length > 0) {
+            id = res.data.results[0].id;
+            companySettingIdRef.current = id;
+            setCompanySettingId(id);
+          }
         }
         if (id) {
           await api.patch(`/company-settings/${id}/`, { zoom_level: roundedLevel });
@@ -128,6 +150,7 @@ export default function Navbar() {
     document.body.style.zoom = initialZoom;
     document.documentElement.style.setProperty('--app-zoom', initialZoom);
     setZoomLevel(initialZoom);
+    syncNavbarHeight();
 
     // Keyboard shortcuts
     const handleKeyDown = (e) => {
@@ -145,7 +168,10 @@ export default function Navbar() {
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      if (navbarObserver) navbarObserver.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -196,7 +222,7 @@ export default function Navbar() {
   };
 
   return (
-    <header className="navbar navbar-expand-md navbar-light sticky-top d-print-none" style={{ zIndex: 1030 }}>
+    <header ref={headerRef} className="navbar navbar-expand-md navbar-light sticky-top d-print-none" style={{ zIndex: 1030 }}>
       <div className="container-fluid">
         <button 
           className="navbar-toggler" 

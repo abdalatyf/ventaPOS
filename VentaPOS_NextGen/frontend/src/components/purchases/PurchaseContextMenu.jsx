@@ -4,11 +4,17 @@ import { IconPencil, IconTrash, IconPrinter } from '@tabler/icons-react';
 
 export default function PurchaseContextMenu({ contextMenu, handleDeleteSingle, handlePrintSingle, onClose }) {
   if (!contextMenu) return null;
+  const currentZoom = (typeof document !== 'undefined' && parseFloat(document.body?.style?.zoom)) || 1.0;
+  const maxW = (typeof window !== 'undefined' ? window.innerWidth / currentZoom : 1280) - 200;
+  const maxH = (typeof window !== 'undefined' ? window.innerHeight / currentZoom : 720) - 180;
+  const top = Math.max(8, Math.min(contextMenu.mouseY / currentZoom, maxH));
+  const left = Math.max(8, Math.min(contextMenu.mouseX / currentZoom, maxW));
 
   return (
     <div 
       className="dropdown-menu show shadow" 
-      style={{ position: 'fixed', top: contextMenu.mouseY, left: contextMenu.mouseX, zIndex: 9999, border: '1px solid #dee2e6' }}
+      style={{ position: 'fixed', top: `${top}px`, left: `${left}px`, zIndex: 9999, border: '1px solid #dee2e6' }}
+      onClick={(e) => e.stopPropagation()}
     >
       {handlePrintSingle && (
         <button 

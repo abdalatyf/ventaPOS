@@ -50,7 +50,10 @@ export default function Login() {
           }
         }
         setCheckingInit(false);
-      }).catch(() => {
+      }).catch((licErr) => {
+        if (!licErr?.response) {
+          setError('تعذر الاتصال بخادم البرنامج. يرجى التأكد من تشغيل الخادم المحلي.');
+        }
         setCheckingInit(false);
       });
 
@@ -161,6 +164,7 @@ export default function Login() {
                       placeholder={hasPassword ? "أدخل كلمة سر النظام" : "النظام بدون كلمة سر (اضغط دخول)"} 
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      autoFocus
                       required={hasPassword} 
                     />
                   </div>

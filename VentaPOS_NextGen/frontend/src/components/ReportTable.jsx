@@ -6,6 +6,7 @@ import api from '../api';
 import './ReportTable.css';
 import { useStandardTableSlots } from './common/StandardTablePageLayout';
 import { ReportsContext } from '../pages/Reports/ReportsLayout';
+import { fmtNum } from '../utils/formatUtils';
 
 const SortDropdown = ({ sortRules, setSortRules, sortableColumns }) => {
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -140,12 +141,15 @@ export default function ReportTable({
   onPrintReport = null,
   children = null,
   loadingMore = false,
+  onContainerRef = null,
 }) {
   const { setTableRef } = useSmartScroll();
   const [sortRules, setSortRules] = useState(defaultSortRules);
   const [focusedRowIndex, setFocusedRowIndex] = useState(-1);
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const tableContainerElemRef = useRef(null);
+
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   const reportsContext = useContext(ReportsContext);
   useEffect(() => {
@@ -160,11 +164,12 @@ export default function ReportTable({
     }
   }, [reportsContext?.registerPrintHandler, onPrintReport]);
 
-  // Combine ref for useSmartScroll and internal keyboard focus
+  // Combine ref for useSmartScroll, internal keyboard focus, and external observers
   const handleSetTableRef = useCallback((node) => {
     tableContainerElemRef.current = node;
     setTableRef(node);
-  }, [setTableRef]);
+    if (onContainerRef) onContainerRef(node);
+  }, [setTableRef, onContainerRef]);
 
   // Direct Column Header Click-to-Sort
   const toggleSort = useCallback((colKey) => {
@@ -281,10 +286,13 @@ export default function ReportTable({
     const titleMap = {
       '/reports/receipts': 'تقرير فواتير البيع',
       '/reports/purchases': 'تقرير فواتير المشتريات',
+      '/reports/areas': 'تقرير المناطق والتحصيل',
       '/reports/installments': 'تقرير تحصيلات الأقساط',
+      '/reports/inventory': 'تقرير حركة المخزون',
       '/reports/inventory-movement': 'تقرير حركة المخزون',
       '/reports/expenses': 'تقرير المصروفات',
       '/reports/profit-and-loss': 'تقرير الأرباح والخسائر',
+      '/reports/salesperson': 'تقرير أداء المناديب',
       '/reports/salesperson-performance': 'تقرير أداء المناديب',
       '/reports/averages': 'تقرير المتوسطات والربحية',
       '/reports/cash-drawer': 'تقرير تفاصيل السيولة والخزنة',
@@ -311,8 +319,8 @@ export default function ReportTable({
         } else if (row[key] !== undefined && row[key] !== null) {
           val = row[key];
         }
-        if (col.format === 'currency') {
-          val = Math.round(Number(val) || 0).toLocaleString('en-US');
+        if (col.format === 'currency' || col.format === 'number') {
+          val = fmtNum(val);
         }
         rowObj[key] = val !== undefined && val !== null ? String(val) : '';
       });
@@ -387,9 +395,9 @@ export default function ReportTable({
               })}
             </div>
           ) : (
-            <div className="d-flex align-items-center gap-2">
+            <div className="d-flex align-items-center gap-2 flex-shrink-0">
               <span className="badge bg-secondary text-white rounded-pill px-2 py-1 tabular-nums">
-                {processedData.length || (data ? data.length : 0)} سجل
+                {fmtNum(processedData.length || (data ? data.length : 0))} سجل
               </span>
             </div>
           )}
@@ -488,7 +496,7 @@ export default function ReportTable({
                       return renderRow({
                         item, 
                         index, 
-                        isSelected: selectedIds.includes(item[idField]),
+                        isSelected: selectedSet.has(item[idField]),
                         toggleSelect: () => toggleSelect(item[idField]),
                         isFocused
                       });
@@ -506,15 +514,14 @@ export default function ReportTable({
                             <input 
                               type="checkbox" 
                               className="form-check-input border-secondary-subtle" 
-                              checked={selectedIds.includes(item[idField])}
+                              checked={selectedSet.has(item[idField])}
                               onChange={() => toggleSelect(item[idField])}
                             />
                           </td>
                         )}
                         {columns.map((col, j) => {
                           let val = col.render ? col.render(item, index) : item[col.key];
-                          if (col.format === 'currency') val = (Number(val) || 0).toLocaleString('en-US');
-                          if (col.format === 'number') val = val;
+                          if (col.format === 'currency' || col.format === 'number') val = fmtNum(val);
                           return (
                             <td key={j} className={`text-${col.align || 'center'} align-middle border-secondary-subtle ${col.className || ''}`} style={col.style} dir={col.dir}>
                               {val}

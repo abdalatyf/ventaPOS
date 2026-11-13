@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import { IconCalculator, IconFilter, IconRefresh } from '@tabler/icons-react';
 import api from '../../api';
 import { ReportsContext } from './ReportsLayout';
 import ReportTable from '../../components/ReportTable';
 import ReportAutocomplete from '../../components/ReportAutocomplete';
-import { fmtNum } from '../../utils/formatUtils';
+import { fmtNum, formatMMYYYY } from '../../utils/formatUtils';
 
 export default function ProfitAndLossReport() {
   const { year, month, branchId } = useContext(ReportsContext);
@@ -29,6 +30,7 @@ export default function ProfitAndLossReport() {
         setSalespersons(res.data.results || res.data || []);
       } catch (err) {
         console.error('Error fetching salespersons:', err);
+        toast.error('تعذر تحميل قائمة المناديب');
       }
     };
     if (branchId) fetchSalespersons();
@@ -298,7 +300,7 @@ export default function ProfitAndLossReport() {
       
       <ReportTable
         reportTitle="تقرير الأرباح والخسائر"
-        periodLabel={year && month ? `${year}/${String(month).padStart(2, '0')}` : undefined}
+        periodLabel={year && month ? formatMMYYYY(month, year) : undefined}
         columns={columns}
         data={items}
         loading={loading}

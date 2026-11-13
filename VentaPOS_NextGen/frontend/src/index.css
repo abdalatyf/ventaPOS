@@ -64,10 +64,18 @@ body {
   border-top-right-radius: 6px;
 }
 
+/* Optional Two-Tier Selection Strip between .sticky-toolbar and table */
+.sticky-selection-strip {
+  position: sticky !important;
+  top: calc(var(--navbar-height, 56px) + var(--toolbar-height-actual, 48px)) !important;
+  z-index: 1019;
+}
+
 /* 2-Scroll Table Container (Window Scroll -> Internal Table Y & X Scroll) */
 .report-table-container {
   overflow-x: auto !important;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   max-height: calc((100vh / var(--app-zoom, 1)) - 114px);
 }
 

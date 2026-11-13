@@ -4,7 +4,7 @@ import api from '../../api';
 import { ReportsContext } from './ReportsLayout';
 import ReportTable from '../../components/ReportTable';
 import ReportAutocomplete from '../../components/ReportAutocomplete';
-import { fmtNum } from '../../utils/formatUtils';
+import { fmtNum, formatMMYYYY } from '../../utils/formatUtils';
 
 export default function InventoryMovementReport() {
   const { year, month, branchId } = useContext(ReportsContext);
@@ -295,9 +295,9 @@ export default function InventoryMovementReport() {
       </button>
 
       <div className="text-muted small fw-bold ms-auto d-flex align-items-center gap-2">
-        <span>الفترة: {year}/{String(month).padStart(2, '0')}</span>
+        <span>الفترة: {formatMMYYYY(month, year)}</span>
         <span>•</span>
-        <span>عدد الأصناف المطابقة: {processedItems.length}</span>
+        <span>عدد الأصناف المطابقة: {fmtNum(processedItems.length)}</span>
       </div>
     </div>
   );
@@ -307,6 +307,8 @@ export default function InventoryMovementReport() {
       {error && <div className="alert alert-danger mb-2 py-1">{error}</div>}
 
       <ReportTable
+        reportTitle="تقرير حركة المخزون"
+        periodLabel={year && month ? formatMMYYYY(month, year) : undefined}
         columns={columns}
         data={processedItems}
         loading={loading}

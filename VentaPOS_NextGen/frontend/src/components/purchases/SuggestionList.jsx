@@ -1,14 +1,15 @@
 import React, { useEffect, useRef } from 'react';
 
 const SuggestionList = ({ open, suggestions, activeIndex, onSelect }) => {
-  if (!open || !suggestions.length) return null;
   const activeItemRef = useRef(null);
-  
+
   useEffect(() => {
     if (open && activeItemRef.current) {
       activeItemRef.current.scrollIntoView({ block: 'nearest' });
     }
-  }, [activeIndex, open]);
+  }, [activeIndex, open, suggestions.length]);
+
+  if (!open || !suggestions.length) return null;
 
   return (
     <ul 

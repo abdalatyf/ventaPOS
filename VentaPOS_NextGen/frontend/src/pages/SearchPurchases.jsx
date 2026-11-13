@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import api from '../api';
+import useSmartScroll from '../hooks/useSmartScroll';
 import { useActiveBranch } from '../hooks/useActiveBranch';
 import { IconReceipt, IconPlus } from '@tabler/icons-react';
 import { PurchaseFilterRow1, PurchaseFilterRow2 } from '../components/purchases/PurchaseFilterToolbar';
@@ -13,6 +14,13 @@ import StandardTablePageLayout from '../components/common/StandardTablePageLayou
 import { fetchSuppliersList, fetchProductsMap } from '../components/purchases/purchaseUtils';
 
 export default function SearchPurchases() {
+  const { setTableRef } = useSmartScroll();
+  const tableContainerElemRef = useRef(null);
+  const handleSetTableRef = useCallback((node) => {
+    tableContainerElemRef.current = node;
+    setTableRef(node);
+  }, [setTableRef]);
+
   const { branchId } = useActiveBranch();
 
   const formatCurrency = (val) => {
@@ -47,20 +55,20 @@ export default function SearchPurchases() {
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [printModalIds, setPrintModalIds] = useState([]);
 
-  // Infinite Scroll Observer
+  // Infinite Scroll Observer scoped to internal scrollable table container
   const observer = useRef();
   const lastRowElementRef = useCallback(node => {
-    if (loadingMore) return;
+    if (loading || loadingMore) return;
     if (observer.current) observer.current.disconnect();
     
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && nextPageUrl) {
         loadMoreInvoices();
       }
-    });
+    }, { root: tableContainerElemRef.current || null, threshold: 0.1 });
     
     if (node) observer.current.observe(node);
-  }, [loadingMore, nextPageUrl]);
+  }, [loading, loadingMore, nextPageUrl]);
 
   const getSupplierName = (sp) => {
     if (!sp) return 'غير محدد';
@@ -105,7 +113,10 @@ export default function SearchPurchases() {
         setSelectedIds(allIds.length > 0 ? allIds : enrichedInvoices.map(r => r.id));
       }
     } catch (error) {
-      if (reqGen === fetchGenRef.current) console.error('Error fetching purchase invoices:', error);
+      if (reqGen === fetchGenRef.current) {
+        console.error('Error fetching purchase invoices:', error);
+        toast.error('حدث خطأ أثناء تحميل فواتير الشراء');
+      }
     } finally {
       if (reqGen === fetchGenRef.current) setLoading(false);
     }
@@ -130,8 +141,12 @@ export default function SearchPurchases() {
       if (filterTimeout.current) clearTimeout(filterTimeout.current);
     }
 
-    fetchSuppliersList(activeBranchId).then(list => { if (!cancelled) setSuppliers(list); });
-    fetchProductsMap(activeBranchId).then(map => { if (!cancelled) setProductsMap(map); });
+    fetchSuppliersList(activeBranchId).then(list => { if (!cancelled) setSuppliers(list); }).catch(() => {
+      if (!cancelled) toast.error('تعذر تحميل قائمة الموردين');
+    });
+    fetchProductsMap(activeBranchId).then(map => { if (!cancelled) setProductsMap(map); }).catch(() => {
+      if (!cancelled) toast.error('تعذر تحميل قائمة الأصناف');
+    });
     fetchInvoices(filters, activeBranchId);
 
     const handleClick = () => setContextMenu(null);
@@ -174,7 +189,10 @@ export default function SearchPurchases() {
         setNextPageUrl(res.data.next);
       }
     } catch (error) {
-      if (reqGen === fetchGenRef.current) console.error('Error loading more invoices:', error);
+      if (reqGen === fetchGenRef.current) {
+        console.error('Error loading more invoices:', error);
+        toast.error('تعذر تحميل المزيد من فواتير الشراء');
+      }
     } finally {
       if (reqGen === fetchGenRef.current) setLoadingMore(false);
     }
@@ -255,12 +273,15 @@ export default function SearchPurchases() {
   };
 
   const toggleSelectAll = () => {
-    const targetLength = globalAllIds.length > 0 ? globalAllIds.length : invoices.length;
-    if (selectedIds.length === targetLength) {
+    if (selectedIds.length > 0) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(globalAllIds.length > 0 ? globalAllIds : invoices.map(r => r.id));
+      setSelectedIds(invoices.map(r => r.id));
     }
+  };
+
+  const selectAllMatching = () => {
+    setSelectedIds(globalAllIds.length > 0 ? globalAllIds : invoices.map(r => r.id));
   };
 
   const handleBulkDelete = async () => {
@@ -402,12 +423,14 @@ export default function SearchPurchases() {
         globalAllIds={globalAllIds}
         toggleSelect={toggleSelect}
         toggleSelectAll={toggleSelectAll}
+        selectAllMatching={selectAllMatching}
         handleOpenPrintModal={handleOpenPrintModal}
         handleBulkDelete={handleBulkDelete}
         handleContextMenu={handleContextMenu}
         formatCurrency={formatCurrency}
         getSupplierName={getSupplierName}
         lastRowElementRef={lastRowElementRef}
+        setTableRef={handleSetTableRef}
         loadingMore={loadingMore}
       />
     </StandardTablePageLayout>

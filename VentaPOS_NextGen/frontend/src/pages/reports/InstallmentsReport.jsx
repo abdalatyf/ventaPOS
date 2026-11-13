@@ -104,7 +104,8 @@ export default function InstallmentsReport() {
 
   const handlePrintSelected = () => {
     if (selectedIds.length === 0) return;
-    const selectedRows = (data.installments || []).filter(inst => selectedIds.includes(inst.payment_id));
+    const selectedSet = new Set(selectedIds);
+    const selectedRows = (data.installments || []).filter(inst => selectedSet.has(inst.payment_id));
     const receiptIds = [...new Set(selectedRows.map(r => r.receipt_id).filter(Boolean))];
     if (receiptIds.length === 0) {
       toast.error('لم يتم العثور على فواتير صالحة للطباعة');
@@ -359,7 +360,7 @@ export default function InstallmentsReport() {
           onClick={handlePrintSelected}
         >
           <IconPrinter size={15} />
-          <span>طباعة جداول المحدد ({selectedIds.length})</span>
+          <span>طباعة جداول المحدد ({fmtNum(selectedIds.length)})</span>
         </button>
       )}
     </div>

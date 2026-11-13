@@ -13,14 +13,19 @@ export default function ReceiptContextMenu({
 
   const r = contextMenu.receipt;
   const rNum = r.receipt_number || r.local_id || r.id;
+  const currentZoom = (typeof document !== 'undefined' && parseFloat(document.body?.style?.zoom)) || 1.0;
+  const maxW = (typeof window !== 'undefined' ? window.innerWidth / currentZoom : 1280) - 180;
+  const maxH = (typeof window !== 'undefined' ? window.innerHeight / currentZoom : 720) - 220;
+  const top = Math.max(8, Math.min(contextMenu.y / currentZoom, maxH));
+  const left = Math.max(8, Math.min(contextMenu.x / currentZoom, maxW));
 
   return (
     <div 
       className="dropdown-menu show shadow" 
       style={{ 
         position: 'fixed',
-        top: `${contextMenu.y}px`, 
-        left: `${contextMenu.x}px`, 
+        top: `${top}px`, 
+        left: `${left}px`, 
         zIndex: 1060,
         minWidth: '160px'
       }}

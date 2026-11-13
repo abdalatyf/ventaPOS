@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import { IconCalculator, IconFilter, IconRefresh } from '@tabler/icons-react';
 import api from '../../api';
 import { ReportsContext } from './ReportsLayout';
 import ReportTable from '../../components/ReportTable';
 import ReportAutocomplete from '../../components/ReportAutocomplete';
-import { fmtNum } from '../../utils/formatUtils';
+import { fmtNum, formatMMYYYY } from '../../utils/formatUtils';
 
 export default function AveragesReport() {
   const { year, month, branchId } = useContext(ReportsContext);
@@ -29,6 +30,7 @@ export default function AveragesReport() {
         setSalespersons(res.data.results || res.data || []);
       } catch (err) {
         console.error('Error fetching salespersons:', err);
+        toast.error('تعذر تحميل قائمة المناديب');
       }
     };
     if (branchId) fetchSalespersons();
@@ -260,7 +262,11 @@ export default function AveragesReport() {
 
   return (
     <div className="w-100 p-0">
+      {error && <div className="alert alert-danger mb-2 py-1">{error}</div>}
+
       <ReportTable
+        reportTitle="تقرير الأرباح والخسائر (المتوسطات)"
+        periodLabel={year && month ? formatMMYYYY(month, year) : undefined}
         columns={columns}
         data={items}
         loading={loading}

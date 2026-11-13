@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { IconAlertTriangle, IconChevronUp, IconChevronDown, IconLoader, IconCheck } from '@tabler/icons-react';
 
 export default function LedgerDeficitForm({
@@ -9,6 +9,17 @@ export default function LedgerDeficitForm({
   handleDeficitSubmit,
   deficitSubmitting
 }) {
+  const monthRef = useRef(null);
+  const yearRef = useRef(null);
+  const reasonRef = useRef(null);
+
+  const handleEnterNext = (e, nextRef) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      nextRef?.current?.focus();
+    }
+  };
+
   return (
     <div className="card shadow-sm border-0 h-100">
       <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
@@ -40,34 +51,40 @@ export default function LedgerDeficitForm({
                 placeholder="مثال: 2"
                 value={deficitForm.quantity}
                 onChange={(e) => setDeficitForm({ ...deficitForm, quantity: e.target.value })}
+                onKeyDown={(e) => handleEnterNext(e, monthRef)}
                 autoFocus
               />
             </div>
             <div className="col-2">
               <label className="form-label small mb-1 fw-bold">شهر <span className="text-danger">*</span></label>
               <input 
+                ref={monthRef}
                 type="text"
                 inputMode="numeric"
                 dir="ltr"
                 className="form-control form-control-sm text-center fw-bold" 
                 value={deficitForm.month}
                 onChange={(e) => setDeficitForm({ ...deficitForm, month: e.target.value })}
+                onKeyDown={(e) => handleEnterNext(e, yearRef)}
               />
             </div>
             <div className="col-2">
               <label className="form-label small mb-1 fw-bold">سنة <span className="text-danger">*</span></label>
               <input 
+                ref={yearRef}
                 type="text"
                 inputMode="numeric"
                 dir="ltr"
                 className="form-control form-control-sm text-center fw-bold" 
                 value={deficitForm.year}
                 onChange={(e) => setDeficitForm({ ...deficitForm, year: e.target.value })}
+                onKeyDown={(e) => handleEnterNext(e, reasonRef)}
               />
             </div>
             <div className="col-3">
               <label className="form-label small mb-1">السبب / البيان</label>
               <input 
+                ref={reasonRef}
                 type="text" 
                 className="form-control form-control-sm" 
                 placeholder="تلف، كسر، فاقد..."

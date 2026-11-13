@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../api';
 import { useActiveBranch } from '../hooks/useActiveBranch';
-import { parseStrictInt, parseWholeMoney, parseValidMonthYear } from '../utils/formatUtils';
+import { parseStrictInt, parseWholeMoney, parseValidMonthYear, formatMMYYYY } from '../utils/formatUtils';
 import { IconArrowLeft, IconReceiptRefund, IconCheck } from '@tabler/icons-react';
 
 export default function ReturnReceipt() {
@@ -241,7 +241,7 @@ export default function ReturnReceipt() {
       }
 
       if (validDate.year < minY || (validDate.year === minY && validDate.month < minM)) {
-        toast.error(`تاريخ المرتجع لا يمكن أن يكون قبل الشهر التالي لتاريخ البيع (${minM}/${minY})`);
+        toast.error(`تاريخ المرتجع لا يمكن أن يكون قبل الشهر التالي لتاريخ البيع (${formatMMYYYY(minM, minY)})`);
         return;
       }
 
@@ -255,7 +255,7 @@ export default function ReturnReceipt() {
           }
         }
         if (Math.abs(totalNewInstallments - newDebt) > 0.01) {
-          toast.error(`يجب أن يتطابق إجمالي الأقساط الجديدة (${totalNewInstallments}) مع المديونية المتبقية (${newDebt}).`);
+          toast.error(`يجب أن يتطابق إجمالي الأقساط الجديدة (${Math.round(totalNewInstallments).toLocaleString('en-US')}) مع المديونية المتبقية (${Math.round(newDebt).toLocaleString('en-US')}).`);
           return;
         }
       }

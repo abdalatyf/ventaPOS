@@ -28,6 +28,7 @@ export default function PurchasesReport() {
 
   // Filters - ONLY PurchasesReport has supplier filter
   const [selectedSupplier, setSelectedSupplier] = useState('');
+  const [selectedSupplierName, setSelectedSupplierName] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedProductName, setSelectedProductName] = useState('');
   const [invoiceType, setInvoiceType] = useState('ALL');
@@ -90,6 +91,7 @@ export default function PurchasesReport() {
 
   const handleResetFilters = () => {
     setSelectedSupplier('');
+    setSelectedSupplierName('');
     setSelectedProductId('');
     setSelectedProductName('');
     setInvoiceType('ALL');
@@ -106,7 +108,7 @@ export default function PurchasesReport() {
         period_label: year && month ? `${year}/${String(month).padStart(2, '0')}` : undefined,
         action: 'view',
         filters_summary: [
-          selectedSupplier ? { label: 'المورد', value: suppliers.find(s => s.id === Number(selectedSupplier))?.name || selectedSupplier } : null,
+          selectedSupplier ? { label: 'المورد', value: selectedSupplierName || suppliers.find(s => s.id === Number(selectedSupplier))?.name || selectedSupplier } : null,
           selectedProductName ? { label: 'الصنف', value: selectedProductName } : null,
           invoiceType !== 'ALL' ? { label: 'نوع الفاتورة', value: invoiceType === 'PURCHASE' ? 'شراء' : 'مرتجع' } : null,
         ].filter(Boolean),
@@ -159,20 +161,35 @@ export default function PurchasesReport() {
 
   const subFiltersRow1 = () => (
     <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
-      {/* Supplier Dropdown - ONLY PurchasesReport has supplier filter */}
-      <div style={{ width: '220px' }} className="flex-shrink-0">
-        <div className="input-group input-group-sm">
+      {/* Supplier Autocomplete - searchable for large supplier lists */}
+      <div style={{ width: '240px' }} className="flex-shrink-0">
+        <div className="input-group input-group-sm flex-nowrap">
           <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">المورد</span>
-          <select
-            className="form-select form-select-sm border-secondary-subtle fw-bold"
-            value={selectedSupplier}
-            onChange={(e) => setSelectedSupplier(e.target.value)}
-          >
-            <option value="">جميع الموردين</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
+          <ReportAutocomplete
+            value={selectedSupplierName}
+            onChange={(val) => {
+              setSelectedSupplierName(val);
+              if (!val) setSelectedSupplier('');
+            }}
+            onSelect={(sup) => {
+              setSelectedSupplierName(sup?.name || '');
+              setSelectedSupplier(sup?.id ? String(sup.id) : '');
+            }}
+            fetchSuggestions={async (query) => {
+              try {
+                const res = await api.get('/suppliers/', {
+                  params: { branch_id: branchId, search: query, limit: 15 }
+                });
+                const list = res.data?.results || res.data;
+                if (Array.isArray(list) && list.length > 0) return list;
+                return suppliers.filter(s => s.name && s.name.toLowerCase().includes(String(query || '').toLowerCase()));
+              } catch {
+                return suppliers.filter(s => s.name && s.name.toLowerCase().includes(String(query || '').toLowerCase()));
+              }
+            }}
+            placeholder="جميع الموردين..."
+            className="form-control fw-bold border-secondary-subtle px-1"
+          />
         </div>
       </div>
 

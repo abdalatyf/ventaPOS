@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { IconBuildingStore, IconDeviceFloppy, IconReceiptTax } from '@tabler/icons-react';
 import api from '../../../api';
 
@@ -16,6 +17,7 @@ export default function CompanyTab({ isFirstSetup = false, onSetupComplete = nul
   const [settingId, setSettingId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
+  const [statusAlert, setStatusAlert] = useState(null);
 
   useEffect(() => {
     const fetchCompanySettings = async () => {
@@ -42,6 +44,7 @@ export default function CompanyTab({ isFirstSetup = false, onSetupComplete = nul
         }
       } catch (error) {
         console.error("Failed to fetch company settings or license", error);
+        toast.error('تعذر تحميل إعدادات الشركة');
       }
     };
     fetchCompanySettings();
@@ -54,6 +57,7 @@ export default function CompanyTab({ isFirstSetup = false, onSetupComplete = nul
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
+    setStatusAlert(null);
     
     const payload = {
       name: formData.name,
@@ -73,14 +77,17 @@ export default function CompanyTab({ isFirstSetup = false, onSetupComplete = nul
         setSettingId(response.data.id);
       }
       localStorage.setItem('company_name', formData.name);
-      alert('تم حفظ بيانات الشركة بنجاح');
-    } catch (error) {
-      alert('حدث خطأ أثناء حفظ البيانات');
-    } finally {
-      setIsLoading(false);
+      setStatusAlert({ type: 'success', text: 'تم حفظ بيانات الشركة بنجاح' });
+      toast.success('تم حفظ بيانات الشركة بنجاح');
       if (onSetupComplete) {
         onSetupComplete();
       }
+    } catch (error) {
+      const errMsg = error.response?.data?.error || 'حدث خطأ أثناء حفظ البيانات';
+      setStatusAlert({ type: 'danger', text: errMsg });
+      toast.error(errMsg);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -88,6 +95,11 @@ export default function CompanyTab({ isFirstSetup = false, onSetupComplete = nul
 
   return (
     <div className="animate__animated animate__fadeIn">
+      {statusAlert && (
+        <div className={`alert alert-${statusAlert.type} border-${statusAlert.type} shadow-sm mb-3 fw-bold`}>
+          {statusAlert.text}
+        </div>
+      )}
       {isDemoMode && (
         <div className="alert alert-warning border-warning shadow-sm mb-4 fw-bold text-dark">
           ⚠️ تخصيص بيانات الإيصال واسم الشركة متاح فقط في النسخة المفعلة، بادر بالاشتراك الآن!

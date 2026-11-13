@@ -183,17 +183,29 @@ const AppAutocomplete = forwardRef(function AppAutocomplete({
       e.preventDefault();
       if (!isOpen) {
         if (fetchSuggestions) {
-          if (String(value).trim()) {
+          if (String(localValue).trim()) {
             setIsLoading(true);
-            fetchSuggestions(value).then((res) => {
-              setSuggestions(Array.isArray(res) ? res : []);
-              setIsOpen(true);
-              setIsLoading(false);
-            });
+            fetchSuggestions(localValue)
+              .then((res) => {
+                const arr = Array.isArray(res) ? res : [];
+                setSuggestions(arr);
+                setIsOpen(true);
+                setActiveIndex(arr.length > 0 ? 0 : -1);
+                setIsLoading(false);
+              })
+              .catch((err) => {
+                console.error('AppAutocomplete error fetching suggestions:', err);
+                setSuggestions([]);
+                setIsOpen(false);
+                setActiveIndex(-1);
+                setIsLoading(false);
+              });
           }
         } else {
-          setSuggestions(filterStaticItems(value, items));
+          const filtered = filterStaticItems(localValue, items);
+          setSuggestions(filtered);
           setIsOpen(true);
+          setActiveIndex(filtered.length > 0 ? 0 : -1);
         }
         return;
       }
@@ -239,7 +251,7 @@ const AppAutocomplete = forwardRef(function AppAutocomplete({
       e.target.select();
     }
     if (!fetchSuggestions) {
-      const filtered = filterStaticItems(value, items);
+      const filtered = filterStaticItems(localValue, items);
       setSuggestions(filtered);
       if (filtered.length > 0) {
         setIsOpen(true);
