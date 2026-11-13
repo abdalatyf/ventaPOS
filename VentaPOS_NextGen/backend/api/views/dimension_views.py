@@ -22,7 +22,7 @@ from api.serializers import (
     SupplierSerializer,
     CompanySettingSerializer,
 )
-from .base import SoftDeleteModelViewSet, get_request_branch_id
+from .base import SoftDeleteModelViewSet, get_request_branch_id, apply_optional_limit
 
 
 class BranchViewSet(SoftDeleteModelViewSet):
@@ -78,6 +78,15 @@ class SupplierViewSet(SoftDeleteModelViewSet):
         if search:
             qs = qs.filter(name__icontains=search.strip())
         return qs
+
+    def list(self, request, *args, **kwargs):
+        queryset = apply_optional_limit(self.filter_queryset(self.get_queryset()), request)
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
     def perform_create(self, serializer):
         branch_id = get_request_branch_id(self.request)

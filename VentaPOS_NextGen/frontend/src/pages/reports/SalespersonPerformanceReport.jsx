@@ -121,7 +121,7 @@ export default function SalespersonPerformanceReport() {
             className="text-decoration-none badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 fs-5 fw-bold"
             title="عرض فواتير المندوب"
           >
-            {row.receipts_count}
+            {fmtNum(row.receipts_count || 0)}
           </Link>
         );
       }

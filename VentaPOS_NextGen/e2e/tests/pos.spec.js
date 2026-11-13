@@ -144,10 +144,10 @@ test.describe('POS Page - Core Features & Cart E2E Tests', () => {
     const prodInput = page.locator('.row.mb-4 input[type="text"]').first();
     await prodInput.fill('باركية خشب فاخر');
 
-    const qtyInput = page.locator('.row.mb-4 input[type="number"]').first();
+    const qtyInput = page.locator('.row.mb-4 input[inputmode="numeric"]').first();
     await qtyInput.fill('2');
 
-    const priceInput = page.locator('.row.mb-4 input[type="number"]').nth(1);
+    const priceInput = page.locator('.row.mb-4 input[inputmode="numeric"]').nth(1);
     await priceInput.fill('500');
 
     const addBtn = page.locator('.row.mb-4 button', { hasText: '+' });
@@ -176,10 +176,10 @@ test.describe('POS Page - Core Features & Cart E2E Tests', () => {
     const prodInput = page.locator('.row.mb-4 input[type="text"]').first();
     await prodInput.fill('باركية خشب فاخر');
 
-    const qtyInput = page.locator('.row.mb-4 input[type="number"]').first();
+    const qtyInput = page.locator('.row.mb-4 input[inputmode="numeric"]').first();
     await qtyInput.fill('1');
 
-    const priceInput = page.locator('.row.mb-4 input[type="number"]').nth(1);
+    const priceInput = page.locator('.row.mb-4 input[inputmode="numeric"]').nth(1);
     await priceInput.fill('1500');
 
     await page.locator('.row.mb-4 button', { hasText: '+' }).click();

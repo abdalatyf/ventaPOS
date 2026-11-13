@@ -232,16 +232,16 @@ export default function Navbar() {
           <span className="navbar-toggler-icon"></span>
         </button>
         
-        <h1 className="navbar-brand navbar-brand-autodark d-none-navbar-horizontal pe-0 pe-md-3">
+        <h1 className="navbar-brand navbar-brand-autodark d-none-navbar-horizontal pe-0 pe-md-2 me-1">
           <Link to="/">
             <img src={logo} alt="VentaPOS" className="navbar-brand-image" style={{ height: '2.5rem' }} />
           </Link>
         </h1>
         
-        <div className="navbar-nav flex-row order-md-last align-items-center">
+        <div className="navbar-nav flex-row order-md-last align-items-center flex-shrink-0">
           <button 
             type="button" 
-            className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1 me-2"
+            className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1 me-1 px-2"
             onClick={() => setShowManualModal(true)}
             title="دليل تشغيل البرنامج (دليل التاجر والمدير)"
           >
@@ -249,10 +249,10 @@ export default function Navbar() {
             <span className="d-none d-sm-inline fw-bold">دليل المستخدم</span>
           </button>
 
-          <div className="btn-group btn-group-sm me-3 bg-light rounded border align-items-center" role="group" aria-label="Zoom Controls">
+          <div className="btn-group btn-group-sm me-2 bg-light rounded border align-items-center" role="group" aria-label="Zoom Controls">
             <button 
               type="button"
-              className="btn btn-sm btn-link text-dark text-decoration-none px-2 py-1" 
+              className="btn btn-sm btn-link text-dark text-decoration-none px-1 py-1" 
               onClick={() => window.zoomOut()} 
               title="تصغير (Ctrl + -)"
               disabled={zoomLevel <= 0.70}
@@ -261,16 +261,16 @@ export default function Navbar() {
             </button>
             <span 
               role="button"
-              className="badge bg-white text-dark border px-2 py-1 mx-1 fw-bold cursor-pointer"
+              className="badge bg-white text-dark border px-1 py-1 mx-1 fw-bold cursor-pointer"
               onClick={() => window.resetZoom()}
               title="إعادة التعيين إلى 100% (Ctrl + 0)"
-              style={{ minWidth: '46px', textAlign: 'center', userSelect: 'none' }}
+              style={{ minWidth: '42px', textAlign: 'center', userSelect: 'none' }}
             >
               {Math.round(zoomLevel * 100)}%
             </span>
             <button 
               type="button"
-              className="btn btn-sm btn-link text-dark text-decoration-none px-2 py-1" 
+              className="btn btn-sm btn-link text-dark text-decoration-none px-1 py-1" 
               onClick={() => window.zoomIn()} 
               title="تكبير (Ctrl + +)"
               disabled={zoomLevel >= 1.50}
@@ -283,7 +283,7 @@ export default function Navbar() {
             <a href="#" className="nav-link d-flex lh-1 text-reset p-0" onClick={(e) => toggleDropdown('user', e)}>
               <span className="avatar avatar-sm bg-primary-lt"><IconBuildingStore size={18} /></span>
               <div className="d-none d-xl-block ps-2">
-                <div>{branchName}</div>
+                <div className="text-truncate" style={{ maxWidth: '95px' }}>{branchName}</div>
               </div>
             </a>
             <div className={`dropdown-menu dropdown-menu-end dropdown-menu-arrow ${openDropdown === 'user' ? 'show' : ''}`} data-bs-popper={openDropdown === 'user' ? 'static' : undefined}>

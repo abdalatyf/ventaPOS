@@ -162,3 +162,44 @@ class AutocompleteAndParityTests(TestCase):
         receipt = serializer.save()
         installment = receipt.payments.first()
         self.assertEqual(installment.payment_date.day, 25)
+
+    def test_inventory_and_supplier_search_limit(self):
+        from api.models import Supplier
+
+        for idx in range(1, 16):
+            InventoryItem.objects.create(
+                branch=self.branch,
+                name=f"منتج اختباري {idx:03d}",
+                initial_quantity=5,
+                initial_purchase_price=100,
+                initial_commission_amount=10,
+                initial_month=1,
+                initial_year=2026,
+            )
+            Supplier.objects.create(
+                branch=self.branch,
+                name=f"مورد اختباري {idx:03d}",
+            )
+
+        # Unfiltered preserves all records
+        inv_all = self.client.get("/api/v1/inventory-items/", {"branch_id": str(self.branch.id)})
+        self.assertEqual(inv_all.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(inv_all.data), 15)
+
+        # Search + limit filters and slices InventoryItemViewSet
+        inv_filtered = self.client.get(
+            "/api/v1/inventory-items/",
+            {"branch_id": str(self.branch.id), "search": "01", "limit": "3"},
+        )
+        self.assertEqual(inv_filtered.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(inv_filtered.data), 3)
+        self.assertTrue(all("01" in row["name"] for row in inv_filtered.data))
+
+        # Limit slices SupplierViewSet
+        sup_limited = self.client.get(
+            "/api/v1/suppliers/",
+            {"branch_id": str(self.branch.id), "search": "مورد", "limit": "4"},
+        )
+        self.assertEqual(sup_limited.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(sup_limited.data), 4)
+

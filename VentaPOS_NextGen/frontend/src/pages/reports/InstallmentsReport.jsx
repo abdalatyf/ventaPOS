@@ -231,7 +231,7 @@ export default function InstallmentsReport() {
     },
     { 
       label: 'عدد الأقساط', 
-      value: data.installments_count || (data.installments || []).length, 
+      value: fmtNum(data.installments_count || (data.installments || []).length), 
       color: 'dark', 
       icon: IconReceipt 
     },

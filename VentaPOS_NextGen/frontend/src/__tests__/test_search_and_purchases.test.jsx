@@ -107,16 +107,16 @@ describe('Search & Purchases Suite (3-Tier Selection & CRUD)', () => {
       </BrowserRouter>
     );
 
-    // 1. Initial Load: Should show 3000 results and 3000 selected by default
+    // 1. Initial Load: Should show 3,000 results and 3,000 selected by default
     await waitFor(() => {
-      expect(screen.getByText(/نتائج البحث: 3000 فاتورة/i)).toBeInTheDocument();
-      expect(screen.getByText(/محدد 3000/i)).toBeInTheDocument();
+      expect(screen.getByText(/نتائج البحث: 3,000 فاتورة/i)).toBeInTheDocument();
+      expect(screen.getByText(/محدد 3,000/i)).toBeInTheDocument();
     });
 
-    // Check banner: "تم تحديد كافة الـ 3000 فاتورة المطابقة للبحث"
-    expect(screen.getByText(/تم تحديد كافة الـ 3000 فاتورة المطابقة للبحث/i)).toBeInTheDocument();
+    // Check banner: "تم تحديد كافة الـ 3,000 فاتورة المطابقة للبحث"
+    expect(screen.getByText(/تم تحديد كافة الـ 3,000 فاتورة المطابقة للبحث/i)).toBeInTheDocument();
 
-    // 2. Click the header checkbox to clear all selection (3000 -> 0)
+    // 2. Click the header checkbox to clear all selection (3,000 -> 0)
     const thead = document.querySelector('thead');
     const headerCheckbox = thead.querySelector('input[type="checkbox"]');
     expect(headerCheckbox).toBeInTheDocument();
@@ -126,7 +126,7 @@ describe('Search & Purchases Suite (3-Tier Selection & CRUD)', () => {
 
     // Now selected should be 0
     await waitFor(() => {
-      expect(screen.queryByText(/محدد 3000/i)).toBeNull();
+      expect(screen.queryByText(/محدد 3,000/i)).toBeNull();
       expect(screen.queryByText(/محدد/i)).toBeNull();
     });
 
@@ -138,16 +138,16 @@ describe('Search & Purchases Suite (3-Tier Selection & CRUD)', () => {
       expect(screen.getByText(/محدد 197/i)).toBeInTheDocument();
     });
 
-    // Banner should now invite selecting all 3000
-    const selectAllBannerBtn = screen.getByText(/تحديد كافة الـ 3000 فاتورة المطابقة للبحث/i);
+    // Banner should now invite selecting all 3,000
+    const selectAllBannerBtn = screen.getByText(/تحديد كافة الـ 3,000 فاتورة المطابقة للبحث/i);
     expect(selectAllBannerBtn).toBeInTheDocument();
 
-    // 4. Click the banner button to re-select all 3000
+    // 4. Click the banner button to re-select all 3,000
     fireEvent.click(selectAllBannerBtn);
 
     await waitFor(() => {
-      expect(screen.getByText(/محدد 3000/i)).toBeInTheDocument();
-      expect(screen.getByText(/تم تحديد كافة الـ 3000 فاتورة المطابقة للبحث/i)).toBeInTheDocument();
+      expect(screen.getByText(/محدد 3,000/i)).toBeInTheDocument();
+      expect(screen.getByText(/تم تحديد كافة الـ 3,000 فاتورة المطابقة للبحث/i)).toBeInTheDocument();
     });
   });
 

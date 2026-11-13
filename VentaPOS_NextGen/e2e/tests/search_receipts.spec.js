@@ -157,7 +157,7 @@ test.describe('Search Receipts & Filters E2E Tests', () => {
     const rows = page.locator('.table tbody tr');
     await expect(rows.first()).toBeVisible();
 
-    const deleteButton = page.locator('button', { hasText: 'حذف المحدد' });
+    const deleteButton = page.locator('button', { hasText: 'حذف محددة' });
     if (await deleteButton.count() > 0) {
       await deleteButton.click();
       

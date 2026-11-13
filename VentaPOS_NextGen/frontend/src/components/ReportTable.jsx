@@ -504,7 +504,7 @@ export default function ReportTable({
                     
                     return (
                       <tr 
-                        key={item[idField] || index}
+                        key={`${item?.[idField] ?? 'row'}-${index}`}
                         data-row-index={index}
                         className={isFocused ? 'table-row-focused' : ''}
                         onClick={() => setFocusedRowIndex(index)}
