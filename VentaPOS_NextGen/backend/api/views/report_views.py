@@ -91,7 +91,8 @@ class DashboardReportView(views.APIView):
                 pass
         area_query = request.query_params.get("area", "").strip()
 
-        active_lic = ClientLicense.objects.filter(is_active=True, is_deleted=False).exclude(machine_id="DEMO_MACHINE").order_by('-expiry_date').first()
+        from api.services.receipt_service import get_active_license
+        active_lic = get_active_license()
         is_pre_license_month = False
         if active_lic and active_lic.start_date:
             if (year < active_lic.start_date.year) or (year == active_lic.start_date.year and month < active_lic.start_date.month):
@@ -105,13 +106,15 @@ class DashboardReportView(views.APIView):
             sales_receipts = Receipt.objects.filter(
                 branch_id=branch_id,
                 sale_month=month, sale_year=year,
-                is_deleted=False
+                is_deleted=False,
+                is_confirmed=True
             ).exclude(receipt_type='RETURN')
 
             return_receipts = Receipt.objects.filter(
                 branch_id=branch_id,
                 receipt_type='RETURN',
-                is_deleted=False
+                is_deleted=False,
+                is_confirmed=True
             ).filter(
                 Q(parent_receipt__sale_month=month, parent_receipt__sale_year=year) |
                 Q(parent_receipt__isnull=True, sale_month=month, sale_year=year)
@@ -120,7 +123,8 @@ class DashboardReportView(views.APIView):
         if salesperson_id:
             sales_receipts = sales_receipts.filter(salesperson_id=salesperson_id)
             return_receipts = return_receipts.filter(
-                Q(salesperson_id=salesperson_id) | Q(parent_receipt__salesperson_id=salesperson_id)
+                Q(parent_receipt__isnull=False, parent_receipt__salesperson_id=salesperson_id) |
+                Q(parent_receipt__isnull=True, salesperson_id=salesperson_id)
             )
         if area_query:
             sales_receipts = sales_receipts.filter(area__icontains=area_query)
@@ -138,17 +142,44 @@ class DashboardReportView(views.APIView):
         get_cached_comm = get_bulk_commission_resolver(branch_item_ids)
 
         # 3. COGS and Sales Commission (Card 1)
-        sale_items = SaleItem.objects.filter(
-            receipt__branch_id=branch_id,
-            receipt__sale_month=month, receipt__sale_year=year,
-            receipt__is_deleted=False,
-            is_deleted=False
-        ).exclude(receipt__receipt_type='RETURN').select_related('inventory_item', 'receipt')
+        if is_pre_license_month:
+            sale_items = SaleItem.objects.none()
+            return_sale_items = SaleItem.objects.none()
+        else:
+            sale_items = SaleItem.objects.filter(
+                receipt__branch_id=branch_id,
+                receipt__sale_month=month, receipt__sale_year=year,
+                receipt__is_deleted=False,
+                receipt__is_confirmed=True,
+                is_deleted=False
+            ).exclude(receipt__receipt_type='RETURN').select_related('inventory_item', 'receipt')
 
-        if salesperson_id:
-            sale_items = sale_items.filter(receipt__salesperson_id=salesperson_id)
-        if area_query:
-            sale_items = sale_items.filter(receipt__area__icontains=area_query)
+            if salesperson_id:
+                sale_items = sale_items.filter(receipt__salesperson_id=salesperson_id)
+            if area_query:
+                sale_items = sale_items.filter(receipt__area__icontains=area_query)
+
+            return_sale_items = SaleItem.objects.filter(
+                receipt__branch_id=branch_id,
+                receipt__receipt_type='RETURN',
+                receipt__is_deleted=False,
+                receipt__is_confirmed=True,
+                is_deleted=False
+            ).filter(
+                Q(receipt__parent_receipt__sale_month=month, receipt__parent_receipt__sale_year=year) |
+                Q(receipt__parent_receipt__isnull=True, receipt__sale_month=month, receipt__sale_year=year)
+            ).select_related('inventory_item', 'receipt', 'receipt__parent_receipt')
+
+            if salesperson_id:
+                return_sale_items = return_sale_items.filter(
+                    Q(receipt__parent_receipt__isnull=False, receipt__parent_receipt__salesperson_id=salesperson_id) |
+                    Q(receipt__parent_receipt__isnull=True, receipt__salesperson_id=salesperson_id)
+                )
+            if area_query:
+                return_sale_items = return_sale_items.filter(
+                    Q(receipt__area__icontains=area_query) |
+                    Q(receipt__parent_receipt__area__icontains=area_query)
+                )
 
         total_cogs = 0
         total_sales_comm_fixed = 0
@@ -158,27 +189,6 @@ class DashboardReportView(views.APIView):
             comm_unit = get_cached_comm(item.inventory_item, item.receipt.sale_month, item.receipt.sale_year)
             total_cogs += float(qty) * float(cost_unit)
             total_sales_comm_fixed += float(qty) * float(comm_unit)
-
-        return_sale_items = SaleItem.objects.filter(
-            receipt__branch_id=branch_id,
-            receipt__receipt_type='RETURN',
-            receipt__is_deleted=False,
-            is_deleted=False
-        ).filter(
-            Q(receipt__parent_receipt__sale_month=month, receipt__parent_receipt__sale_year=year) |
-            Q(receipt__parent_receipt__isnull=True, receipt__sale_month=month, receipt__sale_year=year)
-        ).select_related('inventory_item', 'receipt')
-
-        if salesperson_id:
-            return_sale_items = return_sale_items.filter(
-                Q(receipt__salesperson_id=salesperson_id) |
-                Q(receipt__parent_receipt__salesperson_id=salesperson_id)
-            )
-        if area_query:
-            return_sale_items = return_sale_items.filter(
-                Q(receipt__area__icontains=area_query) |
-                Q(receipt__parent_receipt__area__icontains=area_query)
-            )
 
         for item in return_sale_items:
             qty = item.quantity
@@ -241,49 +251,53 @@ class DashboardReportView(views.APIView):
                     low_stock_count += 1
 
         # 10. Avg Basket Size
-        receipt_count = Receipt.objects.filter(
-            branch_id=branch_id,
-            sale_month=month, sale_year=year,
-            is_deleted=False
-        ).count()
+        receipt_count = sales_receipts.count()
         avg_basket_size = total_revenue // receipt_count if receipt_count > 0 else 0
 
         # 11. Top Products
-        top_products_qs = SaleItem.objects.filter(
-            receipt__branch_id=branch_id,
-            receipt__sale_month=month, receipt__sale_year=year,
-            receipt__is_deleted=False,
-            is_deleted=False
-        ).values('inventory_item__name').annotate(
-            qty=Sum('quantity')
-        ).order_by('-qty')[:5]
+        if is_pre_license_month:
+            top_products = []
+        else:
+            top_products_qs = SaleItem.objects.filter(
+                receipt__branch_id=branch_id,
+                receipt__sale_month=month, receipt__sale_year=year,
+                receipt__is_deleted=False,
+                receipt__is_confirmed=True,
+                is_deleted=False
+            ).exclude(receipt__receipt_type='RETURN').values('inventory_item__name').annotate(
+                qty=Sum('quantity')
+            ).order_by('-qty')[:5]
 
-        top_products = [
-            {
-                "product_name": p['inventory_item__name'],
-                "quantity_sold": int(p['qty'])
-            }
-            for p in top_products_qs
-        ]
+            top_products = [
+                {
+                    "product_name": p['inventory_item__name'],
+                    "quantity_sold": int(p['qty'])
+                }
+                for p in top_products_qs
+            ]
 
         # 12. Top Areas
-        top_areas_qs = Receipt.objects.filter(
-            branch_id=branch_id,
-            sale_month=month, sale_year=year,
-            is_deleted=False
-        ).values('area').annotate(
-            val=Sum('total_amount'),
-            count=Count('id')
-        ).order_by('-val')[:5]
+        if is_pre_license_month:
+            top_areas = []
+        else:
+            top_areas_qs = Receipt.objects.filter(
+                branch_id=branch_id,
+                sale_month=month, sale_year=year,
+                is_deleted=False,
+                is_confirmed=True
+            ).exclude(receipt_type='RETURN').values('area').annotate(
+                val=Sum('total_amount'),
+                count=Count('id')
+            ).order_by('-val')[:5]
 
-        top_areas = [
-            {
-                "area": a['area'] if a['area'] else "",
-                "sales_value": a['val'],
-                "invoice_count": a['count']
-            }
-            for a in top_areas_qs
-        ]
+            top_areas = [
+                {
+                    "area": a['area'] if a['area'] else "",
+                    "sales_value": a['val'],
+                    "invoice_count": a['count']
+                }
+                for a in top_areas_qs
+            ]
 
         return Response({
             "period": {"year": year, "month": month},
@@ -390,12 +404,19 @@ class InventoryMovementReportView(views.APIView):
                     receipt__sale_month=month, receipt__sale_year=year,
                     inventory_item_id__in=[item.id for item in items],
                     is_deleted=False,
-                    receipt__is_deleted=False
+                    receipt__is_deleted=False,
+                    receipt__is_confirmed=True
                 )
                 if salesperson_id:
-                    sp_sales_qs = sp_sales_qs.filter(receipt__salesperson_id=salesperson_id)
+                    sp_sales_qs = sp_sales_qs.filter(
+                        Q(receipt__parent_receipt__isnull=False, receipt__parent_receipt__salesperson_id=salesperson_id) |
+                        Q(receipt__parent_receipt__isnull=True, receipt__salesperson_id=salesperson_id)
+                    )
                 if area_query:
-                    sp_sales_qs = sp_sales_qs.filter(receipt__area__icontains=area_query)
+                    sp_sales_qs = sp_sales_qs.filter(
+                        Q(receipt__area__icontains=area_query) |
+                        Q(receipt__parent_receipt__area__icontains=area_query)
+                    )
                 sp_sales_qs = sp_sales_qs.values('inventory_item_id', 'receipt__receipt_type').annotate(s=Sum('quantity'))
                 for row in sp_sales_qs:
                     iid = row['inventory_item_id']
@@ -489,37 +510,50 @@ class ProfitAndLossReportView(views.APIView):
             except ValueError:
                 raise ValidationError({"salesperson_id": ["Invalid salesperson_id format."]})
 
-        sale_items_qs = SaleItem.objects.filter(
-            receipt__branch_id=branch_id,
-            receipt__sale_month=month, receipt__sale_year=year,
-            receipt__is_deleted=False,
-            is_deleted=False
-        ).exclude(receipt__receipt_type='RETURN')
-        if salesperson_id:
-            sale_items_qs = sale_items_qs.filter(receipt__salesperson_id=salesperson_id)
+        from api.services.receipt_service import get_active_license
+        active_lic = get_active_license()
+        is_pre_license_month = False
+        if active_lic and active_lic.start_date:
+            if (year < active_lic.start_date.year) or (year == active_lic.start_date.year and month < active_lic.start_date.month):
+                is_pre_license_month = True
 
-        return_items_qs = SaleItem.objects.filter(
-            receipt__branch_id=branch_id,
-            receipt__receipt_type='RETURN',
-            receipt__is_deleted=False,
-            is_deleted=False
-        ).filter(
-            Q(receipt__parent_receipt__sale_month=month, receipt__parent_receipt__sale_year=year) |
-            Q(receipt__parent_receipt__isnull=True, receipt__sale_month=month, receipt__sale_year=year)
-        )
-        if salesperson_id:
-            return_items_qs = return_items_qs.filter(
-                Q(receipt__salesperson_id=salesperson_id) |
-                Q(receipt__parent_receipt__salesperson_id=salesperson_id)
-            )
+        if is_pre_license_month:
+            sale_items_qs = SaleItem.objects.none()
+            return_items_qs = SaleItem.objects.none()
+        else:
+            sale_items_qs = SaleItem.objects.filter(
+                receipt__branch_id=branch_id,
+                receipt__sale_month=month, receipt__sale_year=year,
+                receipt__is_deleted=False,
+                receipt__is_confirmed=True,
+                is_deleted=False
+            ).exclude(receipt__receipt_type='RETURN')
+            if salesperson_id:
+                sale_items_qs = sale_items_qs.filter(receipt__salesperson_id=salesperson_id)
 
-        area_query = request.query_params.get("area", "").strip()
-        if area_query:
-            sale_items_qs = sale_items_qs.filter(receipt__area__icontains=area_query)
-            return_items_qs = return_items_qs.filter(
-                Q(receipt__area__icontains=area_query) |
-                Q(receipt__parent_receipt__area__icontains=area_query)
+            return_items_qs = SaleItem.objects.filter(
+                receipt__branch_id=branch_id,
+                receipt__receipt_type='RETURN',
+                receipt__is_deleted=False,
+                receipt__is_confirmed=True,
+                is_deleted=False
+            ).filter(
+                Q(receipt__parent_receipt__sale_month=month, receipt__parent_receipt__sale_year=year) |
+                Q(receipt__parent_receipt__isnull=True, receipt__sale_month=month, receipt__sale_year=year)
             )
+            if salesperson_id:
+                return_items_qs = return_items_qs.filter(
+                    Q(receipt__parent_receipt__isnull=False, receipt__parent_receipt__salesperson_id=salesperson_id) |
+                    Q(receipt__parent_receipt__isnull=True, receipt__salesperson_id=salesperson_id)
+                )
+
+            area_query = request.query_params.get("area", "").strip()
+            if area_query:
+                sale_items_qs = sale_items_qs.filter(receipt__area__icontains=area_query)
+                return_items_qs = return_items_qs.filter(
+                    Q(receipt__area__icontains=area_query) |
+                    Q(receipt__parent_receipt__area__icontains=area_query)
+                )
 
         cash_groups = {}
         installment_groups = {}
@@ -705,18 +739,29 @@ class CashDrawerReportView(views.APIView):
                 pass
         area_query = request.query_params.get("area", "").strip()
 
+        from api.services.receipt_service import get_active_license
+        active_lic = get_active_license()
+        is_pre_license_month = False
+        if active_lic and active_lic.start_date:
+            if (year < active_lic.start_date.year) or (year == active_lic.start_date.year and month < active_lic.start_date.month):
+                is_pre_license_month = True
+
         # 1. Cash Sales receipts
-        cash_receipts = Receipt.objects.filter(
-            branch_id=branch_id,
-            sale_month=month, sale_year=year,
-            is_cash_sale=True,
-            is_deleted=False
-        )
-        if salesperson_id:
-            cash_receipts = cash_receipts.filter(salesperson_id=salesperson_id)
-        if area_query:
-            cash_receipts = cash_receipts.filter(area__icontains=area_query)
-        cash_receipts = cash_receipts.order_by('created_at')
+        if is_pre_license_month:
+            cash_receipts = Receipt.objects.none()
+        else:
+            cash_receipts = Receipt.objects.filter(
+                branch_id=branch_id,
+                sale_month=month, sale_year=year,
+                is_cash_sale=True,
+                is_deleted=False,
+                is_confirmed=True
+            ).exclude(receipt_type='RETURN')
+            if salesperson_id:
+                cash_receipts = cash_receipts.filter(salesperson_id=salesperson_id)
+            if area_query:
+                cash_receipts = cash_receipts.filter(area__icontains=area_query)
+            cash_receipts = cash_receipts.order_by('created_at')
 
         cash_sales_list = [
             {
@@ -730,18 +775,22 @@ class CashDrawerReportView(views.APIView):
         ]
 
         # 2. Down payments
-        down_payment_receipts = Receipt.objects.filter(
-            branch_id=branch_id,
-            sale_month=month, sale_year=year,
-            is_cash_sale=False,
-            down_payment__gt=0,
-            is_deleted=False
-        )
-        if salesperson_id:
-            down_payment_receipts = down_payment_receipts.filter(salesperson_id=salesperson_id)
-        if area_query:
-            down_payment_receipts = down_payment_receipts.filter(area__icontains=area_query)
-        down_payment_receipts = down_payment_receipts.order_by('created_at')
+        if is_pre_license_month:
+            down_payment_receipts = Receipt.objects.none()
+        else:
+            down_payment_receipts = Receipt.objects.filter(
+                branch_id=branch_id,
+                sale_month=month, sale_year=year,
+                is_cash_sale=False,
+                down_payment__gt=0,
+                is_deleted=False,
+                is_confirmed=True
+            ).exclude(receipt_type='RETURN')
+            if salesperson_id:
+                down_payment_receipts = down_payment_receipts.filter(salesperson_id=salesperson_id)
+            if area_query:
+                down_payment_receipts = down_payment_receipts.filter(area__icontains=area_query)
+            down_payment_receipts = down_payment_receipts.order_by('created_at')
 
         down_payments_list = [
             {
@@ -1122,17 +1171,34 @@ class AreasReportView(views.APIView):
             except ValueError:
                 pass
 
-        receipts_qs = Receipt.objects.filter(
-            branch_id=branch_id,
-            sale_month=month,
-            sale_year=year,
-            is_deleted=False
-        ).select_related("salesperson")
+        from api.services.receipt_service import get_active_license
+        active_lic = get_active_license()
+        is_pre_license_month = False
+        if active_lic and active_lic.start_date:
+            if (year < active_lic.start_date.year) or (year == active_lic.start_date.year and month < active_lic.start_date.month):
+                is_pre_license_month = True
 
-        if salesperson_id:
-            receipts_qs = receipts_qs.filter(salesperson_id=salesperson_id)
-        if area_query:
-            receipts_qs = receipts_qs.filter(area__icontains=area_query)
+        if is_pre_license_month:
+            receipts_qs = Receipt.objects.none()
+        else:
+            receipts_qs = Receipt.objects.filter(
+                branch_id=branch_id,
+                sale_month=month,
+                sale_year=year,
+                is_deleted=False,
+                is_confirmed=True
+            ).select_related("salesperson", "parent_receipt")
+
+            if salesperson_id:
+                receipts_qs = receipts_qs.filter(
+                    Q(parent_receipt__isnull=False, parent_receipt__salesperson_id=salesperson_id) |
+                    Q(parent_receipt__isnull=True, salesperson_id=salesperson_id)
+                )
+            if area_query:
+                receipts_qs = receipts_qs.filter(
+                    Q(area__icontains=area_query) |
+                    Q(parent_receipt__area__icontains=area_query)
+                )
 
         # Monthly due installments in the given month/year
         import calendar
@@ -1144,6 +1210,7 @@ class AreasReportView(views.APIView):
         due_payments_qs = InstallmentPayment.objects.filter(
             receipt__branch_id=branch_id,
             receipt__is_deleted=False,
+            receipt__is_confirmed=True,
             is_deleted=False,
             payment_date__range=(start_date, end_date)
         ).select_related("receipt")
@@ -1160,7 +1227,8 @@ class AreasReportView(views.APIView):
 
         area_data = {}
         for r in receipts_qs:
-            a_name = (r.area or "").strip() or "غير محدد"
+            raw_area = r.area or (r.parent_receipt.area if r.parent_receipt else "") or ""
+            a_name = raw_area.strip() or "غير محدد"
             if a_name not in area_data:
                 area_data[a_name] = {
                     "area": a_name,
@@ -1174,7 +1242,6 @@ class AreasReportView(views.APIView):
                     "salespersons": set(),
                 }
 
-            area_data[a_name]["invoices_count"] += 1
             if r.salesperson:
                 area_data[a_name]["salespersons"].add(r.salesperson.name)
 
@@ -1185,6 +1252,7 @@ class AreasReportView(views.APIView):
                 area_data[a_name]["returns_count"] += 1
                 area_data[a_name]["returns_amount"] += amt
             else:
+                area_data[a_name]["invoices_count"] += 1
                 area_data[a_name]["gross_sales"] += amt
                 area_data[a_name]["down_payments"] += dp
                 if r.is_cash_sale:

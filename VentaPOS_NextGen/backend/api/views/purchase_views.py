@@ -84,7 +84,7 @@ class PurchaseInvoiceViewSet(SoftDeleteModelViewSet):
 
         with transaction.atomic():
             if instance.invoice_type == "PURCHASE":
-                curr_year, curr_month = get_default_date()
+                curr_year, curr_month = get_default_date(branch_id=instance.branch_id)
 
                 item_quantities = defaultdict(int)
                 item_objects = {}

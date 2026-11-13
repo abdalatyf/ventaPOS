@@ -39,7 +39,11 @@ class ReceiptPagination(PageNumberPagination):
 
     def get_paginated_response(self, data):
         qs = self.page.paginator.object_list
-        aggregates = qs.aggregate(
+        req_type = ""
+        if hasattr(self, "request") and self.request is not None:
+            req_type = str(self.request.query_params.get("receipt_type", "")).strip().upper()
+        agg_qs = qs if req_type == "RETURN" else qs.exclude(receipt_type="RETURN")
+        aggregates = agg_qs.aggregate(
             total_sales=Sum("total_amount"),
             total_cash=Sum("total_amount", filter=Q(is_cash_sale=True)),
             total_down_payments=Sum("down_payment", filter=Q(is_cash_sale=False)),
@@ -50,7 +54,7 @@ class ReceiptPagination(PageNumberPagination):
         total_down_payments = aggregates["total_down_payments"] or 0
         total_credit = aggregates["total_credit"] or 0
         all_ids = list(qs.values_list('id', flat=True))
-        all_installment_ids = list(qs.filter(is_cash_sale=False).values_list('id', flat=True))
+        all_installment_ids = list(qs.exclude(receipt_type="RETURN").filter(is_cash_sale=False).values_list('id', flat=True))
         return Response({
             "count": self.page.paginator.count,
             "next": self.get_next_link(),
@@ -83,7 +87,7 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
 
         with transaction.atomic():
             if instance.receipt_type == "RETURN":
-                curr_year, curr_month = get_default_date()
+                curr_year, curr_month = get_default_date(branch_id=instance.branch_id)
 
                 item_quantities = defaultdict(int)
                 item_objects = {}
@@ -123,9 +127,8 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
             return_receipts = [r for r in receipts_to_delete if r.receipt_type == "RETURN"]
 
             if return_receipts:
-                curr_year, curr_month = get_default_date()
-
                 for r in return_receipts:
+                    curr_year, curr_month = get_default_date(branch_id=r.branch_id)
                     item_quantities = defaultdict(int)
                     item_objects = {}
                     for s_item in r.sale_items.filter(is_deleted=False).select_related("inventory_item"):
@@ -384,6 +387,11 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
             if str(has_down_payment).strip().lower() == "true":
                 qs = qs.filter(is_cash_sale=False, down_payment__gt=0)
 
+        if receipt_type := params.get("receipt_type"):
+            rt_clean = str(receipt_type).strip().upper()
+            if rt_clean in ("SALE", "RETURN"):
+                qs = qs.filter(receipt_type=rt_clean)
+
         qs = qs.annotate(
             _has_returns=Exists(
                 Receipt.objects.filter(
@@ -399,7 +407,9 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
 
-        total_sum = queryset.aggregate(Sum('total_amount'))['total_amount__sum'] or 0.0
+        req_type = str(request.query_params.get("receipt_type", "")).strip().upper()
+        agg_qs = queryset if req_type == "RETURN" else queryset.exclude(receipt_type="RETURN")
+        total_sum = agg_qs.aggregate(Sum('total_amount'))['total_amount__sum'] or 0.0
 
         page = self.paginate_queryset(queryset)
         if page is not None:

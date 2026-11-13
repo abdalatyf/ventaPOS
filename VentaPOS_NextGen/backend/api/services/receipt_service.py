@@ -150,6 +150,8 @@ def process_return_receipt(original_receipt, data):
             salesperson=original_receipt.salesperson,
             customer_name=original_receipt.customer_name,
             phone_number=original_receipt.phone_number,
+            area=original_receipt.area,
+            address=original_receipt.address,
             receipt_type="RETURN",
             parent_receipt=original_receipt,
             total_amount=calculated_return_value,
@@ -339,9 +341,15 @@ def create_receipt(validated_data, items_data, installments_data):
         target_month = validated_data["sale_month"]
 
         if is_confirmed and validated_data.get("receipt_type") != "RETURN" and not is_pre_license:
+            req_by_item = {}
             for item_data in items_data:
                 item = item_data["inventory_item"]
-                qty = item_data["quantity"]
+                if item.id not in req_by_item:
+                    req_by_item[item.id] = {"item": item, "qty": 0}
+                req_by_item[item.id]["qty"] += item_data["quantity"]
+            for entry in req_by_item.values():
+                item = entry["item"]
+                qty = entry["qty"]
                 safe_limit = item.get_safe_available_qty(target_month, target_year, default_month, default_year)
                 if qty > safe_limit:
                     raise ValidationError({
@@ -395,6 +403,7 @@ def update_receipt(instance, validated_data, items_data, installments_data):
     Atomically updates a Receipt and its items/payments, validating safe stock and re-signing HMAC.
     """
     from api.models import SaleItem, InstallmentPayment
+    from api.services.purchase_service import validate_items_stock_integrity
     from api.utils.security_utils import generate_receipt_signature
     from api.views.base import get_default_date
     from rest_framework.exceptions import ValidationError
@@ -451,21 +460,31 @@ def update_receipt(instance, validated_data, items_data, installments_data):
             raise ValidationError({"error": "انتهت فترة الاشتراك."})
 
     with transaction.atomic():
+        old_items = list(instance.sale_items.filter(is_deleted=False).select_related("inventory_item"))
+        affected_items = {si.inventory_item for si in old_items}
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
+        branch = instance.branch
+        branch_id = branch.id if branch else None
+        default_year, default_month = get_default_date(branch_id=branch_id)
+
         if items_data is not None:
             instance.sale_items.all().update(is_deleted=True)
 
-            branch = instance.branch
-            branch_id = branch.id if branch else None
-            default_year, default_month = get_default_date(branch_id=branch_id)
-
-            if validated_data.get("receipt_type", instance.receipt_type) != "RETURN":
+            if validated_data.get("receipt_type", instance.receipt_type) != "RETURN" and not is_pre_license and instance.is_confirmed:
+                req_by_item = {}
                 for item_data in items_data:
                     item = item_data["inventory_item"]
-                    qty = item_data["quantity"]
+                    affected_items.add(item)
+                    if item.id not in req_by_item:
+                        req_by_item[item.id] = {"item": item, "qty": 0}
+                    req_by_item[item.id]["qty"] += item_data["quantity"]
+                for entry in req_by_item.values():
+                    item = entry["item"]
+                    qty = entry["qty"]
                     safe_limit = item.get_safe_available_qty(target_month, target_year, default_month, default_year)
                     if qty > safe_limit:
                         raise ValidationError({
@@ -473,9 +492,15 @@ def update_receipt(instance, validated_data, items_data, installments_data):
                         })
 
             for item_data in items_data:
+                affected_items.add(item_data["inventory_item"])
                 SaleItem.objects.create(receipt=instance, **item_data)
 
-        if installments_data is not None:
+        if instance.receipt_type != "RETURN" and not is_pre_license and instance.is_confirmed and affected_items:
+            validate_items_stock_integrity(affected_items, default_year=default_year, default_month=default_month)
+
+        if instance.is_cash_sale:
+            instance.payments.filter(is_deleted=False).update(is_deleted=True)
+        elif installments_data is not None:
             instance.payments.all().update(is_deleted=True)
             for inst_data in installments_data:
                 payment_month = inst_data.pop("payment_month", 1)
@@ -491,7 +516,7 @@ def update_receipt(instance, validated_data, items_data, installments_data):
                 "inventory_item_id", "quantity", "unit_price"
             ))
         )
-        if items_data is not None:
+        if items_data:
             instance.products_text = " + ".join([f"{i['inventory_item'].name}" if i['quantity'] == 1 else f"{i['quantity']} {i['inventory_item'].name}" for i in items_data])
 
         instance.receipt_hash = generate_receipt_signature(
@@ -502,7 +527,7 @@ def update_receipt(instance, validated_data, items_data, installments_data):
             current_items,
         )
         update_fields = ["receipt_hash"]
-        if items_data is not None:
+        if items_data:
             update_fields.append("products_text")
         instance.save(update_fields=update_fields)
 

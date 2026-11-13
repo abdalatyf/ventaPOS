@@ -43,11 +43,18 @@ def generate_record_signature(expiry_date, balance, machine_id, product_id, is_a
 # 2. دالة الختم السري للفواتير (لمنع الإضافة اليدوية)
 # ==========================================
 def generate_receipt_signature(receipt_number, total_amount, sale_month, sale_year, items_data=None):
+    from decimal import Decimal, InvalidOperation
     # نستخدم نفس المفتاح السري المبعثر
     SECRET_DB_KEY = LicenseValidator._get_key()
     
+    try:
+        d = Decimal(str(total_amount))
+        norm_total = str(int(d)) if d == d.to_integral_value() else f"{d.quantize(Decimal('0.01'))}"
+    except (InvalidOperation, ValueError, TypeError):
+        norm_total = str(total_amount)
+
     # دمج بيانات الفاتورة الأساسية
-    data_to_sign = f"RECEIPT-{receipt_number}-{total_amount}-{sale_month}-{sale_year}"
+    data_to_sign = f"RECEIPT-{receipt_number}-{norm_total}-{sale_month}-{sale_year}"
     
     if items_data:
         try:

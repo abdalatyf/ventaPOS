@@ -115,8 +115,15 @@ def validate_items_stock_integrity(items, default_year=None, default_month=None)
         running_stock = init_qty
 
         # Add any deltas prior to init date (if any)
-        for dt, d in deltas.items():
+        for dt, d in sorted(deltas.items()):
             if dt < (init_y, init_m):
+                if d < 0:
+                    raise ValidationError({
+                        "error": (
+                            f"عفواً، لا يمكن تعديل الفاتورة! تعديل الصنف '{item.name}' "
+                            f"يتسبب في رصيد سالب ({d}) في شهر {dt[1]}/{dt[0]}."
+                        )
+                    })
                 running_stock += d
 
         while (curr_y, curr_m) <= (end_y, end_m):
@@ -147,12 +154,18 @@ def create_purchase_invoice(validated_data, items_data):
     invoice_type = validated_data.get("invoice_type", "PURCHASE")
     target_year = validated_data.get("invoice_year")
     target_month = validated_data.get("invoice_month")
+    default_year, default_month = get_default_date(branch_id=branch.id if branch else None)
 
     if invoice_type == "RETURN" and items_data:
-        default_year, default_month = get_default_date(branch_id=branch.id if branch else None)
+        req_by_item = {}
         for item_data in items_data:
             item = item_data["inventory_item"]
-            qty = item_data["quantity"]
+            if item.id not in req_by_item:
+                req_by_item[item.id] = {"item": item, "qty": 0}
+            req_by_item[item.id]["qty"] += item_data["quantity"]
+        for entry in req_by_item.values():
+            item = entry["item"]
+            qty = entry["qty"]
             safe_limit = item.get_safe_available_qty(target_month, target_year, default_month, default_year)
             if qty > safe_limit:
                 raise ValidationError({
@@ -168,11 +181,15 @@ def create_purchase_invoice(validated_data, items_data):
 
     with transaction.atomic():
         invoice = PurchaseInvoice.objects.create(**validated_data)
+        affected_items = set()
         for item_data in items_data:
+            affected_items.add(item_data["inventory_item"])
             PurchaseInvoiceItem.objects.create(
                 invoice=invoice,
                 **item_data
             )
+        if invoice_type == "RETURN" and affected_items:
+            validate_items_stock_integrity(affected_items, default_year=default_year, default_month=default_month)
     return invoice
 
 
@@ -203,18 +220,25 @@ def update_purchase_invoice(instance, validated_data, items_data):
             target_month = validated_data.get("invoice_month", instance.invoice_month)
             invoice_type = validated_data.get("invoice_type", instance.invoice_type)
 
-            for item_data in items_data:
-                item = item_data["inventory_item"]
-                affected_items.add(item)
-                qty = item_data["quantity"]
-
-                if invoice_type == "RETURN":
+            if invoice_type == "RETURN":
+                req_by_item = {}
+                for item_data in items_data:
+                    item = item_data["inventory_item"]
+                    if item.id not in req_by_item:
+                        req_by_item[item.id] = {"item": item, "qty": 0}
+                    req_by_item[item.id]["qty"] += item_data["quantity"]
+                for entry in req_by_item.values():
+                    item = entry["item"]
+                    qty = entry["qty"]
                     safe_limit = item.get_safe_available_qty(target_month, target_year, default_month, default_year)
                     if qty > safe_limit:
                         raise ValidationError({
                             "error": f"عفواً، لا يمكن الإرجاع! أقصى كمية يمكن إرجاعها للمورد للصنف '{item.name}' هي ({safe_limit})."
                         })
 
+            for item_data in items_data:
+                item = item_data["inventory_item"]
+                affected_items.add(item)
                 PurchaseInvoiceItem.objects.create(
                     invoice=instance, **item_data
                 )

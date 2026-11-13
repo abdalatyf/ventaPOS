@@ -38,7 +38,7 @@ export const parseInstallmentTextToBoxes = (textVal) => {
       let v1 = parseInt(val1) || 0;
       let v2 = parseInt(val2) || 0;
       let amount, count;
-      if (v2 > 20) {
+      if (v2 > v1 && v1 <= 60) {
         amount = v2;
         count = v1;
       } else {

@@ -204,9 +204,9 @@ def calculate_bulk_stock_timeline(items, target_month=None, target_year=None, de
         current_stock = get_stock(default_month, default_year)
 
         # Bottleneck calculation:
-        # If (target_year, target_month) >= (default_year, default_month):
-        # safe_available_qty = stock_at_target, bottleneck = (target_month, target_year)
-        if (target_year, target_month) >= (default_year, default_month):
+        # Walk from (target_year, target_month) up to max((default_year, default_month), (end_y, end_m))
+        horizon_y, horizon_m = max((default_year, default_month), (end_y, end_m))
+        if (target_year, target_month) >= (horizon_y, horizon_m):
             safe_qty = stock_at_target
             b_month = target_month
             b_year = target_year
@@ -215,7 +215,7 @@ def calculate_bulk_stock_timeline(items, target_month=None, target_year=None, de
             b_month = target_month
             b_year = target_year
             curr_y, curr_m = target_year, target_month
-            while (curr_y, curr_m) <= (default_year, default_month):
+            while (curr_y, curr_m) <= (horizon_y, horizon_m):
                 stock = get_stock(curr_m, curr_y)
                 if min_stock is None or stock < min_stock:
                     min_stock = stock

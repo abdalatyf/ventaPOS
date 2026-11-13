@@ -76,69 +76,79 @@ def calculate_branch_salespersons_performance(branch_id, month, year, get_cached
         for sp in salespersons
     }
 
-    # 1. Non-return receipts bulk grouped
-    non_return_qs = Receipt.objects.filter(
-        branch_id=branch_id,
-        sale_month=month,
-        sale_year=year,
-        is_deleted=False,
-    ).exclude(receipt_type="RETURN")
+    from api.services.receipt_service import get_active_license
+    active_lic = get_active_license()
+    is_pre_license_month = False
+    if active_lic and active_lic.start_date:
+        if (year < active_lic.start_date.year) or (year == active_lic.start_date.year and month < active_lic.start_date.month):
+            is_pre_license_month = True
 
-    if salesperson_id:
-        non_return_qs = non_return_qs.filter(salesperson_id=salesperson_id)
-    if area:
-        non_return_qs = non_return_qs.filter(area__icontains=area)
+    if not is_pre_license_month:
+        # 1. Non-return receipts bulk grouped
+        non_return_qs = Receipt.objects.filter(
+            branch_id=branch_id,
+            sale_month=month,
+            sale_year=year,
+            is_deleted=False,
+            is_confirmed=True,
+        ).exclude(receipt_type="RETURN")
 
-    non_return_receipts = (
-        non_return_qs
-        .values("salesperson_id")
-        .annotate(
-            count=Count("id"),
-            cash_sales=Sum("total_amount", filter=Q(is_cash_sale=True)),
-            credit_sales=Sum("total_amount", filter=Q(is_cash_sale=False)),
-            down_payments=Sum("down_payment", filter=Q(is_cash_sale=False)),
+        if salesperson_id:
+            non_return_qs = non_return_qs.filter(salesperson_id=salesperson_id)
+        if area:
+            non_return_qs = non_return_qs.filter(area__icontains=area)
+
+        non_return_receipts = (
+            non_return_qs
+            .values("salesperson_id")
+            .annotate(
+                count=Count("id"),
+                cash_sales=Sum("total_amount", filter=Q(is_cash_sale=True)),
+                credit_sales=Sum("total_amount", filter=Q(is_cash_sale=False)),
+                down_payments=Sum("down_payment", filter=Q(is_cash_sale=False)),
+            )
         )
-    )
-    for row in non_return_receipts:
-        sid = row["salesperson_id"]
-        if sid in sp_data:
-            sp_data[sid]["receipts_count"] = row["count"] or 0
-            sp_data[sid]["cash_sales_raw"] = row["cash_sales"] or 0
-            sp_data[sid]["credit_sales_raw"] = row["credit_sales"] or 0
-            sp_data[sid]["down_payments"] = row["down_payments"] or 0
+        for row in non_return_receipts:
+            sid = row["salesperson_id"]
+            if sid in sp_data:
+                sp_data[sid]["receipts_count"] = row["count"] or 0
+                sp_data[sid]["cash_sales_raw"] = row["cash_sales"] or 0
+                sp_data[sid]["credit_sales_raw"] = row["credit_sales"] or 0
+                sp_data[sid]["down_payments"] = row["down_payments"] or 0
 
-    # 2. Return receipts bulk
-    return_qs = Receipt.objects.filter(
-        branch_id=branch_id,
-        receipt_type="RETURN",
-        is_deleted=False,
-    ).filter(
-        Q(parent_receipt__sale_month=month, parent_receipt__sale_year=year)
-        | Q(parent_receipt__isnull=True, sale_month=month, sale_year=year)
-    )
-    if salesperson_id:
-        return_qs = return_qs.filter(
-            Q(salesperson_id=salesperson_id) | Q(parent_receipt__salesperson_id=salesperson_id)
+        # 2. Return receipts bulk
+        return_qs = Receipt.objects.filter(
+            branch_id=branch_id,
+            receipt_type="RETURN",
+            is_deleted=False,
+            is_confirmed=True,
+        ).filter(
+            Q(parent_receipt__sale_month=month, parent_receipt__sale_year=year)
+            | Q(parent_receipt__isnull=True, sale_month=month, sale_year=year)
         )
-    if area:
-        return_qs = return_qs.filter(
-            Q(area__icontains=area) | Q(parent_receipt__area__icontains=area)
-        )
+        if salesperson_id:
+            return_qs = return_qs.filter(
+                Q(parent_receipt__isnull=False, parent_receipt__salesperson_id=salesperson_id)
+                | Q(parent_receipt__isnull=True, salesperson_id=salesperson_id)
+            )
+        if area:
+            return_qs = return_qs.filter(
+                Q(area__icontains=area) | Q(parent_receipt__area__icontains=area)
+            )
 
-    return_receipts = list(return_qs.select_related("parent_receipt"))
-    for ret in return_receipts:
-        affected_sp_ids = set()
-        if ret.salesperson_id and ret.salesperson_id in sp_data:
-            affected_sp_ids.add(ret.salesperson_id)
-        if ret.parent_receipt and ret.parent_receipt.salesperson_id and ret.parent_receipt.salesperson_id in sp_data:
-            affected_sp_ids.add(ret.parent_receipt.salesperson_id)
-
-        amt = ret.total_amount or 0
-        for sid in affected_sp_ids:
-            if ret.is_cash_sale:
-                sp_data[sid]["cash_returns"] += amt
-            else:
-                sp_data[sid]["credit_returns"] += amt
+        return_receipts = list(return_qs.select_related("parent_receipt"))
+        for ret in return_receipts:
+            target_sp_id = (
+                ret.parent_receipt.salesperson_id
+                if (ret.parent_receipt and ret.parent_receipt.salesperson_id)
+                else ret.salesperson_id
+            )
+            if target_sp_id and target_sp_id in sp_data:
+                amt = ret.total_amount or 0
+                if ret.is_cash_sale:
+                    sp_data[target_sp_id]["cash_returns"] += amt
+                else:
+                    sp_data[target_sp_id]["credit_returns"] += amt
 
     # 3. Installment collections with indexed date range
     _, last_day = calendar.monthrange(year, month)
@@ -168,70 +178,68 @@ def calculate_branch_salespersons_performance(branch_id, month, year, get_cached
         if sid in sp_data:
             sp_data[sid]["collected"] = row["total"] or 0
 
-    # 4. Sale items (Sales commission)
-    sale_items_qs = SaleItem.objects.filter(
-        receipt__branch_id=branch_id,
-        receipt__sale_month=month,
-        receipt__sale_year=year,
-        receipt__is_deleted=False,
-        is_deleted=False,
-    ).exclude(receipt__receipt_type="RETURN")
+    if not is_pre_license_month:
+        # 4. Sale items (Sales commission)
+        sale_items_qs = SaleItem.objects.filter(
+            receipt__branch_id=branch_id,
+            receipt__sale_month=month,
+            receipt__sale_year=year,
+            receipt__is_deleted=False,
+            receipt__is_confirmed=True,
+            is_deleted=False,
+        ).exclude(receipt__receipt_type="RETURN")
 
-    if salesperson_id:
-        sale_items_qs = sale_items_qs.filter(receipt__salesperson_id=salesperson_id)
-    if area:
-        sale_items_qs = sale_items_qs.filter(receipt__area__icontains=area)
+        if salesperson_id:
+            sale_items_qs = sale_items_qs.filter(receipt__salesperson_id=salesperson_id)
+        if area:
+            sale_items_qs = sale_items_qs.filter(receipt__area__icontains=area)
 
-    sale_items = sale_items_qs.select_related("inventory_item", "receipt")
-    for item in sale_items:
-        sid = item.receipt.salesperson_id
-        if sid in sp_data:
+        sale_items = sale_items_qs.select_related("inventory_item", "receipt")
+        for item in sale_items:
+            sid = item.receipt.salesperson_id
+            if sid in sp_data:
+                qty = item.quantity
+                comm_unit = get_cached_comm(item.inventory_item, item.receipt.sale_month, item.receipt.sale_year)
+                sp_data[sid]["comm_sales"] += float(qty) * float(comm_unit)
+
+        # 5. Return items (Commission deduction)
+        return_items_qs = SaleItem.objects.filter(
+            receipt__branch_id=branch_id,
+            receipt__receipt_type="RETURN",
+            receipt__is_deleted=False,
+            receipt__is_confirmed=True,
+            is_deleted=False,
+        ).filter(
+            Q(receipt__parent_receipt__sale_month=month, receipt__parent_receipt__sale_year=year)
+            | Q(receipt__parent_receipt__isnull=True, receipt__sale_month=month, receipt__sale_year=year)
+        )
+        if salesperson_id:
+            return_items_qs = return_items_qs.filter(
+                Q(receipt__parent_receipt__isnull=False, receipt__parent_receipt__salesperson_id=salesperson_id)
+                | Q(receipt__parent_receipt__isnull=True, receipt__salesperson_id=salesperson_id)
+            )
+        if area:
+            return_items_qs = return_items_qs.filter(
+                Q(receipt__area__icontains=area) | Q(receipt__parent_receipt__area__icontains=area)
+            )
+
+        return_items = return_items_qs.select_related("inventory_item", "receipt", "receipt__parent_receipt")
+        for item in return_items:
+            target_sp_id = (
+                item.receipt.parent_receipt.salesperson_id
+                if (item.receipt.parent_receipt and item.receipt.parent_receipt.salesperson_id)
+                else item.receipt.salesperson_id
+            )
+            if not target_sp_id or target_sp_id not in sp_data:
+                continue
+
             qty = item.quantity
-            comm_unit = get_cached_comm(item.inventory_item, item.receipt.sale_month, item.receipt.sale_year)
-            sp_data[sid]["comm_sales"] += float(qty) * float(comm_unit)
+            orig_m = item.receipt.parent_receipt.sale_month if item.receipt.parent_receipt else item.receipt.sale_month
+            orig_y = item.receipt.parent_receipt.sale_year if item.receipt.parent_receipt else item.receipt.sale_year
+            comm_unit = get_cached_comm(item.inventory_item, orig_m, orig_y)
+            item_comm_deduction = float(qty) * float(comm_unit)
 
-    # 5. Return items (Commission deduction)
-    return_items_qs = SaleItem.objects.filter(
-        receipt__branch_id=branch_id,
-        receipt__receipt_type="RETURN",
-        receipt__is_deleted=False,
-        is_deleted=False,
-    ).filter(
-        Q(receipt__parent_receipt__sale_month=month, receipt__parent_receipt__sale_year=year)
-        | Q(receipt__parent_receipt__isnull=True, receipt__sale_month=month, receipt__sale_year=year)
-    )
-    if salesperson_id:
-        return_items_qs = return_items_qs.filter(
-            Q(receipt__salesperson_id=salesperson_id) | Q(receipt__parent_receipt__salesperson_id=salesperson_id)
-        )
-    if area:
-        return_items_qs = return_items_qs.filter(
-            Q(receipt__area__icontains=area) | Q(receipt__parent_receipt__area__icontains=area)
-        )
-
-    return_items = return_items_qs.select_related("inventory_item", "receipt", "receipt__parent_receipt")
-    for item in return_items:
-        affected_sp_ids = set()
-        if item.receipt.salesperson_id and item.receipt.salesperson_id in sp_data:
-            affected_sp_ids.add(item.receipt.salesperson_id)
-        if (
-            item.receipt.parent_receipt
-            and item.receipt.parent_receipt.salesperson_id
-            and item.receipt.parent_receipt.salesperson_id in sp_data
-        ):
-            affected_sp_ids.add(item.receipt.parent_receipt.salesperson_id)
-
-        if not affected_sp_ids:
-            continue
-
-        qty = item.quantity
-        orig_m = item.receipt.parent_receipt.sale_month if item.receipt.parent_receipt else item.receipt.sale_month
-        orig_y = item.receipt.parent_receipt.sale_year if item.receipt.parent_receipt else item.receipt.sale_year
-        comm_unit = get_cached_comm(item.inventory_item, orig_m, orig_y)
-        item_comm_deduction = float(qty) * float(comm_unit)
-
-        for sid in affected_sp_ids:
-            sp_data[sid]["comm_sales"] -= item_comm_deduction
+            sp_data[target_sp_id]["comm_sales"] -= item_comm_deduction
 
     # 6. Aggregate results
     list_data = []

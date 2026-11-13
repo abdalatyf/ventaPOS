@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { vi } from 'vitest';
 import POS from '../pages/POS';
 import ReturnReceipt from '../pages/ReturnReceipt';
+import { parseInstallmentTextToBoxes, formatBoxesToInstallmentText } from '../components/pos/posUtils';
 
 vi.mock('../api', () => ({
   default: {
@@ -125,5 +126,19 @@ describe('POS & Returns Suite', () => {
       // 1 unit returned * 2500 price = 2,500
       expect(screen.getAllByText(/2,500/i).length).toBeGreaterThan(0);
     });
+  });
+
+  it('correctly parses and round-trips installment boxes with counts > 20 (e.g. 500*24 and 300*36)', () => {
+    const boxes24 = parseInstallmentTextToBoxes('500*24');
+    expect(boxes24[0]).toEqual({ count: 24, amount: 500 });
+    expect(formatBoxesToInstallmentText(boxes24)).toBe('500*24');
+
+    const boxes36 = parseInstallmentTextToBoxes('300*36+150*12');
+    expect(boxes36[0]).toEqual({ count: 36, amount: 300 });
+    expect(boxes36[1]).toEqual({ count: 12, amount: 150 });
+    expect(formatBoxesToInstallmentText(boxes36)).toBe('300*36+150*12');
+
+    const legacySwapped = parseInstallmentTextToBoxes('24*500');
+    expect(legacySwapped[0]).toEqual({ count: 24, amount: 500 });
   });
 });

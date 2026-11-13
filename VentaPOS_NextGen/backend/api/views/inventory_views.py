@@ -49,7 +49,10 @@ class InventoryItemViewSet(SoftDeleteModelViewSet):
         if items_to_process:
             from api.services.stock_service import calculate_bulk_stock_timeline
             now = timezone.now()
-            stock_map = calculate_bulk_stock_timeline(items_to_process, now.month, now.year, now.month, now.year)
+            first_branch = items_to_process[0].branch_id if items_to_process else None
+            def_year, def_month = get_default_date(branch_id=first_branch)
+            eff_year, eff_month = max((now.year, now.month), (def_year, def_month))
+            stock_map = calculate_bulk_stock_timeline(items_to_process, eff_month, eff_year, eff_month, eff_year)
             for item in items_to_process:
                 item_data = stock_map.get(item.id, {})
                 item._precomputed_stock = item_data.get('current_stock', 0)
@@ -329,12 +332,6 @@ class InventoryItemViewSet(SoftDeleteModelViewSet):
             elif ev_type == "COMMISSION_CHANGE":
                 pass
 
-            # Check if this is the last event of this month (month boundary)
-            is_month_end = (i == len(raw_events) - 1 or 
-                            (raw_events[i + 1]["year"], raw_events[i + 1]["month"]) != (ev["year"], ev["month"]))
-            if is_month_end:
-                running_stock = max(0, running_stock)
-
             ev["running_stock"] = max(0, running_stock)
             ev["is_price_change"] = is_price_change
             del ev["sort_key"]
@@ -356,9 +353,14 @@ class InventoryItemViewSet(SoftDeleteModelViewSet):
         }
 
         now = timezone.now()
-        current_stock = item.get_stock_at_date(now.month, now.year)
-        current_purchase_price = float(item.get_price_at_date(now.month, now.year))
-        current_commission = float(item.get_commission_at_date(now.month, now.year))
+        def_year, def_month = get_default_date(branch_id=item.branch_id)
+        eff_year, eff_month = max((now.year, now.month), (def_year, def_month))
+        if timeline:
+            last_ev_ym = max((ev["year"], ev["month"]) for ev in timeline)
+            eff_year, eff_month = max((eff_year, eff_month), last_ev_ym)
+        current_stock = item.get_stock_at_date(eff_month, eff_year)
+        current_purchase_price = float(item.get_price_at_date(eff_month, eff_year))
+        current_commission = float(item.get_commission_at_date(eff_month, eff_year))
 
         total_purchased_qty = sum(ev["quantity"] for ev in timeline if ev["type"] == "PURCHASE")
         total_sold_qty = sum(ev["quantity"] for ev in timeline if ev["type"] == "SALE")

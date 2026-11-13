@@ -105,8 +105,11 @@ class InventoryItemSerializer(serializers.ModelSerializer):
         if hasattr(obj, '_precomputed_stock'):
             return obj._precomputed_stock
         from django.utils import timezone
+        from api.views import get_default_date
         now = timezone.now()
-        return obj.get_stock_at_date(now.month, now.year)
+        def_year, def_month = get_default_date(branch_id=obj.branch_id)
+        eff_year, eff_month = max((now.year, now.month), (def_year, def_month))
+        return obj.get_stock_at_date(eff_month, eff_year)
 
 
 # ---------------------------------------------------------------------------
@@ -155,12 +158,12 @@ class InventoryAdjustmentSerializer(serializers.ModelSerializer):
     def validate(self, data):
         from api.views import get_default_date
         from rest_framework.exceptions import ValidationError
-        default_year, default_month = get_default_date()
         
         target_year = data.get("year", self.instance.year if self.instance else None)
         target_month = data.get("month", self.instance.month if self.instance else None)
         item = data.get("item", self.instance.item if self.instance else None)
         qty = data.get("quantity", self.instance.quantity if self.instance else None)
+        default_year, default_month = get_default_date(branch_id=item.branch_id if item else None)
         
         if item and target_month and target_year and qty:
             safe_limit = item.get_safe_available_qty(target_month, target_year, default_month, default_year)
