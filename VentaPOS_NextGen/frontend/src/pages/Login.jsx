@@ -24,50 +24,69 @@ export default function Login() {
   const [hasPassword, setHasPassword] = useState(true);
 
   useEffect(() => {
-    // Attempt Auto-Login for Demo Mode
-    api.post('/auth/demo/').then(demoRes => {
-      // Success means we are in Demo mode!
-      localStorage.setItem('token', demoRes.data.token);
-      localStorage.setItem('company_name', demoRes.data.company_name);
-      navigate('/select-branch', { replace: true });
-    }).catch(err => {
-      // If it fails, system is ACTIVATED. Check password & license status
-      api.get('/license/status/').then(async (licRes) => {
-        const lic = licRes.data || {};
-        if (lic.company_name) setCompanyName(lic.company_name);
-        if (lic.has_password === false) {
-          setHasPassword(false);
-          if (!lic.is_expired) {
-            try {
-              const autoLoginRes = await api.post('/auth/local/', { password: '' });
-              localStorage.setItem('token', autoLoginRes.data.token);
-              localStorage.setItem('company_name', autoLoginRes.data.company_name);
-              navigate('/select-branch', { replace: true });
-              return;
-            } catch (loginErr) {
-              // Fallback to manual form if auto login fails
-            }
-          }
-        }
-        setCheckingInit(false);
-      }).catch(() => {
-        setCheckingInit(false);
-      });
-
-      // Try to get the real company name for display when already authenticated
-      if (localStorage.getItem('token')) {
-        api.get('/company-settings/').then(res => {
-          if (res.data.name) setCompanyName(res.data.name);
-        }).catch(() => {
-          // Ignore 401s if token is expired
-        });
-      }
-    });
+    let isMounted = true;
 
     const searchParams = new URLSearchParams(location.search);
     if (searchParams.get('reason') === 'expired') {
       setError('انتهت جلسة الدخول أو الاشتراك، يرجى تسجيل الدخول مجدداً.');
     }
+
+    // Check license status first (200 AllowAny) so activated production launches do not trigger 403 /auth/demo/ console errors
+    api.get('/license/status/').then(async (licRes) => {
+      if (!isMounted) return;
+      const lic = licRes?.data || {};
+
+      if (lic.is_demo) {
+        try {
+          const demoRes = await api.post('/auth/demo/');
+          if (!isMounted) return;
+          localStorage.setItem('token', demoRes.data.token);
+          localStorage.setItem('company_name', demoRes.data.company_name);
+          navigate('/select-branch', { replace: true });
+          return;
+        } catch {
+          // Fall through to password form if demo login is disallowed
+        }
+      }
+
+      if (lic.company_name) setCompanyName(lic.company_name);
+      if (lic.has_password === false) {
+        setHasPassword(false);
+        if (!lic.is_expired) {
+          try {
+            const autoLoginRes = await api.post('/auth/local/', { password: '' });
+            if (!isMounted) return;
+            localStorage.setItem('token', autoLoginRes.data.token);
+            localStorage.setItem('company_name', autoLoginRes.data.company_name);
+            navigate('/select-branch', { replace: true });
+            return;
+          } catch {
+            // Fallback to manual form if auto login fails
+          }
+        }
+      }
+
+      // Only query protected company settings if an active token is already stored
+      if (localStorage.getItem('token')) {
+        api.get('/company-settings/').then(res => {
+          if (isMounted && res.data?.name) setCompanyName(res.data.name);
+        }).catch(() => {
+          // Ignore 401s if token is expired
+        });
+      }
+
+      if (isMounted) setCheckingInit(false);
+    }).catch((licErr) => {
+      if (!isMounted) return;
+      if (!licErr?.response) {
+        setError('تعذر الاتصال بخادم البرنامج. يرجى التأكد من تشغيل الخادم المحلي.');
+      }
+      setCheckingInit(false);
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, [navigate, location]);
 
   const handleSubmit = async (e) => {
@@ -161,6 +180,7 @@ export default function Login() {
                       placeholder={hasPassword ? "أدخل كلمة سر النظام" : "النظام بدون كلمة سر (اضغط دخول)"} 
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      autoFocus
                       required={hasPassword} 
                     />
                   </div>

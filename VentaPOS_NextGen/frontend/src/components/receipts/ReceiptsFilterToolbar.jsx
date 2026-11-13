@@ -15,11 +15,11 @@ export function ReceiptsFilterRow1({
         <div className="input-group input-group-sm">
           <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">شهر</span>
           <input 
-            type="number" 
-            className="form-control fw-bold border-secondary-subtle px-1 text-center" 
+            type="text"
+            inputMode="numeric"
+            dir="ltr"
+            className="form-control fw-bold border-secondary-subtle px-1 text-center hide-arrows" 
             name="month" 
-            min="1" 
-            max="12" 
             placeholder="الكل"
             value={filters.month} 
             onChange={handleFilterChange} 
@@ -32,8 +32,10 @@ export function ReceiptsFilterRow1({
         <div className="input-group input-group-sm">
           <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">سنة</span>
           <input 
-            type="number" 
-            className="form-control fw-bold border-secondary-subtle px-1 text-center" 
+            type="text"
+            inputMode="numeric"
+            dir="ltr"
+            className="form-control fw-bold border-secondary-subtle px-1 text-center hide-arrows" 
             name="year" 
             placeholder="الكل"
             value={filters.year} 
@@ -47,8 +49,10 @@ export function ReceiptsFilterRow1({
         <div className="input-group input-group-sm">
           <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">من رقم</span>
           <input 
-            type="number" 
-            className="form-control fw-bold border-secondary-subtle px-1 text-center" 
+            type="text"
+            inputMode="numeric"
+            dir="ltr"
+            className="form-control fw-bold border-secondary-subtle px-1 text-center hide-arrows" 
             name="receipt_from" 
             placeholder="الكل"
             value={filters.receipt_from} 
@@ -62,8 +66,10 @@ export function ReceiptsFilterRow1({
         <div className="input-group input-group-sm">
           <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">إلى رقم</span>
           <input 
-            type="number" 
-            className="form-control fw-bold border-secondary-subtle px-1 text-center" 
+            type="text"
+            inputMode="numeric"
+            dir="ltr"
+            className="form-control fw-bold border-secondary-subtle px-1 text-center hide-arrows" 
             name="receipt_to" 
             placeholder="الكل"
             value={filters.receipt_to} 

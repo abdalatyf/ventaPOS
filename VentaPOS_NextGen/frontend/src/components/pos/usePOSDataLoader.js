@@ -73,7 +73,11 @@ export default function usePOSDataLoader({
         setPhoneNumber(r.phone_number);
         setAddress(r.address);
         setArea(r.area);
-        setDownPayment(r.down_payment);
+        setDownPayment(
+          r.down_payment !== null && r.down_payment !== undefined && r.down_payment !== ''
+            ? Math.round(Number(r.down_payment))
+            : ''
+        );
         setInstallmentDesc(r.installment_system);
 
         if (r.installment_system) {
@@ -84,7 +88,7 @@ export default function usePOSDataLoader({
           setProductsText(r.products_text);
         }
         if (r.total_amount && setManualTotalAmount) {
-          setManualTotalAmount(String(r.total_amount));
+          setManualTotalAmount(String(Math.round(Number(r.total_amount))));
         }
 
         if (r.sale_items && r.sale_items.length > 0) {
@@ -95,7 +99,7 @@ export default function usePOSDataLoader({
               inventory_item: si.inventory_item,
               productName: matchingInv ? matchingInv.name : `صنف #${si.inventory_item}`,
               quantity: si.quantity,
-              sell_price: parseFloat(si.unit_price || si.sell_price || 0),
+              sell_price: Math.round(parseFloat(si.unit_price || si.sell_price || 0)),
             };
           }));
         }

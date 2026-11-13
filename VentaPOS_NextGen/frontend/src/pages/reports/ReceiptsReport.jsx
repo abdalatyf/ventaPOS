@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { IconFilter, IconReceipt, IconRefresh } from '@tabler/icons-react';
 import api from '../../api';
 import { ReportsContext } from './ReportsLayout';
@@ -121,6 +122,7 @@ export default function ReceiptsReport() {
       }
     } catch (error) {
       console.error('Error fetching receipts:', error);
+      toast.error('حدث خطأ أثناء تحميل تقرير الفواتير');
     } finally {
       setLoading(false);
     }
@@ -138,6 +140,7 @@ export default function ReceiptsReport() {
       }
     } catch (error) {
       console.error('Error loading more receipts:', error);
+      toast.error('تعذر تحميل المزيد من الفواتير');
     } finally {
       setLoadingMore(false);
     }
@@ -152,6 +155,7 @@ export default function ReceiptsReport() {
     });
   };
 
+  const tableContainerRef = useRef(null);
   const observer = useRef();
   const lastRowElementRef = useCallback(node => {
     if (loadingMore) return;
@@ -160,6 +164,9 @@ export default function ReceiptsReport() {
       if (entries[0].isIntersecting && hasMoreUrl) {
         loadMoreReceipts();
       }
+    }, {
+      root: tableContainerRef.current || null,
+      rootMargin: '100px'
     });
     if (node) observer.current.observe(node);
   }, [loadingMore, hasMoreUrl]);
@@ -176,7 +183,7 @@ export default function ReceiptsReport() {
 
   const summaryCards = [
     { label: 'التاريخ', value: formatMMYYYY(month, year), color: 'secondary' },
-    { label: 'عدد الفواتير', value: totalInvoicesCount, color: 'dark', icon: IconReceipt },
+    { label: 'عدد الفواتير', value: fmtNum(totalInvoicesCount), color: 'dark', icon: IconReceipt },
     { label: 'إجمالي الكاش', value: fmtNum(totalCashSum), color: 'success' },
     { label: 'إجمالي المقدمات', value: fmtNum(totalDownPaymentSum), color: 'info' },
     { label: 'إجمالي المبيعات', value: fmtNum(totalAmountSum), color: 'primary' }
@@ -416,6 +423,9 @@ export default function ReceiptsReport() {
   return (
     <div className="w-100 p-0">
       <ReportTable
+        reportTitle="تقرير فواتير المبيعات"
+        periodLabel={year && month ? formatMMYYYY(month, year) : undefined}
+        onContainerRef={(node) => { tableContainerRef.current = node; }}
         columns={columns}
         data={receipts}
         loading={loading && receipts.length === 0}

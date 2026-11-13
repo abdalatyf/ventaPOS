@@ -67,7 +67,7 @@ export default function POSInstallmentBox({
                   />
                   {sys.count && sys.amount && (
                     <div className="text-success small mt-1 fw-bold border-top pt-1" style={{ borderColor: '#adb5bd' }}>
-                      {fmt((parseInt(toEnglish(sys.count))||0)*(parseFloat(toEnglish(sys.amount))||0))}
+                      {fmt(Math.round((parseInt(toEnglish(sys.count), 10) || 0) * (Math.round(parseFloat(toEnglish(sys.amount))) || 0)))}
                     </div>
                   )}
                 </div>

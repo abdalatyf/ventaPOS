@@ -7,7 +7,7 @@ import Swal from 'sweetalert2';
 import useSmartScroll from '../hooks/useSmartScroll';
 import { useDefaultDate } from '../hooks/useDefaultDate';
 import { useActiveBranch } from '../hooks/useActiveBranch';
-import { parseWholeMoney, parseValidMonthYear } from '../utils/formatUtils';
+import { parseWholeMoney, parseValidMonthYear, formatMMYYYY, toEnglish } from '../utils/formatUtils';
 import StandardTablePageLayout from '../components/common/StandardTablePageLayout';
 
 const fmtNum = (val) => {
@@ -23,10 +23,19 @@ export default function Expenses() {
   const { defaultMonth, defaultYear, loading: defaultLoading } = useDefaultDate(branchId);
   const [searchParams] = useSearchParams();
   const descInputRef = useRef(null);
+  const categoryInputRef = useRef(null);
+  const amountInputRef = useRef(null);
   const submittingRef = useRef(false);
   const deletingRef = useRef(false);
   const fetchGenRef = useRef(0);
   const prevBranchIdRef = useRef(branchId);
+
+  const handleEnterNext = (e, nextRef) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      nextRef?.current?.focus();
+    }
+  };
 
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +47,12 @@ export default function Expenses() {
   const [category, setCategory] = useState('مصروفات عامة');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [editingId, setEditingId] = useState(null);
+
+  const availableCategories = React.useMemo(() => {
+    const list = Array.isArray(expenses) ? expenses : [];
+    const extra = list.map((e) => (e.category || '').trim()).filter(Boolean);
+    return Array.from(new Set([...CATEGORY_PRESETS, ...extra]));
+  }, [expenses]);
 
   // Sort and Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -263,21 +278,24 @@ export default function Expenses() {
               placeholder="البيان (اسم المصروف) *" 
               value={description} 
               onChange={(e) => setDescription(e.target.value)} 
+              onKeyDown={(e) => handleEnterNext(e, categoryInputRef)}
             />
           </div>
 
           {/* Category */}
           <div style={{ width: '150px' }} className="flex-shrink-0">
             <input 
+              ref={categoryInputRef}
               type="text" 
               className="form-control form-control-sm border-secondary-subtle fw-bold" 
               list="expenseCategoryOptions" 
               value={category} 
               onChange={(e) => setCategory(e.target.value)} 
+              onKeyDown={(e) => handleEnterNext(e, amountInputRef)}
               placeholder="التصنيف (افتراضي: عامة)"
             />
             <datalist id="expenseCategoryOptions">
-              {CATEGORY_PRESETS.map((cat) => (
+              {availableCategories.map((cat) => (
                 <option key={cat} value={cat} />
               ))}
             </datalist>
@@ -286,6 +304,7 @@ export default function Expenses() {
           {/* Amount */}
           <div style={{ width: '120px' }} className="flex-shrink-0">
             <input 
+              ref={amountInputRef}
               type="text"
               inputMode="numeric"
               dir="ltr"
@@ -300,8 +319,9 @@ export default function Expenses() {
           <div style={{ width: '100px' }} className="flex-shrink-0">
             <input 
               type="text" 
+              dir="ltr"
               className="form-control form-control-sm bg-light text-center text-muted border-secondary-subtle px-1 fw-bold" 
-              value={`${expenseMonth}/${expenseYear}`} 
+              value={expenseMonth && expenseYear ? formatMMYYYY(expenseMonth, expenseYear) : ''} 
               readOnly 
               title="يُسجل في هذا الشهر"
             />
@@ -333,7 +353,7 @@ export default function Expenses() {
                 dir="ltr"
                 className="form-control text-center fw-bold border-secondary-subtle px-1" 
                 value={expenseMonth} 
-                onChange={(e) => setExpenseMonth(e.target.value)} 
+                onChange={(e) => setExpenseMonth(toEnglish(e.target.value))} 
               />
             </div>
           </div>
@@ -348,7 +368,7 @@ export default function Expenses() {
                 dir="ltr"
                 className="form-control text-center fw-bold border-secondary-subtle px-1" 
                 value={expenseYear} 
-                onChange={(e) => setExpenseYear(e.target.value)} 
+                onChange={(e) => setExpenseYear(toEnglish(e.target.value))} 
               />
             </div>
           </div>
@@ -367,7 +387,7 @@ export default function Expenses() {
               onChange={(e) => setCategoryFilter(e.target.value)}
             >
               <option value="">كل التصنيفات</option>
-              {CATEGORY_PRESETS.map((cat) => (
+              {availableCategories.map((cat) => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
@@ -398,7 +418,7 @@ export default function Expenses() {
           <div className="d-flex align-items-center gap-2">
             <span className="text-secondary fw-bold small">النتائج:</span>
             <span className="badge bg-primary text-white rounded-pill px-2 py-1 tabular-nums">
-              {filteredAndSortedExpenses.length} مصروف
+              {fmtNum(filteredAndSortedExpenses.length)} مصروف
             </span>
           </div>
 
@@ -441,13 +461,13 @@ export default function Expenses() {
               ) : (
                 filteredAndSortedExpenses.map((exp) => (
                   <tr key={exp.id}>
-                    <td className="text-center align-middle border-secondary-subtle text-muted fw-bold">{exp.id}</td>
+                    <td className="text-center align-middle border-secondary-subtle text-muted fw-bold">{fmtNum(exp.id)}</td>
                     <td className="text-start px-3 align-middle border-secondary-subtle fw-bold text-primary">{exp.description}</td>
                     <td className="text-center align-middle border-secondary-subtle">
                       <span className="badge bg-blue-lt text-primary fw-bold px-2 py-1">{exp.category || 'مصروفات عامة'}</span>
                     </td>
                     <td className="text-end px-3 align-middle border-secondary-subtle fw-bold text-danger fs-4">{fmtNum(exp.amount)}</td>
-                    <td className="text-center align-middle border-secondary-subtle text-muted fw-bold" dir="ltr">{new Date(exp.created_at).toLocaleDateString('en-GB')}</td>
+                    <td className="text-center align-middle border-secondary-subtle text-muted fw-bold" dir="ltr">{formatMMYYYY(exp.expense_month || expenseMonth, exp.expense_year || expenseYear)}</td>
                     <td className="text-center align-middle border-secondary-subtle">
                       <div className="btn-group">
                         <button className="btn btn-sm btn-outline-primary border-secondary-subtle fw-bold px-2 py-1" onClick={() => handleEditClick(exp)} title="تعديل">

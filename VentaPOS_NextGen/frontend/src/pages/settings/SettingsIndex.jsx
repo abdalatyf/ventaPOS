@@ -23,8 +23,8 @@ export default function SettingsIndex() {
     <div className="container-fluid px-0">
       {/* Removed page header to stick tabs to navbar */}
 
-      <div className="card shadow-none border-0 animate__animated animate__fadeIn rounded-0" style={{ marginTop: '-1rem' }}>
-        <div className="card-header border-bottom-0 p-0 bg-white sticky-top" style={{ top: '60px', zIndex: 1020, borderBottom: '1px solid #dee2e6' }}>
+      <div className="card shadow-none border-0 animate__animated animate__fadeIn rounded-0">
+        <div className="card-header border-bottom-0 p-0 bg-white sticky-top" style={{ top: 'var(--navbar-height, 56px)', zIndex: 1020, borderBottom: '1px solid #dee2e6' }}>
           <ul className="nav nav-tabs nav-fill w-100" data-bs-toggle="tabs">
             <li className="nav-item">
               <button 

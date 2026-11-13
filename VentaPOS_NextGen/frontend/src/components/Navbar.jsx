@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api, { getLicenseStatus } from '../api';
@@ -37,6 +37,8 @@ export default function Navbar() {
   
   const [zoomLevel, setZoomLevel] = useState(parseFloat(localStorage.getItem('appZoomLevel')) || 1.0);
   const [companySettingId, setCompanySettingId] = useState(null);
+  const companySettingIdRef = useRef(null);
+  const headerRef = useRef(null);
   const [isPrintOnly, setIsPrintOnly] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -61,12 +63,29 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
+    const syncNavbarHeight = () => {
+      if (headerRef.current) {
+        const h = headerRef.current.offsetHeight;
+        if (h > 0) {
+          document.documentElement.style.setProperty('--navbar-height', `${h}px`);
+        }
+      }
+    };
+
+    syncNavbarHeight();
+    let navbarObserver = null;
+    if (typeof ResizeObserver !== 'undefined' && headerRef.current) {
+      navbarObserver = new ResizeObserver(syncNavbarHeight);
+      navbarObserver.observe(headerRef.current);
+    }
+
     // Fetch initial zoom from DB
     const fetchZoom = async () => {
       try {
         const res = await api.get('/company-settings/');
         if (res.data && res.data.results && res.data.results.length > 0) {
           const setting = res.data.results[0];
+          companySettingIdRef.current = setting.id;
           setCompanySettingId(setting.id);
           if (setting.zoom_level) {
             const level = Math.max(0.70, Math.min(1.50, Math.round(parseFloat(setting.zoom_level) * 100) / 100));
@@ -74,6 +93,7 @@ export default function Navbar() {
             document.documentElement.style.setProperty('--app-zoom', level);
             localStorage.setItem('appZoomLevel', level);
             setZoomLevel(level);
+            syncNavbarHeight();
             window.dispatchEvent(new CustomEvent('app-zoom-changed', { detail: { zoom: level } }));
             window.dispatchEvent(new Event('resize'));
           }
@@ -90,19 +110,21 @@ export default function Navbar() {
       document.documentElement.style.setProperty('--app-zoom', roundedLevel);
       localStorage.setItem('appZoomLevel', roundedLevel);
       setZoomLevel(roundedLevel);
-      
+      syncNavbarHeight();
+
       window.dispatchEvent(new CustomEvent('app-zoom-changed', { detail: { zoom: roundedLevel } }));
       window.dispatchEvent(new Event('resize'));
-      
+
       // Save to DB
       try {
-        let id = companySettingId;
+        let id = companySettingIdRef.current;
         if (!id) {
-            const res = await api.get('/company-settings/');
-            if (res.data?.results?.length > 0) {
-                id = res.data.results[0].id;
-                setCompanySettingId(id);
-            }
+          const res = await api.get('/company-settings/');
+          if (res.data?.results?.length > 0) {
+            id = res.data.results[0].id;
+            companySettingIdRef.current = id;
+            setCompanySettingId(id);
+          }
         }
         if (id) {
           await api.patch(`/company-settings/${id}/`, { zoom_level: roundedLevel });
@@ -128,6 +150,7 @@ export default function Navbar() {
     document.body.style.zoom = initialZoom;
     document.documentElement.style.setProperty('--app-zoom', initialZoom);
     setZoomLevel(initialZoom);
+    syncNavbarHeight();
 
     // Keyboard shortcuts
     const handleKeyDown = (e) => {
@@ -145,7 +168,10 @@ export default function Navbar() {
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      if (navbarObserver) navbarObserver.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -196,7 +222,7 @@ export default function Navbar() {
   };
 
   return (
-    <header className="navbar navbar-expand-md navbar-light sticky-top d-print-none" style={{ zIndex: 1030 }}>
+    <header ref={headerRef} className="navbar navbar-expand-md navbar-light sticky-top d-print-none" style={{ zIndex: 1030 }}>
       <div className="container-fluid">
         <button 
           className="navbar-toggler" 
@@ -206,16 +232,16 @@ export default function Navbar() {
           <span className="navbar-toggler-icon"></span>
         </button>
         
-        <h1 className="navbar-brand navbar-brand-autodark d-none-navbar-horizontal pe-0 pe-md-3">
+        <h1 className="navbar-brand navbar-brand-autodark d-none-navbar-horizontal pe-0 pe-md-2 me-1">
           <Link to="/">
             <img src={logo} alt="VentaPOS" className="navbar-brand-image" style={{ height: '2.5rem' }} />
           </Link>
         </h1>
         
-        <div className="navbar-nav flex-row order-md-last align-items-center">
+        <div className="navbar-nav flex-row order-md-last align-items-center flex-shrink-0">
           <button 
             type="button" 
-            className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1 me-2"
+            className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1 me-1 px-2"
             onClick={() => setShowManualModal(true)}
             title="دليل تشغيل البرنامج (دليل التاجر والمدير)"
           >
@@ -223,10 +249,10 @@ export default function Navbar() {
             <span className="d-none d-sm-inline fw-bold">دليل المستخدم</span>
           </button>
 
-          <div className="btn-group btn-group-sm me-3 bg-light rounded border align-items-center" role="group" aria-label="Zoom Controls">
+          <div className="btn-group btn-group-sm me-2 bg-light rounded border align-items-center" role="group" aria-label="Zoom Controls">
             <button 
               type="button"
-              className="btn btn-sm btn-link text-dark text-decoration-none px-2 py-1" 
+              className="btn btn-sm btn-link text-dark text-decoration-none px-1 py-1" 
               onClick={() => window.zoomOut()} 
               title="تصغير (Ctrl + -)"
               disabled={zoomLevel <= 0.70}
@@ -235,16 +261,16 @@ export default function Navbar() {
             </button>
             <span 
               role="button"
-              className="badge bg-white text-dark border px-2 py-1 mx-1 fw-bold cursor-pointer"
+              className="badge bg-white text-dark border px-1 py-1 mx-1 fw-bold cursor-pointer"
               onClick={() => window.resetZoom()}
               title="إعادة التعيين إلى 100% (Ctrl + 0)"
-              style={{ minWidth: '46px', textAlign: 'center', userSelect: 'none' }}
+              style={{ minWidth: '42px', textAlign: 'center', userSelect: 'none' }}
             >
               {Math.round(zoomLevel * 100)}%
             </span>
             <button 
               type="button"
-              className="btn btn-sm btn-link text-dark text-decoration-none px-2 py-1" 
+              className="btn btn-sm btn-link text-dark text-decoration-none px-1 py-1" 
               onClick={() => window.zoomIn()} 
               title="تكبير (Ctrl + +)"
               disabled={zoomLevel >= 1.50}
@@ -257,7 +283,7 @@ export default function Navbar() {
             <a href="#" className="nav-link d-flex lh-1 text-reset p-0" onClick={(e) => toggleDropdown('user', e)}>
               <span className="avatar avatar-sm bg-primary-lt"><IconBuildingStore size={18} /></span>
               <div className="d-none d-xl-block ps-2">
-                <div>{branchName}</div>
+                <div className="text-truncate" style={{ maxWidth: '95px' }}>{branchName}</div>
               </div>
             </a>
             <div className={`dropdown-menu dropdown-menu-end dropdown-menu-arrow ${openDropdown === 'user' ? 'show' : ''}`} data-bs-popper={openDropdown === 'user' ? 'static' : undefined}>

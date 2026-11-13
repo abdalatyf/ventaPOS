@@ -4,6 +4,7 @@ import { IconFilter, IconReport, IconPrinter } from '@tabler/icons-react';
 import { useDefaultDate } from '../../hooks/useDefaultDate';
 import StandardTablePageLayout from '../../components/common/StandardTablePageLayout';
 import { getLicenseStatus } from '../../api';
+import { toEnglish } from '../../utils/formatUtils';
 
 export const ReportsContext = createContext();
 
@@ -151,10 +152,12 @@ export default function ReportsLayout() {
               <div className="input-group input-group-sm">
                 <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">شهر</span>
                 <input
-                  type="number"
-                  className="form-control form-control-sm fw-bold text-center border-secondary-subtle px-1"
-                  min="1" max="12" placeholder="شهر"
-                  value={month} onChange={(e) => setMonth(e.target.value)}
+                  type="text"
+                  inputMode="numeric"
+                  dir="ltr"
+                  className="form-control form-control-sm fw-bold text-center border-secondary-subtle px-1 hide-arrows"
+                  placeholder="شهر"
+                  value={month} onChange={(e) => setMonth(toEnglish(e.target.value))}
                 />
               </div>
             </div>
@@ -164,10 +167,12 @@ export default function ReportsLayout() {
               <div className="input-group input-group-sm">
                 <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">سنة</span>
                 <input
-                  type="number"
-                  className="form-control form-control-sm fw-bold text-center border-secondary-subtle px-1"
-                  min="2000" max="2100" placeholder="سنة"
-                  value={year} onChange={(e) => setYear(e.target.value)}
+                  type="text"
+                  inputMode="numeric"
+                  dir="ltr"
+                  className="form-control form-control-sm fw-bold text-center border-secondary-subtle px-1 hide-arrows"
+                  placeholder="سنة"
+                  value={year} onChange={(e) => setYear(toEnglish(e.target.value))}
                 />
               </div>
             </div>

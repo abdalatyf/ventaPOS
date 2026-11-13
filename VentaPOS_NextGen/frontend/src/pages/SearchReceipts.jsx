@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import useSmartScroll from '../hooks/useSmartScroll';
 import { useActiveBranch } from '../hooks/useActiveBranch';
@@ -13,6 +14,12 @@ import StandardTablePageLayout from '../components/common/StandardTablePageLayou
 
 export default function SearchReceipts() {
   const { setTableRef } = useSmartScroll();
+  const tableContainerElemRef = useRef(null);
+  const handleSetTableRef = useCallback((node) => {
+    tableContainerElemRef.current = node;
+    setTableRef(node);
+  }, [setTableRef]);
+
   const { branchId } = useActiveBranch();
   const navigate = useNavigate();
   const location = useLocation();
@@ -86,7 +93,10 @@ export default function SearchReceipts() {
         setSalespersons(res.data);
       }
     } catch (error) {
-      if (reqGen === fetchGenRef.current) console.error('Error fetching salespersons:', error);
+      if (reqGen === fetchGenRef.current) {
+        console.error('Error fetching salespersons:', error);
+        toast.error('تعذر تحميل قائمة المناديب');
+      }
     }
   };
 
@@ -129,7 +139,10 @@ export default function SearchReceipts() {
         setSelectedIds(allIds.length > 0 ? allIds : res.data.results.map(r => r.id));
       }
     } catch (error) {
-      if (reqGen === fetchGenRef.current) console.error('Error fetching receipts:', error);
+      if (reqGen === fetchGenRef.current) {
+        console.error('Error fetching receipts:', error);
+        toast.error('حدث خطأ أثناء تحميل فواتير البيع');
+      }
     } finally {
       if (reqGen === fetchGenRef.current) setLoading(false);
     }
@@ -147,7 +160,10 @@ export default function SearchReceipts() {
         setNextPageUrl(res.data.next);
       }
     } catch (error) {
-      if (reqGen === fetchGenRef.current) console.error('Error loading more receipts:', error);
+      if (reqGen === fetchGenRef.current) {
+        console.error('Error loading more receipts:', error);
+        toast.error('تعذر تحميل المزيد من الفواتير');
+      }
     } finally {
       if (reqGen === fetchGenRef.current) setLoadingMore(false);
     }
@@ -312,15 +328,18 @@ export default function SearchReceipts() {
     if (!ids || ids.length === 0) return;
 
     // Physical printing is strictly reserved for Installment Schedules. Standard cash receipts are not printed.
-    const installmentIds = ids.filter(id => {
-      if (globalInstallmentIds && globalInstallmentIds.length > 0) {
-        return globalInstallmentIds.includes(id);
-      }
-      const r = receipts.find(rc => rc.id === id);
-      return r ? !r.is_cash_sale : true;
-    });
+    let installmentIds = [];
+    if (globalAllIds.length > 0) {
+      const instSet = new Set(globalInstallmentIds);
+      installmentIds = ids.filter(id => instSet.has(id));
+    } else {
+      installmentIds = ids.filter(id => {
+        const r = receipts.find(rc => rc.id === id);
+        return r ? (!r.is_cash_sale && r.receipt_type !== 'RETURN') : false;
+      });
+    }
 
-    if (ids.length > 0 && installmentIds.length === 0) {
+    if (installmentIds.length === 0) {
       Swal.fire({
         icon: 'info',
         title: 'تنبيه الطباعة',
@@ -331,8 +350,7 @@ export default function SearchReceipts() {
       return;
     }
 
-    const targetIds = installmentIds.length > 0 ? installmentIds : ids;
-    setPrintModalIds(targetIds);
+    setPrintModalIds(installmentIds);
     setPrintModalOpen(true);
   };
 
@@ -363,7 +381,7 @@ export default function SearchReceipts() {
       if (entries[0].isIntersecting && nextPageUrl) {
         loadMoreReceipts();
       }
-    });
+    }, { root: tableContainerElemRef.current || null, threshold: 0.1 });
     
     if (node) observer.current.observe(node);
   }, [loading, loadingMore, nextPageUrl]);
@@ -442,7 +460,7 @@ export default function SearchReceipts() {
         handleDeleteSingle={handleDeleteSingle}
         handleReturnSingle={handleReturnSingle}
         lastRowElementRef={lastRowElementRef}
-        setTableRef={setTableRef}
+        setTableRef={handleSetTableRef}
         loadingMore={loadingMore}
       />
     </StandardTablePageLayout>

@@ -64,10 +64,18 @@ body {
   border-top-right-radius: 6px;
 }
 
+/* Optional Two-Tier Selection Strip between .sticky-toolbar and table */
+.sticky-selection-strip {
+  position: sticky !important;
+  top: calc(var(--navbar-height, 56px) + var(--toolbar-height-actual, 48px)) !important;
+  z-index: 1019;
+}
+
 /* 2-Scroll Table Container (Window Scroll -> Internal Table Y & X Scroll) */
 .report-table-container {
   overflow-x: auto !important;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   max-height: calc((100vh / var(--app-zoom, 1)) - 114px);
 }
 
@@ -129,6 +137,9 @@ html {
 #root {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: calc(100vh / var(--app-zoom, 1));
 }
 
@@ -136,6 +147,9 @@ html {
   display: flex;
   flex-direction: column;
   flex-grow: 1;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 0;
 }
 
@@ -143,7 +157,18 @@ html {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 0;
+}
+
+.page-body,
+.standard-page-table-area,
+.standard-page-table-area > .card {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 
@@ -207,13 +232,26 @@ html {
   color: #fff !important;
 }
 
-/* Slim Navbars */
+/* Slim Navbars — fits cleanly single-row at 1280px under 125% CSS zoom */
+.navbar > .container-fluid {
+  flex-wrap: wrap !important;
+  row-gap: 0.25rem;
+}
+.navbar-brand {
+  padding-top: 0.25rem !important;
+  padding-bottom: 0.25rem !important;
+}
 .navbar .nav-link {
-  padding-top: 0.35rem !important;
-  padding-bottom: 0.35rem !important;
+  padding: 0.35rem 0.35rem !important;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+.navbar .nav-link-icon {
+  margin-inline-end: 0.2rem !important;
+  width: 1rem !important;
 }
 .navbar-brand-image {
-  height: 2.0rem !important;
+  height: 1.9rem !important;
 }
 
 /* Hide number arrows */

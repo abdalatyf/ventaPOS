@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { IconCalendarCheck, IconCheck, IconX, IconCloudDownload } from '@tabler/icons-react';
 import MachineIdDisplay from '../../../components/settings/MachineIdDisplay';
 import LicenseKeyInput from '../../../components/settings/LicenseKeyInput';
@@ -21,6 +22,7 @@ export default function SubscriptionTab() {
   const [historyRecords, setHistoryRecords] = useState([]);
   const [isActivating, setIsActivating] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [statusAlert, setStatusAlert] = useState(null);
 
   const fetchLicenseStatus = async () => {
     try {
@@ -53,6 +55,7 @@ export default function SubscriptionTab() {
       }
     } catch (error) {
       console.error("Failed to fetch license status", error);
+      toast.error('تعذر تحميل حالة الاشتراك');
     }
   };
 
@@ -62,20 +65,27 @@ export default function SubscriptionTab() {
 
   const handleActivation = async (code) => {
     setIsActivating(true);
+    setStatusAlert(null);
     try {
       const response = await api.post('/license/activate/', { license_code: code });
       window.dispatchEvent(new CustomEvent('license_updated'));
       if (response.data?.wiped_demo) {
         localStorage.removeItem('branchId');
         localStorage.removeItem('branchName');
-        alert(response.data?.message || 'تم التفعيل بنجاح! جاري تحويلك لصفحة التهيئة.');
+        const msg = response.data?.message || 'تم التفعيل بنجاح! جاري تحويلك لصفحة التهيئة.';
+        setStatusAlert({ type: 'success', text: msg });
+        toast.success(msg);
         navigate('/activation-setup', { replace: true });
       } else {
-        alert(response.data?.message || 'تم تفعيل الترخيص بنجاح.');
+        const msg = response.data?.message || 'تم تفعيل الترخيص بنجاح.';
+        setStatusAlert({ type: 'success', text: msg });
+        toast.success(msg);
         fetchLicenseStatus();
       }
     } catch (error) {
-      alert(error.response?.data?.error || 'حدث خطأ أثناء التفعيل');
+      const errMsg = error.response?.data?.error || 'حدث خطأ أثناء التفعيل';
+      setStatusAlert({ type: 'danger', text: errMsg });
+      toast.error(errMsg);
     } finally {
       setIsActivating(false);
     }
@@ -83,6 +93,11 @@ export default function SubscriptionTab() {
 
   return (
     <div className="animate__animated animate__fadeIn">
+      {statusAlert && (
+        <div className={`alert alert-${statusAlert.type} border-${statusAlert.type} shadow-sm mb-3 fw-bold`}>
+          {statusAlert.text}
+        </div>
+      )}
       {/* Machine ID */}
       <MachineIdDisplay machineId={machineId} />
 
@@ -198,7 +213,7 @@ export default function SubscriptionTab() {
         <div className="card-header bg-white fw-bold text-muted border-bottom-0">
           سجل العمليات السابقة
         </div>
-        <div className="table-responsive" style={{ overflow: 'visible' }}>
+        <div className="table-responsive">
           <table className="table table-bordered table-vcenter table-hover table-sticky-header text-nowrap tabular-nums mb-0 text-center align-middle">
             <thead className="bg-light">
               <tr>

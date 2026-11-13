@@ -357,6 +357,17 @@ const POS = () => {
     setManualTotalAmount
   });
 
+  useEffect(() => {
+    const onGlobalKeyDown = (e) => {
+      if (e.key === 'F9') {
+        e.preventDefault();
+        if (!saving) handleSave();
+      }
+    };
+    window.addEventListener('keydown', onGlobalKeyDown);
+    return () => window.removeEventListener('keydown', onGlobalKeyDown);
+  }, [handleSave, saving]);
+
   const handleSystemChange = (idx, field, val) => {
     const updated = systems.map((s, i) => i === idx ? { ...s, [field]: val } : s);
     setSystems(updated);

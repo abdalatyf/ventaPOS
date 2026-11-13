@@ -5,7 +5,7 @@ import api from '../../api';
 import { ReportsContext } from './ReportsLayout';
 import ReportTable from '../../components/ReportTable';
 import ReportAutocomplete from '../../components/ReportAutocomplete';
-import { fmtNum } from '../../utils/formatUtils';
+import { fmtNum, formatMMYYYY } from '../../utils/formatUtils';
 
 export default function SalespersonPerformanceReport() {
   const { year, month, branchId } = useContext(ReportsContext);
@@ -92,7 +92,7 @@ export default function SalespersonPerformanceReport() {
   }, [processedItems]);
 
   const summaryCards = [
-    { label: 'إجمالي الفواتير', value: totals.receipts, color: 'dark', icon: IconReceipt },
+    { label: 'إجمالي الفواتير', value: fmtNum(totals.receipts), color: 'dark', icon: IconReceipt },
     { label: 'مبيعات كاش', value: fmtNum(totals.cash), color: 'success', icon: IconCash },
     { label: 'مبيعات قسط', value: fmtNum(totals.credit), color: 'warning', icon: IconCoin },
     { label: 'إجمالي المقدمات', value: fmtNum(totals.down_payments), color: 'info' },
@@ -121,7 +121,7 @@ export default function SalespersonPerformanceReport() {
             className="text-decoration-none badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 fs-5 fw-bold"
             title="عرض فواتير المندوب"
           >
-            {row.receipts_count}
+            {fmtNum(row.receipts_count || 0)}
           </Link>
         );
       }
@@ -270,7 +270,7 @@ export default function SalespersonPerformanceReport() {
             onClick={() => toggleSort && toggleSort('collected')}
             title="انقر للترتيب"
           >
-            تحصيل {month}/{year}{getSortArrow('collected')}
+            تحصيل {formatMMYYYY(month, year)}{getSortArrow('collected')}
           </th>
           <th colSpan="3" className="text-center table-primary">تفاصيل المرتب</th>
         </tr>
@@ -397,9 +397,9 @@ export default function SalespersonPerformanceReport() {
   const subFiltersRow2 = () => (
     <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
       <div className="text-muted small fw-bold d-flex align-items-center gap-2">
-        <span>الفترة: {year}/{String(month).padStart(2, '0')}</span>
+        <span>الفترة: {formatMMYYYY(month, year)}</span>
         <span>•</span>
-        <span>إجمالي عدد المناديب النشطين: {processedItems.length}</span>
+        <span>إجمالي عدد المناديب النشطين: {fmtNum(processedItems.length)}</span>
       </div>
     </div>
   );
@@ -409,6 +409,8 @@ export default function SalespersonPerformanceReport() {
       {error && <div className="alert alert-danger mb-2 py-1">{error}</div>}
 
       <ReportTable
+        reportTitle="تقرير أداء المناديب"
+        periodLabel={year && month ? formatMMYYYY(month, year) : undefined}
         columns={columns}
         data={processedItems}
         loading={loading}

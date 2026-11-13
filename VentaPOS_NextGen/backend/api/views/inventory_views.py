@@ -20,7 +20,7 @@ from api.serializers import (
     CommissionHistorySerializer,
     InventoryAdjustmentSerializer,
 )
-from .base import SoftDeleteModelViewSet, get_default_date, get_collection_commission_rate, get_request_branch_id
+from .base import SoftDeleteModelViewSet, get_default_date, get_collection_commission_rate, get_request_branch_id, apply_optional_limit
 
 
 class InventoryItemViewSet(SoftDeleteModelViewSet):
@@ -38,10 +38,13 @@ class InventoryItemViewSet(SoftDeleteModelViewSet):
         branch_id = get_request_branch_id(self.request)
         if branch_id:
             qs = qs.filter(branch_id=branch_id)
+        search = self.request.query_params.get("search")
+        if search and str(search).strip():
+            qs = qs.filter(name__icontains=str(search).strip())
         return qs
 
     def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
+        queryset = apply_optional_limit(self.filter_queryset(self.get_queryset()), request)
 
         page = self.paginate_queryset(queryset)
         items_to_process = page if page is not None else list(queryset)

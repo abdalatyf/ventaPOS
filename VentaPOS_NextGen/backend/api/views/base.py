@@ -158,3 +158,18 @@ class SoftDeleteModelViewSet(viewsets.ModelViewSet):
         ctx = super().get_serializer_context()
         ctx["tenant"] = getattr(self.request, "tenant", None)
         return ctx
+
+
+def apply_optional_limit(queryset, request, max_limit=5000):
+    """Slices a list queryset only when an explicit positive integer limit param is provided."""
+    raw_limit = request.query_params.get("limit") if request and hasattr(request, "query_params") else None
+    if raw_limit is None or not str(raw_limit).strip():
+        return queryset
+    try:
+        limit = int(to_english_numerals(str(raw_limit).strip()))
+    except (ValueError, TypeError):
+        return queryset
+    if limit > 0:
+        return queryset[:min(limit, max_limit)]
+    return queryset
+

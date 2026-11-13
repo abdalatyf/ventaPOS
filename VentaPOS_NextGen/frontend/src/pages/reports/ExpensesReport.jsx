@@ -74,6 +74,11 @@ export default function ExpensesReport() {
     setMaxAmount('');
   };
 
+  const availableCategories = useMemo(() => {
+    const extra = rawList.map((item) => (item.category || '').trim()).filter(Boolean);
+    return Array.from(new Set([...CATEGORY_PRESETS, ...extra]));
+  }, [rawList]);
+
   const columns = [
     { 
       key: 'id', 
@@ -120,7 +125,7 @@ export default function ExpensesReport() {
   const summaryCards = [
     { 
       label: 'عدد المصروفات', 
-      value: processedItems.length, 
+      value: fmtNum(processedItems.length), 
       color: 'dark', 
       icon: IconReceipt 
     },
@@ -153,7 +158,7 @@ export default function ExpensesReport() {
           onChange={(e) => setCategoryQuery(e.target.value)}
         >
           <option value="">كل التصنيفات</option>
-          {CATEGORY_PRESETS.map((cat) => (
+          {availableCategories.map((cat) => (
             <option key={cat} value={cat}>{cat}</option>
           ))}
         </select>
@@ -205,6 +210,8 @@ export default function ExpensesReport() {
       {error && <div className="alert alert-danger mb-2 py-1">{error}</div>}
 
       <ReportTable
+        reportTitle="تقرير المصروفات"
+        periodLabel={year && month ? formatMMYYYY(month, year) : undefined}
         columns={columns}
         data={processedItems}
         loading={loading}

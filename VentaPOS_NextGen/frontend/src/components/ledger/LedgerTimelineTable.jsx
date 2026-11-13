@@ -67,7 +67,7 @@ export default function LedgerTimelineTable({
           </div>
         </div>
 
-        <div className="table-responsive" style={{ overflow: 'visible' }}>
+        <div className="table-responsive">
           <table className="table table-vcenter table-bordered table-hover text-nowrap table-sticky-header tabular-nums mb-0">
             <thead className="bg-light">
               <tr>
@@ -187,7 +187,7 @@ export default function LedgerTimelineTable({
           <div className="card-header bg-light py-2">
             <span className="fw-bold text-dark fs-5">ملخص الحركة الشهري للصنف ({monthlySummary.length} شهر)</span>
           </div>
-          <div className="table-responsive" style={{ overflow: 'visible' }}>
+          <div className="table-responsive">
             <table className="table table-vcenter table-bordered table-hover table-sm text-nowrap tabular-nums mb-0">
               <thead className="bg-light">
                 <tr>

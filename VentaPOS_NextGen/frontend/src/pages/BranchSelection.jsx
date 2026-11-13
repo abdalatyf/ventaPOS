@@ -124,7 +124,7 @@ export default function BranchSelection() {
   };
 
   return (
-    <div className="page page-center" style={{ backgroundColor: '#f8f9fa', overflow: 'hidden', height: '100vh', fontFamily: "'Cairo', sans-serif" }}>
+    <div className="page page-center" style={{ backgroundColor: '#f8f9fa', overflowY: 'auto', minHeight: '100vh', fontFamily: "'Cairo', sans-serif" }}>
       <div className="container-fluid px-4 py-5">
         <div className="text-center mb-4">
           <h2 className="fw-bold text-dark mb-1">اختيار الفرع</h2>

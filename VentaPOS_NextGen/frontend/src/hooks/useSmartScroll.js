@@ -20,7 +20,7 @@ export default function useSmartScroll() {
 
   const handleScroll = useCallback(() => {
     if (!tableContainerRef.current) return;
-    
+
     const navbar = document.querySelector('header.navbar');
     const navbarBottom = navbar ? navbar.getBoundingClientRect().bottom : 56;
     const card = tableContainerRef.current.closest('.card');
@@ -32,10 +32,10 @@ export default function useSmartScroll() {
     const clientHeight = document.documentElement.clientHeight || window.innerHeight;
     const scrollTop = window.scrollY || document.documentElement.scrollTop;
     const currentZoom = parseFloat(document.body.style.zoom) || 1.0;
-    const tolerance = Math.max(6, 10 / currentZoom);
+    const tolerance = Math.max(8, 12 / currentZoom);
     const distanceToBottom = scrollHeight - clientHeight - scrollTop;
 
-    // Activate Scroll #2 (internal table scroll) when the table's sticky-toolbar touches the Navbar OR window hits bottom
+    // Activate Scroll #2 (internal table scroll) when the sticky-toolbar touches Navbar OR window hits bottom
     if (triggerTop <= navbarBottom + 4 || distanceToBottom <= tolerance) {
       if (tableContainerRef.current.style.overflowY !== 'auto') {
         tableContainerRef.current.style.overflowY = 'auto';
@@ -49,21 +49,42 @@ export default function useSmartScroll() {
 
   const adjustHeight = useCallback(() => {
     if (!tableContainerRef.current) return;
-    
+
     const currentZoom = parseFloat(document.body.style.zoom) || 1.0;
-    
-    // Always ensure horizontal scroll is enabled
+
+    // Always ensure horizontal scroll is enabled inside table container
     tableContainerRef.current.style.overflowX = 'auto';
 
     const navbar = document.querySelector('header.navbar');
     const navbarHeight = navbar ? navbar.offsetHeight : 56;
+    if (navbarHeight > 0) {
+      document.documentElement.style.setProperty('--navbar-height', `${navbarHeight}px`);
+    }
+
     const card = tableContainerRef.current.closest('.card');
     const toolbar = card?.querySelector('.sticky-toolbar') || document.querySelector('.sticky-toolbar');
     const toolbarHeight = toolbar ? toolbar.offsetHeight : 0;
-    
-    // 8px pb-2 + 2px card borders = 10px exact bottom space
-    const offset = navbarHeight + toolbarHeight + 10;
-    tableContainerRef.current.style.maxHeight = `calc((100vh / ${currentZoom}) - ${offset}px)`;
+    if (toolbarHeight > 0 && card) {
+      card.style.setProperty('--toolbar-height-actual', `${toolbarHeight}px`);
+    }
+
+    // Sum all card chrome elements above the table container (sticky-toolbar + Two-Tier Selection Strip, etc.)
+    let chromeHeight = toolbarHeight;
+    if (card) {
+      let prev = tableContainerRef.current.previousElementSibling;
+      let siblingSum = 0;
+      while (prev) {
+        siblingSum += prev.offsetHeight;
+        prev = prev.previousElementSibling;
+      }
+      if (siblingSum > 0) {
+        chromeHeight = siblingSum;
+      }
+    }
+
+    // 8px container bottom padding + 2px card borders + 2px subpixel buffer = 12px
+    const offset = navbarHeight + chromeHeight + 12;
+    tableContainerRef.current.style.maxHeight = `max(200px, calc((100vh / ${currentZoom}) - ${offset}px))`;
 
     // Measure row 1 of multi-level headers dynamically
     const headerRow1 = tableContainerRef.current.querySelector('thead > tr:first-child');
@@ -84,9 +105,18 @@ export default function useSmartScroll() {
         adjustHeight();
       });
 
+      const navbar = document.querySelector('header.navbar');
+      if (navbar) resizeObserverRef.current.observe(navbar);
+
       const card = node.closest('.card');
+      if (card) resizeObserverRef.current.observe(card);
+
       const toolbar = card?.querySelector('.sticky-toolbar') || document.querySelector('.sticky-toolbar');
       if (toolbar) resizeObserverRef.current.observe(toolbar);
+
+      const strip = card?.querySelector('.sticky-selection-strip');
+      if (strip) resizeObserverRef.current.observe(strip);
+
       resizeObserverRef.current.observe(node);
 
       const tableEl = node.querySelector('table');

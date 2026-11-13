@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import api from '../api';
 import useSmartScroll from '../hooks/useSmartScroll';
 import { useActiveBranch } from '../hooks/useActiveBranch';
-import { fmt, parseNumber, parseStrictInt, parseWholeMoney, parseValidMonthYear } from '../utils/formatUtils';
+import { fmt, parseNumber, parseStrictInt, parseWholeMoney, parseValidMonthYear, formatMMYYYY } from '../utils/formatUtils';
 import { useStandardTableSlots } from './common/StandardTablePageLayout';
 
 export default function InventoryTab() {
@@ -461,10 +461,10 @@ export default function InventoryTab() {
                     <td className="text-center align-middle border-secondary-subtle text-muted fw-bold">{item.id}</td>
                     <td className="text-start px-2 align-middle border-secondary-subtle fw-bold">{item.name}</td>
                     <td className="text-center align-middle border-secondary-subtle">
-                      {item.initial_quantity || 0}
+                      {fmt(item.initial_quantity || 0)}
                     </td>
                     <td className="text-center align-middle border-secondary-subtle">{fmt(item.initial_purchase_price || 0)}</td>
-                    <td className="text-center align-middle border-secondary-subtle">{item.initial_year}/{item.initial_month}</td>
+                    <td className="text-center align-middle border-secondary-subtle" dir="ltr">{formatMMYYYY(item.initial_month, item.initial_year)}</td>
                     <td className="text-center align-middle border-secondary-subtle">{fmt(item.initial_commission_amount || 0)}</td>
                     <td className="text-nowrap text-center align-middle border-secondary-subtle">
                       <Link to={`/product-ledger/${item.id}`} className="btn btn-sm btn-ghost-info me-1" title="كارت الصنف وسجل العمليات">
