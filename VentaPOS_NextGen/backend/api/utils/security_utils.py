@@ -1,8 +1,37 @@
 import os
+import re
 import platform
 import hashlib
 import hmac
 from .license_validator import LicenseValidator
+
+
+def canonical_code_hash(raw_code):
+    """Computes SHA-256 over uppercased, whitespace/hyphen-stripped license/recovery code."""
+    normalized = re.sub(r'[-\s]+', '', str(raw_code or '').strip().upper())
+    return hashlib.sha256(normalized.encode('utf-8')).hexdigest()
+
+
+def is_authorized_for_maintenance(request):
+    """
+    Authorizes sensitive maintenance endpoints (backup upload, auto-update apply):
+    - Always allows authenticated users.
+    - Allows unauthenticated access ONLY in Demo mode or when admin has no usable password.
+    """
+    user = getattr(request, 'user', None)
+    if user and user.is_authenticated:
+        return True
+
+    from django.contrib.auth.models import User
+    from api.models import ClientLicense
+
+    has_prod_lic = ClientLicense.all_objects.exclude(machine_id="DEMO_MACHINE").exists()
+    if not has_prod_lic:
+        return True
+
+    admin_user = User.objects.filter(is_superuser=True).first()
+    has_password = bool(admin_user and admin_user.has_usable_password() and admin_user.check_password("") is False)
+    return not has_password
 
 def get_machine_id():
     """

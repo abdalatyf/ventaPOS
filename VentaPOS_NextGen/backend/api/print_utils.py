@@ -32,7 +32,14 @@ def to_arabic_numerals(text):
             d = Decimal(val_str)
             text = str(int(d.quantize(Decimal('1'), rounding=ROUND_HALF_UP)))
         else:
-            text = val_str
+            def _round_token(m):
+                raw = m.group(0)
+                has_comma = ',' in raw
+                cleaned = raw.replace(',', '')
+                rounded = int(Decimal(cleaned).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+                return f"{rounded:,}" if has_comma else str(rounded)
+
+            text = re.sub(r'(?<![.\d])(-?\d{1,3}(?:,\d{3})+\.\d+|-?\d+\.\d+)(?![.\d])', _round_token, val_str)
     else:
         text = str(text)
 
@@ -66,8 +73,12 @@ def get_save_directory():
         base_path = getattr(settings, 'DB_DIR', Path(os.environ.get('APPDATA', Path.home())) / 'VentaPOSTest')
         invoices_dir = os.path.join(str(base_path), 'الفواتير المطبوعة')
     else:
-        base_path = settings.BASE_DIR
-        invoices_dir = os.path.join(str(base_path), 'media', 'Invoices')
+        media_root = getattr(settings, 'MEDIA_ROOT', None)
+        if media_root:
+            invoices_dir = os.path.join(str(media_root), 'Invoices')
+        else:
+            base_path = settings.BASE_DIR
+            invoices_dir = os.path.join(str(base_path), 'media', 'Invoices')
     
     if not os.path.exists(invoices_dir):
         os.makedirs(invoices_dir, exist_ok=True)
@@ -119,9 +130,10 @@ def generate_and_open_pdf(html_content, filename_prefix="document", target_print
                 'load-media-error-handling': 'ignore'
             }
 
+        import uuid
         save_dir = get_save_directory()
         timestamp = timezone.now().strftime("%Y-%m-%d_%H-%M-%S")
-        filename = f"{filename_prefix}_{timestamp}.pdf"
+        filename = f"{filename_prefix}_{timestamp}_{uuid.uuid4().hex[:6]}.pdf"
         full_path = os.path.join(save_dir, filename)
 
         pdfkit.from_string(html_content, full_path, configuration=config, options=options)

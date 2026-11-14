@@ -240,17 +240,15 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
         from django.template.loader import render_to_string
         from api.print_utils import generate_and_open_pdf, ed2ad
 
-        company_settings = CompanySetting.objects.filter().first()
         pages_html = []
 
         for receipt in receipts:
-            installments_from_db = list(receipt.payments.filter(is_deleted=False).order_by('payment_date'))
+            installments_from_db = list(receipt.payments.filter(is_deleted=False).order_by('payment_date', 'id'))
             total_installments = len(installments_from_db)
             paid_so_far = receipt.down_payment
 
             if not installments_from_db:
                 ctx = self._prepare_pdf_context(receipt)
-                ctx['company_settings'] = company_settings
                 part = render_to_string('api/pdf_invoice_content.html', ctx)
                 pages_html.append(part)
             else:
@@ -267,7 +265,6 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
 
                     ctx = self._prepare_pdf_context(receipt, inst, i + 1, total_installments)
                     ctx['remaining_amount'] = rem_text
-                    ctx['company_settings'] = company_settings
 
                     part = render_to_string('api/pdf_invoice_content.html', ctx)
                     pages_html.append(part)
@@ -303,6 +300,13 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
         branch_name = receipt.branch.name if receipt.branch else ''
         comp_name = (cs.name if cs and cs.name else branch_name) or branch_name
 
+        accounting_sale_date = f"{receipt.sale_year}/{str(receipt.sale_month).zfill(2)}"
+        payment_date_str = (
+            inst.payment_date.strftime("%Y/%m/%d")
+            if inst and inst.payment_date
+            else f"{accounting_sale_date}/25"
+        )
+
         return {
             'receipt_number': ed2ad(str(receipt.receipt_number)),
             'current_installment_index': ed2ad(str(inst_index)) if inst_index else '',
@@ -323,9 +327,9 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
             'phone_number': ed2ad(str(receipt.phone_number)) if receipt.phone_number else '',
             'amount_to_pay': ed2ad(str(inst.amount)) if inst else ed2ad(str(total)),
             'amount_in_words': get_num_to_words_ar(int(inst.amount if inst else total)),
-            'payment_date': ed2ad(inst.payment_date.strftime("%Y/%m/%d")) if inst and inst.payment_date else ed2ad(receipt.created_at.strftime("%Y/%m/%d")),
+            'payment_date': ed2ad(payment_date_str),
             'products_text': receipt.products_text or '',
-            'sale_date': ed2ad(receipt.created_at.strftime("%Y/%m/%d")),
+            'sale_date': ed2ad(accounting_sale_date),
             'installment_system': receipt.installment_system or ('كاش' if receipt.is_cash_sale else ''),
             'salesperson_name': receipt.salesperson.name if receipt.salesperson else '',
         }

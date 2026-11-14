@@ -54,10 +54,13 @@ export default function SecurityTab() {
     try {
       // If we are disabling the password
       if (!isPasswordEnabled) {
-        await api.post('/auth/change-password/', {
+        const res = await api.post('/auth/change-password/', {
           old_password: formData.oldPassword,
           new_password: '' // empty means remove password
         });
+        if (res?.data?.token) {
+          localStorage.setItem('token', res.data.token);
+        }
         setSuccess('تم إلغاء كلمة المرور بنجاح، ستتمكن من الدخول المباشر.');
         setHasInitialPassword(false);
         setFormData({ oldPassword: '', newPassword: '', confirmPassword: '' });
@@ -68,10 +71,13 @@ export default function SecurityTab() {
           setIsLoading(false);
           return;
         }
-        await api.post('/auth/change-password/', {
+        const res = await api.post('/auth/change-password/', {
           old_password: formData.oldPassword,
           new_password: formData.newPassword
         });
+        if (res?.data?.token) {
+          localStorage.setItem('token', res.data.token);
+        }
         setSuccess('تم تحديث كلمة المرور بنجاح.');
         setHasInitialPassword(true);
         setFormData({ oldPassword: '', newPassword: '', confirmPassword: '' });

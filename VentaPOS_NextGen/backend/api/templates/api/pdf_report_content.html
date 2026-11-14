@@ -180,97 +180,6 @@
     {% endif %}
 
     <!-- Data Table -->
-    {% if report_type == 'areas' %}
-    <table class="report-table">
-        <thead>
-            <tr>
-                <th style="width: 15%;" class="text-start">المنطقة</th>
-                <th style="width: 8%;" class="text-center">عدد الفواتير</th>
-                <th style="width: 9%;" class="text-center">مبيعات نقدي</th>
-                <th style="width: 9%;" class="text-center">مبيعات تقسيط</th>
-                <th style="width: 10%;" class="text-center">إجمالي المبيعات</th>
-                <th style="width: 9%;" class="text-center">إجمالي المقدمات</th>
-                <th style="width: 9%;" class="text-center">الأقساط المستحقة</th>
-                <th style="width: 9%;" class="text-center">المرتجعات</th>
-                <th style="width: 10%;" class="text-center">صافي المبيعات</th>
-                <th style="width: 12%;" class="text-start">المناديب</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in rows %}
-            <tr>
-                {% for cell in row.cells %}
-                <td class="text-{{ cell.align|default:'center' }} {% if cell.is_bold %}fw-bold{% endif %} {% if cell.color %}text-{{ cell.color }}{% endif %}">
-                    {{ cell.value_ar|default:cell.value }}
-                </td>
-                {% endfor %}
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="10" class="text-center py-4 text-muted">
-                    لا توجد بيانات مطابقة لهذا التقرير
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-        {% if footer_row %}
-        <tfoot>
-            <tr>
-                {% for fcell in footer_row %}
-                <td class="text-{{ fcell.align|default:'center' }} fw-bold" {% if fcell.colspan %}colspan="{{ fcell.colspan }}"{% endif %}>
-                    {{ fcell.value_ar|default:fcell.value }}
-                </td>
-                {% endfor %}
-            </tr>
-        </tfoot>
-        {% endif %}
-    </table>
-    {% elif report_type == 'purchases' %}
-    <table class="report-table">
-        <thead>
-            <tr>
-                <th style="width: 18%;" class="text-start">اسم الصنف</th>
-                <th style="width: 14%;" class="text-start">اسم المورد</th>
-                <th style="width: 8%;" class="text-center">عدد الفواتير</th>
-                <th style="width: 8%;" class="text-center">كمية الشراء</th>
-                <th style="width: 8%;" class="text-center">كمية المرتجع</th>
-                <th style="width: 8%;" class="text-center">صافي الكمية</th>
-                <th style="width: 9%;" class="text-center">متوسط سعر الشراء</th>
-                <th style="width: 9%;" class="text-center">إجمالي الشراء</th>
-                <th style="width: 9%;" class="text-center">إجمالي المرتجع</th>
-                <th style="width: 9%;" class="text-center">صافي المشتريات</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in rows %}
-            <tr>
-                {% for cell in row.cells %}
-                <td class="text-{{ cell.align|default:'center' }} {% if cell.is_bold %}fw-bold{% endif %} {% if cell.color %}text-{{ cell.color }}{% endif %}">
-                    {{ cell.value_ar|default:cell.value }}
-                </td>
-                {% endfor %}
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="10" class="text-center py-4 text-muted">
-                    لا توجد بيانات مطابقة لهذا التقرير
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-        {% if footer_row %}
-        <tfoot>
-            <tr>
-                {% for fcell in footer_row %}
-                <td class="text-{{ fcell.align|default:'center' }} fw-bold" {% if fcell.colspan %}colspan="{{ fcell.colspan }}"{% endif %}>
-                    {{ fcell.value_ar|default:fcell.value }}
-                </td>
-                {% endfor %}
-            </tr>
-        </tfoot>
-        {% endif %}
-    </table>
-    {% else %}
     <table class="report-table">
         <thead>
             <tr>
@@ -310,7 +219,6 @@
         </tfoot>
         {% endif %}
     </table>
-    {% endif %}
 
     <!-- Footer Note -->
     <div class="footer-note">

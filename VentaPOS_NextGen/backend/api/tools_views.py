@@ -84,8 +84,16 @@ class BackupUploadView(ToolsBaseView):
 
     def post(self, request):
         import shutil
+        import uuid
         from pathlib import Path
         from django.db import connections
+        from api.utils.security_utils import is_authorized_for_maintenance
+
+        if not is_authorized_for_maintenance(request):
+            return Response(
+                {"error": "غير مصرح لك. يرجى تسجيل الدخول أولاً."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
         file_obj = request.FILES.get('backup_file')
         if not file_obj:
@@ -95,120 +103,147 @@ class BackupUploadView(ToolsBaseView):
         if not safe_filename.endswith(('.sqlite3', '.db')):
             return Response({"error": "امتداد الملف غير مدعوم، يرجى اختيار ملف .sqlite3 أو .db"}, status=400)
 
-        temp_file_path = os.path.join(tempfile.gettempdir(), safe_filename)
-        with open(temp_file_path, 'wb+') as dest:
-            for chunk in file_obj.chunks():
-                dest.write(chunk)
-
-        # 1. Integrity Check & Table Schema Validation
+        temp_file_path = os.path.join(tempfile.gettempdir(), f"ventapos_restore_{uuid.uuid4().hex}_{safe_filename}")
         try:
-            conn = sqlite3.connect(temp_file_path)
-            cursor = conn.cursor()
-            cursor.execute("PRAGMA integrity_check;")
-            result = cursor.fetchone()
-            if not result or result[0] != "ok":
-                conn.close()
-                return Response({"error": "ملف قاعدة البيانات تالف أو غير صالح للاستعادة"}, status=400)
-            
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            tables = {row[0] for row in cursor.fetchall()}
-            conn.close()
+            with open(temp_file_path, 'wb+') as dest:
+                for chunk in file_obj.chunks():
+                    dest.write(chunk)
 
-            required_tables = {
-                'salesapp_receipt', 'salesapp_saleitem', 'salesapp_inventoryitem',
-                'salesapp_purchaseinvoice', 'salesapp_branch', 'salesapp_salesperson',
-                'salesapp_companysetting', 'salesapp_clientlicense'
-            }
-            if not required_tables.issubset(tables):
-                return Response({"error": "ملف قاعدة البيانات غير متوافق مع نظام VentaPOS (جداول مفقودة)"}, status=400)
-        except Exception as e:
-            return Response({"error": f"فشل فحص النسخة: {str(e)}"}, status=400)
-
-        # 2. Perform Immediate Live Restore with Fallback Staging
-        db_path = Path(settings.DATABASES['default']['NAME'])
-        pending_path = db_path.parent / 'restore_pending.bin'
-
-        # Stage fallback copy first
-        try:
-            shutil.copy2(temp_file_path, pending_path)
-        except Exception as stage_err:
-            print(f"Warning staging restore file: {stage_err}")
-
-        try:
-            # Close existing active Django DB connections to release locks on Windows
-            connections.close_all()
-
-            # Automatic pre-restore snapshot
-            backups_dir = db_path.parent / 'backups'
-            backups_dir.mkdir(parents=True, exist_ok=True)
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            pre_restore_file = backups_dir / f"pre_restore_{timestamp}.sqlite3"
-            if db_path.exists() and db_path.stat().st_size > 0:
-                try:
-                    src_conn = sqlite3.connect(str(db_path))
-                    dst_conn = sqlite3.connect(str(pre_restore_file))
-                    with dst_conn:
-                        src_conn.backup(dst_conn)
-                    dst_conn.close()
-                    src_conn.close()
-                except Exception as pre_err:
-                    print(f"Warning creating pre-restore backup: {pre_err}")
-
-            # Live overwrite of the primary database file FIRST (before deleting wal/shm)
-            # If copy2 fails (e.g. PermissionError on Windows), live WAL/SHM are preserved intact!
-            shutil.copy2(temp_file_path, db_path)
-
-            # Remove stale WAL and SHM files to prevent replaying old transactions
-            wal_file = Path(str(db_path) + '-wal')
-            shm_file = Path(str(db_path) + '-shm')
-            if wal_file.exists():
-                wal_file.unlink(missing_ok=True)
-            if shm_file.exists():
-                shm_file.unlink(missing_ok=True)
-
-            # Re-initialize WAL and truncate on the new file
-            verify_conn = sqlite3.connect(str(db_path), timeout=30)
-            verify_conn.execute("PRAGMA journal_mode=WAL;")
-            verify_conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
-            cur = verify_conn.cursor()
-            cur.execute("PRAGMA integrity_check;")
-            res = cur.fetchone()
-            verify_conn.close()
-
-            connections.close_all()
-
-            # Run migrations to automatically upgrade older backup schemas
-            from django.core.management import call_command
+            # 1. Integrity Check & Table Schema Validation
+            conn = None
             try:
-                call_command('migrate', interactive=False)
-            except Exception as mig_err:
-                # If migration fails, rollback to pre-restore snapshot
-                if pre_restore_file.exists():
-                    shutil.copy2(pre_restore_file, db_path)
-                    if wal_file.exists():
-                        wal_file.unlink(missing_ok=True)
-                    if shm_file.exists():
-                        shm_file.unlink(missing_ok=True)
+                conn = sqlite3.connect(temp_file_path)
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA integrity_check;")
+                result = cursor.fetchone()
+                if not result or result[0] != "ok":
+                    return Response({"error": "ملف قاعدة البيانات تالف أو غير صالح للاستعادة"}, status=400)
+                
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+                tables = {row[0] for row in cursor.fetchall()}
+
+                required_tables = {
+                    'salesapp_receipt', 'salesapp_saleitem', 'salesapp_inventoryitem',
+                    'salesapp_purchaseinvoice', 'salesapp_branch', 'salesapp_salesperson',
+                    'salesapp_companysetting', 'salesapp_clientlicense'
+                }
+                if not required_tables.issubset(tables):
+                    return Response({"error": "ملف قاعدة البيانات غير متوافق مع نظام VentaPOS (جداول مفقودة)"}, status=400)
+            except Exception as e:
+                return Response({"error": f"فشل فحص النسخة: {str(e)}"}, status=400)
+            finally:
+                if conn is not None:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+
+            # 2. Perform Immediate Live Restore with Fallback Staging
+            db_path = Path(settings.DATABASES['default']['NAME'])
+            pending_path = db_path.parent / 'restore_pending.bin'
+
+            # Stage fallback copy first
+            try:
+                shutil.copy2(temp_file_path, pending_path)
+            except Exception as stage_err:
+                print(f"Warning staging restore file: {stage_err}")
+
+            pre_restore_file = None
+            try:
+                # Close existing active Django DB connections to release locks on Windows
                 connections.close_all()
-                return Response({"error": f"فشل ترقية مخطط قاعدة البيانات المستعادة: {str(mig_err)}"}, status=400)
 
-            connections.close_all()
+                # Automatic pre-restore snapshot
+                backups_dir = db_path.parent / 'backups'
+                backups_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                pre_restore_file = backups_dir / f"pre_restore_{timestamp}.sqlite3"
+                if db_path.exists() and db_path.stat().st_size > 0:
+                    try:
+                        src_conn = sqlite3.connect(str(db_path))
+                        dst_conn = sqlite3.connect(str(pre_restore_file))
+                        with dst_conn:
+                            src_conn.backup(dst_conn)
+                        dst_conn.close()
+                        src_conn.close()
+                    except Exception as pre_err:
+                        print(f"Warning creating pre-restore backup: {pre_err}")
 
-            # Clean up pending file since live restore succeeded
-            if pending_path.exists():
-                pending_path.unlink(missing_ok=True)
+                # Live overwrite of the primary database file FIRST (before deleting wal/shm)
+                shutil.copy2(temp_file_path, db_path)
 
-            return Response({
-                "status": "success",
-                "message": "تم استعادة قاعدة البيانات بنجاح. جاري تحديث بيانات البرنامج..."
-            }, status=200)
+                # Remove stale WAL and SHM files to prevent replaying old transactions
+                wal_file = Path(str(db_path) + '-wal')
+                shm_file = Path(str(db_path) + '-shm')
+                if wal_file.exists():
+                    wal_file.unlink(missing_ok=True)
+                if shm_file.exists():
+                    shm_file.unlink(missing_ok=True)
 
-        except Exception as swap_err:
-            # Staged file remains in pending_path for launcher.py startup recovery
-            return Response({
-                "status": "pending_restart",
-                "message": f"تم فحص النسخة واعتمادها بنجاح. تعذر التبديل الحي بسبب قفل النظام ({str(swap_err)}). يرجى إعادة تشغيل البرنامج لتطبيق الاستعادة."
-            }, status=200)
+                # Re-initialize WAL and verify restored DB integrity
+                verify_conn = sqlite3.connect(str(db_path), timeout=30)
+                cur = None
+                res = None
+                try:
+                    verify_conn.execute("PRAGMA journal_mode=WAL;").close()
+                    verify_conn.execute("PRAGMA wal_checkpoint(TRUNCATE);").close()
+                    cur = verify_conn.cursor()
+                    cur.execute("PRAGMA integrity_check;")
+                    res = cur.fetchone()
+                finally:
+                    if cur is not None:
+                        cur.close()
+                    verify_conn.close()
+
+                if not res or res[0] != "ok":
+                    if pre_restore_file and pre_restore_file.exists():
+                        shutil.copy2(pre_restore_file, db_path)
+                        for sidecar in (wal_file, shm_file):
+                            try:
+                                sidecar.unlink(missing_ok=True)
+                            except OSError:
+                                pass
+                    connections.close_all()
+                    return Response({"error": "فشل فحص سلامة قاعدة البيانات بعد النسخ، تم التراجع تلقائياً."}, status=400)
+
+                connections.close_all()
+
+                # Run migrations to automatically upgrade older backup schemas
+                from django.core.management import call_command
+                try:
+                    call_command('migrate', interactive=False)
+                except Exception as mig_err:
+                    # If migration fails, rollback to pre-restore snapshot
+                    if pre_restore_file and pre_restore_file.exists():
+                        shutil.copy2(pre_restore_file, db_path)
+                        wal_file.unlink(missing_ok=True)
+                        shm_file.unlink(missing_ok=True)
+                    connections.close_all()
+                    return Response({"error": f"فشل ترقية مخطط قاعدة البيانات المستعادة: {str(mig_err)}"}, status=400)
+
+                connections.close_all()
+
+                # Clean up pending file since live restore succeeded
+                if pending_path.exists():
+                    pending_path.unlink(missing_ok=True)
+
+                return Response({
+                    "status": "success",
+                    "message": "تم استعادة قاعدة البيانات بنجاح. جاري تحديث بيانات البرنامج..."
+                }, status=200)
+
+            except Exception as swap_err:
+                # Staged file remains in pending_path for launcher.py startup recovery
+                return Response({
+                    "status": "pending_restart",
+                    "message": f"تم فحص النسخة واعتمادها بنجاح. تعذر التبديل الحي بسبب قفل النظام ({str(swap_err)}). يرجى إعادة تشغيل البرنامج لتطبيق الاستعادة."
+                }, status=200)
+        finally:
+            try:
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+            except OSError:
+                pass
 
 class OfflineExportItemsView(ToolsBaseView):
     permission_classes = [IsAuthenticated]

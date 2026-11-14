@@ -10,9 +10,10 @@ from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from api.models import ClientLicense, UsedLicense
+from django.db import transaction
+from api.models import ClientLicense, UsedLicense, LicenseHistory
 from api.utils.license_validator import LicenseValidator
-from api.utils.security_utils import get_machine_id
+from api.utils.security_utils import canonical_code_hash, get_machine_id
 
 
 class CustomAuthToken(ObtainAuthToken):
@@ -72,29 +73,38 @@ class PasswordRecoveryView(views.APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        recovery_code = request.data.get('recovery_code')
+        recovery_code = str(request.data.get('recovery_code') or '').strip()
         new_password = request.data.get('new_password')
-        if not recovery_code or not new_password:
+        if not recovery_code or not str(new_password or '').strip():
             return Response({"error": "الرجاء إدخال كود الاسترداد وكلمة المرور الجديدة"}, status=400)
 
         machine_id = get_machine_id()
         result = LicenseValidator.validate(recovery_code, machine_id)
 
-        if not result.get("valid") or not (result.get("product_id") in (15, 16) or result.get("is_recovery")):
+        if not result.get("valid") or result.get("product_id") != 16 or not result.get("is_recovery"):
             return Response({"error": "كود الاسترداد غير صحيح أو غير مخصص لهذا الجهاز."}, status=400)
 
-        code_hash = hashlib.sha256(recovery_code.encode()).hexdigest()
-        if UsedLicense.objects.filter(code_hash=code_hash, is_deleted=False).exists():
+        code_hash = canonical_code_hash(recovery_code)
+        raw_hash = hashlib.sha256(recovery_code.encode()).hexdigest()
+        if UsedLicense.objects.filter(code_hash__in=[code_hash, raw_hash], is_deleted=False).exists():
             return Response({"error": "تم استخدام كود الاسترداد هذا من قبل."}, status=400)
 
         admin_user = User.objects.filter(is_superuser=True).first()
         if not admin_user:
             return Response({"error": "لا يوجد حساب مدير في النظام."}, status=400)
 
-        admin_user.set_password(new_password)
-        admin_user.save()
-
-        UsedLicense.objects.create(code_hash=code_hash)
+        with transaction.atomic():
+            admin_user.set_password(new_password)
+            admin_user.save()
+            Token.objects.filter(user=admin_user).delete()
+            UsedLicense.objects.create(code_hash=code_hash)
+            LicenseHistory.objects.create(
+                machine_id=machine_id,
+                product_name="Emergency Password Recovery (Product 16)",
+                operation_type="RECOVERY",
+                added_balance=0,
+                status="SUCCESS",
+            )
         return Response({"message": "تم تغيير كلمة المرور بنجاح."})
 
 
@@ -113,6 +123,8 @@ class ChangePasswordView(views.APIView):
 
         if old_password is None or new_password is None:
             return Response({"error": "بيانات غير صالحة"}, status=400)
+        if new_password != "" and not str(new_password).strip():
+            return Response({"error": "كلمة المرور الجديدة لا يمكن أن تكون مسافات فارغة فقط"}, status=400)
 
         user = request.user
         if not user.is_authenticated:
@@ -125,5 +137,7 @@ class ChangePasswordView(views.APIView):
 
         user.set_password(new_password)
         user.save()
+        Token.objects.filter(user=user).delete()
+        new_token = Token.objects.create(user=user)
         msg = "تم تغيير كلمة المرور بنجاح." if new_password else "تم إلغاء كلمة المرور، ستتمكن من الدخول مباشرة."
-        return Response({"message": msg})
+        return Response({"message": msg, "token": new_token.key})

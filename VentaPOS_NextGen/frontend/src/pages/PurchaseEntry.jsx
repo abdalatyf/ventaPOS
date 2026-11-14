@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../api';
 import { useActiveBranch } from '../hooks/useActiveBranch';
 import { parseStrictInt, parseWholeMoney, parseValidMonthYear } from '../utils/formatUtils';
-import { scheduleIdleFocus } from '../utils/focusUtils';
+import { scheduleIdleFocus, scheduleTransitionFocus } from '../utils/focusUtils';
 import { IconFileInvoice } from '@tabler/icons-react';
 import PurchaseHeader from '../components/purchases/PurchaseHeader';
 import PurchaseItemForm from '../components/purchases/PurchaseItemForm';
@@ -164,7 +164,7 @@ const PurchaseEntry = () => {
     if (fieldType === 'supplier') {
       setSupplierId(item.id);
       setSupplierQuery(item.name);
-      setTimeout(() => monthRef.current?.focus(), 50);
+      scheduleTransitionFocus(monthRef, 50);
     } else if (fieldType === 'product') {
       setSelectedProduct(item);
       setProductQuery(item.name);
@@ -186,7 +186,7 @@ const PurchaseEntry = () => {
            }).catch(() => {});
       }
 
-      setTimeout(() => qtyRef.current?.focus(), 50);
+      scheduleTransitionFocus(qtyRef, 50);
     }
     setSuggestions([]);
     setActiveInput('');
@@ -299,7 +299,7 @@ const PurchaseEntry = () => {
       setProductQuery('');
       setQuantity('');
       setPurchasePrice('');
-      setTimeout(() => prodQueryRef.current?.focus(), 50);
+      scheduleTransitionFocus(prodQueryRef, 50);
     } finally {
       addingItemRef.current = false;
     }

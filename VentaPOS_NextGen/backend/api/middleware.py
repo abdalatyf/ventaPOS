@@ -108,6 +108,11 @@ class LicenseEnforcementMiddleware:
                 machine_id = get_machine_id()
                 cache.set('machine_id', machine_id, 3600 * 24)
 
+            from api.services.receipt_service import (
+                get_first_production_license_start_date,
+                get_license_date_bounds,
+            )
+
             today = timezone.localdate()
             all_active_licenses = ClientLicense.objects.filter(is_active=True).exclude(machine_id="DEMO_MACHINE")
             valid_time_license = None
@@ -120,12 +125,13 @@ class LicenseEnforcementMiddleware:
                     continue
 
                 if lic.product_id < 10:
-                    if not valid_time_license or (lic.expiry_date and lic.expiry_date > valid_time_license.expiry_date):
+                    if not valid_time_license or (lic.expiry_date and (not valid_time_license.expiry_date or lic.expiry_date > valid_time_license.expiry_date)):
                         valid_time_license = lic
 
-                total_invoices_balance += lic.invoices_balance
+                _, _, lic_grace = get_license_date_bounds(lic)
+                if not lic_grace or today <= lic_grace:
+                    total_invoices_balance += lic.invoices_balance
 
-            from api.services.receipt_service import get_license_date_bounds
             start_date, last_allowed_month, grace_end = get_license_date_bounds(valid_time_license)
 
             if valid_time_license and valid_time_license.product_id in (2, 3):
@@ -153,12 +159,27 @@ class LicenseEnforcementMiddleware:
                         "message": "انتهى الاشتراك. التطبيق الآن في وضع القراءة فقط."
                     }, status=403)
 
-            is_saving_receipt = (request.path.startswith('/api/v1/receipts/') and request.method == 'POST')
-            if is_saving_receipt and total_invoices_balance <= 0 and valid_time_license:
-                return JsonResponse({
-                    "error": "license_expired",
-                    "message": "Invoice balance exhausted. Please add invoice balance."
-                }, status=403)
+            is_creating_receipt = (request.path.rstrip('/') == '/api/v1/receipts' and request.method == 'POST')
+            if is_creating_receipt and total_invoices_balance <= 0 and valid_time_license:
+                is_exempt_pre_license = False
+                first_start = get_first_production_license_start_date()
+                if first_start and request.body:
+                    try:
+                        import json as _json
+                        payload = _json.loads(request.body.decode('utf-8'))
+                        s_year = int(payload.get('sale_year'))
+                        s_month = int(payload.get('sale_month'))
+                        inv_date = timezone.datetime(s_year, s_month, 1).date()
+                        if inv_date < first_start.replace(day=1):
+                            is_exempt_pre_license = True
+                    except Exception:
+                        pass
+
+                if not is_exempt_pre_license:
+                    return JsonResponse({
+                        "error": "license_expired",
+                        "message": "Invoice balance exhausted. Please add invoice balance."
+                    }, status=403)
 
             return self.get_response(request)
 

@@ -23,8 +23,11 @@ export default function CompanyTab({ isFirstSetup = false, onSetupComplete = nul
     const fetchCompanySettings = async () => {
       try {
         const response = await api.get('/company-settings/');
-        if (response.data && response.data.results && response.data.results.length > 0) {
-          const setting = response.data.results[0];
+        const settingsList = Array.isArray(response.data)
+          ? response.data
+          : (response.data?.results || []);
+        if (settingsList.length > 0) {
+          const setting = settingsList[0];
           setSettingId(setting.id);
           setFormData({
             name: setting.name || '',

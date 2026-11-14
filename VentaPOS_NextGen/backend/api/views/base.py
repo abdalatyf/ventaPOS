@@ -72,31 +72,18 @@ def get_default_date(branch_id=None):
 
 
 def is_date_within_subscription(year, month):
-    from api.models import ClientLicense
-    from dateutil.relativedelta import relativedelta
+    from api.services.receipt_service import get_active_license, get_subscription_date_bounds
     target_date = datetime.date(year, month, 1)
-    
-    # Query active production license first, fallback to demo
-    active_lic = ClientLicense.objects.filter(is_active=True, is_deleted=False).exclude(machine_id="DEMO_MACHINE").order_by('-expiry_date').first()
-    if not active_lic:
-        active_lic = ClientLicense.objects.filter(is_active=True, is_deleted=False).order_by('-expiry_date').first()
 
+    active_lic = get_active_license()
     if active_lic:
-        start = active_lic.start_date
-        expiry = active_lic.expiry_date
-
-        if start:
-            start_norm = datetime.date(start.year, start.month, 1)
+        start_norm, last_allowed_month, _ = get_subscription_date_bounds(active_lic)
+        if start_norm:
+            start_norm = datetime.date(start_norm.year, start_norm.month, 1)
             if target_date < start_norm:
                 return False
-        if expiry:
-            if expiry.day == 1 and (not start or start < expiry):
-                last_allowed_month = (expiry - relativedelta(months=1)).replace(day=1)
-            else:
-                last_allowed_month = expiry.replace(day=1)
-
-            if target_date > last_allowed_month:
-                return False
+        if last_allowed_month and target_date > last_allowed_month:
+            return False
         return True
     return True
 

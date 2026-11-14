@@ -91,12 +91,8 @@ class DashboardReportView(views.APIView):
                 pass
         area_query = request.query_params.get("area", "").strip()
 
-        from api.services.receipt_service import get_active_license
-        active_lic = get_active_license()
-        is_pre_license_month = False
-        if active_lic and active_lic.start_date:
-            if (year < active_lic.start_date.year) or (year == active_lic.start_date.year and month < active_lic.start_date.month):
-                is_pre_license_month = True
+        from api.services.receipt_service import is_pre_license_month as _is_pre_license_month
+        is_pre_license_month = _is_pre_license_month(year, month)
 
         # 1. Revenue & Returns (Card 1)
         if is_pre_license_month:
@@ -510,12 +506,8 @@ class ProfitAndLossReportView(views.APIView):
             except ValueError:
                 raise ValidationError({"salesperson_id": ["Invalid salesperson_id format."]})
 
-        from api.services.receipt_service import get_active_license
-        active_lic = get_active_license()
-        is_pre_license_month = False
-        if active_lic and active_lic.start_date:
-            if (year < active_lic.start_date.year) or (year == active_lic.start_date.year and month < active_lic.start_date.month):
-                is_pre_license_month = True
+        from api.services.receipt_service import is_pre_license_month as _is_pre_license_month
+        is_pre_license_month = _is_pre_license_month(year, month)
 
         if is_pre_license_month:
             sale_items_qs = SaleItem.objects.none()
@@ -739,12 +731,8 @@ class CashDrawerReportView(views.APIView):
                 pass
         area_query = request.query_params.get("area", "").strip()
 
-        from api.services.receipt_service import get_active_license
-        active_lic = get_active_license()
-        is_pre_license_month = False
-        if active_lic and active_lic.start_date:
-            if (year < active_lic.start_date.year) or (year == active_lic.start_date.year and month < active_lic.start_date.month):
-                is_pre_license_month = True
+        from api.services.receipt_service import is_pre_license_month as _is_pre_license_month
+        is_pre_license_month = _is_pre_license_month(year, month)
 
         # 1. Cash Sales receipts
         if is_pre_license_month:
@@ -1171,12 +1159,8 @@ class AreasReportView(views.APIView):
             except ValueError:
                 pass
 
-        from api.services.receipt_service import get_active_license
-        active_lic = get_active_license()
-        is_pre_license_month = False
-        if active_lic and active_lic.start_date:
-            if (year < active_lic.start_date.year) or (year == active_lic.start_date.year and month < active_lic.start_date.month):
-                is_pre_license_month = True
+        from api.services.receipt_service import is_pre_license_month as _is_pre_license_month
+        is_pre_license_month = _is_pre_license_month(year, month)
 
         if is_pre_license_month:
             receipts_qs = Receipt.objects.none()
@@ -1344,16 +1328,16 @@ class ReportDesktopPrintView(views.APIView):
                 title = "تقرير المناطق والتحصيل الجغرافي"
             if not columns:
                 columns = [
-                    {"key": "area", "label": "المنطقة", "align": "start"},
-                    {"key": "invoices_count", "label": "عدد الفواتير", "align": "center"},
-                    {"key": "cash_sales", "label": "مبيعات نقدي", "align": "center"},
-                    {"key": "installment_sales", "label": "مبيعات تقسيط", "align": "center"},
-                    {"key": "gross_sales", "label": "إجمالي المبيعات", "align": "center"},
-                    {"key": "down_payments", "label": "إجمالي المقدمات", "align": "center"},
-                    {"key": "due_installments_month", "label": "الأقساط المستحقة", "align": "center"},
-                    {"key": "returns_amount", "label": "المرتجعات", "align": "center"},
-                    {"key": "net_sales", "label": "صافي المبيعات", "align": "center"},
-                    {"key": "salespersons_display", "label": "المناديب", "align": "start"},
+                    {"key": "area", "label": "المنطقة", "align": "start", "width": "15%"},
+                    {"key": "invoices_count", "label": "عدد الفواتير", "align": "center", "width": "8%"},
+                    {"key": "cash_sales", "label": "مبيعات نقدي", "align": "center", "width": "9%"},
+                    {"key": "installment_sales", "label": "مبيعات تقسيط", "align": "center", "width": "9%"},
+                    {"key": "gross_sales", "label": "إجمالي المبيعات", "align": "center", "width": "10%"},
+                    {"key": "down_payments", "label": "إجمالي المقدمات", "align": "center", "width": "9%"},
+                    {"key": "due_installments_month", "label": "الأقساط المستحقة", "align": "center", "width": "9%"},
+                    {"key": "returns_amount", "label": "المرتجعات", "align": "center", "width": "9%"},
+                    {"key": "net_sales", "label": "صافي المبيعات", "align": "center", "width": "10%"},
+                    {"key": "salespersons_display", "label": "المناديب", "align": "start", "width": "12%"},
                 ]
             if not rows:
                 from rest_framework.test import APIRequestFactory
@@ -1392,16 +1376,16 @@ class ReportDesktopPrintView(views.APIView):
                 title = "تقرير المشتريات والموردين"
             if not columns:
                 columns = [
-                    {"key": "item_name", "label": "اسم الصنف", "align": "start"},
-                    {"key": "supplier_name", "label": "اسم المورد", "align": "start"},
-                    {"key": "invoices_count", "label": "عدد الفواتير", "align": "center"},
-                    {"key": "purchased_qty", "label": "كمية الشراء", "align": "center"},
-                    {"key": "returned_qty", "label": "كمية المرتجع", "align": "center"},
-                    {"key": "net_qty", "label": "صافي الكمية", "align": "center"},
-                    {"key": "avg_unit_cost", "label": "متوسط سعر الشراء", "align": "center"},
-                    {"key": "gross_purchases", "label": "إجمالي الشراء", "align": "center"},
-                    {"key": "returns_amount", "label": "إجمالي المرتجع", "align": "center"},
-                    {"key": "net_purchases", "label": "صافي المشتريات", "align": "center"},
+                    {"key": "item_name", "label": "اسم الصنف", "align": "start", "width": "18%"},
+                    {"key": "supplier_name", "label": "اسم المورد", "align": "start", "width": "14%"},
+                    {"key": "invoices_count", "label": "عدد الفواتير", "align": "center", "width": "8%"},
+                    {"key": "purchased_qty", "label": "كمية الشراء", "align": "center", "width": "8%"},
+                    {"key": "returned_qty", "label": "كمية المرتجع", "align": "center", "width": "8%"},
+                    {"key": "net_qty", "label": "صافي الكمية", "align": "center", "width": "8%"},
+                    {"key": "avg_unit_cost", "label": "متوسط سعر الشراء", "align": "center", "width": "9%"},
+                    {"key": "gross_purchases", "label": "إجمالي الشراء", "align": "center", "width": "9%"},
+                    {"key": "returns_amount", "label": "إجمالي المرتجع", "align": "center", "width": "9%"},
+                    {"key": "net_purchases", "label": "صافي المشتريات", "align": "center", "width": "9%"},
                 ]
             if not rows:
                 from rest_framework.test import APIRequestFactory
@@ -1455,8 +1439,10 @@ class ReportDesktopPrintView(views.APIView):
 
         period_label = request.data.get("period_label", "")
         filters_summary = request.data.get("filters_summary", [])
-        kpis = request.data.get("kpis", [])
-        rows = request.data.get("rows", [])
+        if request.data.get("kpis"):
+            kpis = request.data.get("kpis")
+        if request.data.get("rows"):
+            rows = request.data.get("rows")
         footer_row = request.data.get("footer_row", None)
         action_type = request.data.get("action", "print")
         target_printer = request.data.get("target_printer", None)

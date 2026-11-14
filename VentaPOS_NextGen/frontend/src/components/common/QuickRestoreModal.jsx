@@ -50,15 +50,15 @@ export default function QuickRestoreModal({ isOpen, onClose }) {
       localStorage.removeItem('branchName');
       localStorage.removeItem('company_name');
 
-      if (res.data?.pending_restart || res.data?.status === 'pending_restart') {
+      const isPendingRestart = Boolean(res.data?.pending_restart || res.data?.status === 'pending_restart');
+      if (isPendingRestart) {
         setSuccessMsg('تم تجهيز النسخة الاحتياطية بنجاح! يرجى إعادة تشغيل البرنامج لتطبيق التغييرات.');
       } else {
         setSuccessMsg(res.data?.message || 'تمت استعادة النسخة الاحتياطية بنجاح! سيتم الانتقال لتسجيل الدخول.');
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 2000);
       }
-
-      setTimeout(() => {
-        window.location.href = '/login';
-      }, 2000);
     } catch (err) {
       console.error('Restore error:', err);
       setError(err.response?.data?.error || err.response?.data?.detail || 'فشل استعادة النسخة الاحتياطية.');

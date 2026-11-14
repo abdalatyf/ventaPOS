@@ -36,8 +36,8 @@ export default function DemoBanner() {
 
   if (!isDemo) return null;
   
-  // Don't show on init or login
-  if (location.pathname === '/init' || location.pathname === '/login') return null;
+  // Don't show on activation-setup or login
+  if (location.pathname === '/activation-setup' || location.pathname === '/login') return null;
 
   return (
     <>

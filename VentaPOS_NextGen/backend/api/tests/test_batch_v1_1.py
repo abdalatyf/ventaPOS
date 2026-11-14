@@ -243,9 +243,15 @@ class BatchV11Tests(TestCase):
         self.assertEqual(drawer_m6["collection_inflow"], 1000)
 
     def test_unauthenticated_backup_upload_access(self):
-        """Test BackupUploadView allows unauthenticated access for setup and login restore."""
+        """Test BackupUploadView blocks unauthenticated access when password-protected and allows it during initial setup."""
         self.client.logout()
+        res_locked = self.client.post("/api/v1/tools/backup/upload/", {})
+        self.assertEqual(res_locked.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        self.user.set_unusable_password()
+        self.user.save()
         res = self.client.post("/api/v1/tools/backup/upload/", {})
-        # Should NOT be 401 Unauthorized or 403 Forbidden; should be 400 Bad Request because no file was attached
+        # During initial setup (no password), should be 400 Bad Request because no file was attached
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("error", res.data)
+

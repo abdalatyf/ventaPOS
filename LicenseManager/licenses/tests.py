@@ -262,3 +262,94 @@ class LicenseManagerViewTests(TestCase):
                 self.assertEqual(payload['product_id'], 4)
                 self.assertEqual(payload['license_code'], lic.generated_code)
 
+    def test_login_fails_closed_when_master_password_empty(self):
+        """Verify login fails closed when MASTER_PASSWORD is empty (never falls back to '123')."""
+        from django.urls import reverse
+        from django.test import override_settings
+
+        with override_settings(MASTER_PASSWORD=""):
+            res_default = self.client.post(reverse('login'), {'password': '123'})
+            self.assertEqual(res_default.status_code, 200)
+            self.assertContains(res_default, 'VENTA_LICENSE_MASTER_PASSWORD')
+            self.assertFalse(self.client.session.get('is_logged_in', False))
+
+            res_empty = self.client.post(reverse('login'), {'password': ''})
+            self.assertEqual(res_empty.status_code, 200)
+            self.assertFalse(self.client.session.get('is_logged_in', False))
+
+    def test_login_succeeds_with_configured_master_password_and_rejects_wrong(self):
+        """Verify constant-time login succeeds only with the exact configured MASTER_PASSWORD."""
+        from django.urls import reverse
+        from django.test import override_settings
+
+        with override_settings(MASTER_PASSWORD="StrongAdminPass!99"):
+            bad_res = self.client.post(reverse('login'), {'password': '123'})
+            self.assertEqual(bad_res.status_code, 200)
+            self.assertContains(bad_res, 'كلمة المرور غير صحيحة')
+            self.assertFalse(self.client.session.get('is_logged_in', False))
+
+            ok_res = self.client.post(reverse('login'), {'password': 'StrongAdminPass!99'})
+            self.assertEqual(ok_res.status_code, 302)
+            self.assertEqual(ok_res.url, reverse('dashboard'))
+            self.assertTrue(self.client.session.get('is_logged_in', False))
+
+    def test_issue_product_15_topup_5000_vs_product_16_recovery_mocked_supabase(self):
+        """
+        Verify add_license_view separates product_id=15 (5000-invoice top-up) from
+        product_id=16 (emergency password recovery) with external Supabase calls mocked.
+        """
+        from unittest.mock import patch, MagicMock
+        from django.urls import reverse
+        from django.test import override_settings
+        self._login_session()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 201
+        mock_resp.text = ''
+
+        with override_settings(SUPABASE_KEY="valid-secret-key"):
+            with patch('requests.post', return_value=mock_resp) as mock_post:
+                # 1. Mint product_id=15 (Top-up +5000 invoices)
+                r15 = self.client.post(reverse('add_license'), {
+                    'client': self.client_obj.id,
+                    'product_id': 15,
+                    'price': 500,
+                    'start_date': '2026-02-01',
+                    'notes': '5000 topup'
+                })
+                self.assertEqual(r15.status_code, 302)
+
+                # 2. Mint product_id=16 (Emergency password recovery)
+                r16 = self.client.post(reverse('add_license'), {
+                    'client': self.client_obj.id,
+                    'product_id': 16,
+                    'price': 0,
+                    'start_date': '2026-02-01',
+                    'notes': 'emergency reset'
+                })
+                self.assertEqual(r16.status_code, 302)
+
+                self.assertEqual(mock_post.call_count, 2)
+                p15 = mock_post.call_args_list[0].kwargs['json']
+                p16 = mock_post.call_args_list[1].kwargs['json']
+                self.assertEqual(p15['product_id'], 15)
+                self.assertIn('5000', p15['product_name'])
+                self.assertIsNone(p15['expiry_date'])
+                self.assertEqual(p16['product_id'], 16)
+                self.assertIsNone(p16['expiry_date'])
+
+                lic15 = License.objects.get(product_id=15)
+                lic16 = License.objects.get(product_id=16)
+                self.assertTrue(lic15.is_invoice_based)
+                self.assertFalse(lic15.is_emergency_code)
+                self.assertTrue(lic16.is_emergency_code)
+                self.assertFalse(lic16.is_invoice_based)
+
+                val15 = LicenseGenerator.validate(lic15.generated_code, self.client_obj.machine_id)
+                val16 = LicenseGenerator.validate(lic16.generated_code, self.client_obj.machine_id)
+                self.assertTrue(val15['valid'])
+                self.assertEqual(val15['product_id'], 15)
+                self.assertTrue(val16['valid'])
+                self.assertEqual(val16['product_id'], 16)
+
+

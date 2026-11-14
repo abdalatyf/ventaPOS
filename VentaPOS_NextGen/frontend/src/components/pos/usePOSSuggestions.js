@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import api from '../../api';
 import { toEnglish } from './posUtils';
 import { parseValidMonthYear } from '../../utils/formatUtils';
+import { scheduleTransitionFocus } from '../../utils/focusUtils';
 
 export default function usePOSSuggestions({
   salespersons,
@@ -123,7 +124,7 @@ export default function usePOSSuggestions({
       setSelectedProduct(item);
       setProductQuery(item.value);
       setSellPrice(isCashSale ? (item.cash_price || '') : (item.installment_price || ''));
-      setTimeout(() => qtyRef.current?.focus(), 50);
+      scheduleTransitionFocus(qtyRef, 50);
       const validDate = parseValidMonthYear(saleMonth, saleYear, { minYear: 2000, maxYear: 2100 });
       if (validDate) {
         const reqGen = requestGenRef.current;

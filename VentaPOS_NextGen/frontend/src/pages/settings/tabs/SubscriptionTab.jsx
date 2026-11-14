@@ -17,7 +17,9 @@ export default function SubscriptionTab() {
     isOnlineActive: false,
     onlineExpiryDate: null,
     is_last_month: false,
-    needs_support: false
+    needs_support: false,
+    totalInvoicesBalance: 0,
+    isPrintOnly: false,
   });
   const [historyRecords, setHistoryRecords] = useState([]);
   const [isActivating, setIsActivating] = useState(false);
@@ -44,15 +46,18 @@ export default function SubscriptionTab() {
           isOnlineActive: false,
           onlineExpiryDate: null,
           is_last_month: data.is_last_month || false,
-          needs_support: data.needs_support || false
+          needs_support: data.needs_support || false,
+          totalInvoicesBalance: data.total_invoices_balance ?? 0,
+          isPrintOnly: Boolean(data.is_print_only),
         });
       }
       
       // Fetch history
       const historyRes = await api.get('/license-history/');
-      if (historyRes.data && historyRes.data.results) {
-        setHistoryRecords(historyRes.data.results);
-      }
+      const histList = Array.isArray(historyRes.data)
+        ? historyRes.data
+        : (historyRes.data?.results || []);
+      setHistoryRecords(histList);
     } catch (error) {
       console.error("Failed to fetch license status", error);
       toast.error('تعذر تحميل حالة الاشتراك');
@@ -210,37 +215,55 @@ export default function SubscriptionTab() {
 
       {/* History Table */}
       <div className="card shadow-sm border-secondary-subtle mb-4">
-        <div className="card-header bg-white fw-bold text-muted border-bottom-0">
-          سجل العمليات السابقة
+        <div className="card-header bg-white fw-bold text-muted border-bottom-0 d-flex justify-content-between align-items-center">
+          <span>سجل العمليات السابقة</span>
+          <span className="badge bg-primary bg-opacity-10 text-primary px-3 py-2">
+            الرصيد المتاح: {Number(licenseInfo.totalInvoicesBalance || 0).toLocaleString('en-US')} فاتورة
+            {licenseInfo.isPrintOnly ? ' • باقة طباعة فقط' : ''}
+          </span>
         </div>
         <div className="table-responsive">
           <table className="table table-bordered table-vcenter table-hover table-sticky-header text-nowrap tabular-nums mb-0 text-center align-middle">
             <thead className="bg-light">
               <tr>
                 <th className="py-2 border-secondary-subtle">الرقم</th>
-                <th className="border-secondary-subtle">كود التفعيل</th>
-                <th className="border-secondary-subtle">التاريخ</th>
-                <th className="border-secondary-subtle">ملاحظات</th>
+                <th className="border-secondary-subtle">الباقة / العملية</th>
+                <th className="border-secondary-subtle">النوع</th>
+                <th className="border-secondary-subtle">الفواتير المضافة</th>
+                <th className="border-secondary-subtle">بداية الفترة</th>
+                <th className="border-secondary-subtle">نهاية الفترة</th>
+                <th className="border-secondary-subtle">تاريخ التنفيذ</th>
+                <th className="border-secondary-subtle">الحالة</th>
               </tr>
             </thead>
             <tbody>
               {historyRecords.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="py-4 text-muted">لا توجد عمليات سابقة</td>
+                  <td colSpan="8" className="py-4 text-muted">لا توجد عمليات سابقة</td>
                 </tr>
               ) : (
-                historyRecords.map((record) => (
-                  <tr key={record.id}>
-                    <td className="fw-bold">{record.id}</td>
-                    <td>{record.license_code || '---'}</td>
-                    <td>{new Date(record.created_at).toLocaleString('en-US')}</td>
-                    <td>
-                      <span className="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">
-                        ناجح
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                historyRecords.map((record) => {
+                  const archivedDate = record.archived_at
+                    ? new Date(record.archived_at).toLocaleDateString('en-CA')
+                    : '---';
+                  const isSuccess = record.status === 'SUCCESS' || record.status === 'ناجح';
+                  return (
+                    <tr key={record.id}>
+                      <td className="fw-bold">{record.id}</td>
+                      <td>{record.product_name || '---'}</td>
+                      <td>{record.operation_type || '---'}</td>
+                      <td className="fw-bold">{Number(record.added_balance || 0).toLocaleString('en-US')}</td>
+                      <td>{record.start_date || '---'}</td>
+                      <td>{record.end_date || '---'}</td>
+                      <td>{archivedDate}</td>
+                      <td>
+                        <span className={`badge px-3 py-2 rounded-pill ${isSuccess ? 'bg-success bg-opacity-10 text-success' : 'bg-secondary bg-opacity-10 text-secondary'}`}>
+                          {isSuccess ? 'ناجح' : (record.status || '---')}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

@@ -47,12 +47,13 @@ def calculate_cash_drawer_summary(branch_id, month, year, auto_salaries=0.0):
     Outflows: Operating expenses, Auto salaries, Purchases, Sales return cash refunds
     Net cash in hand: total_cash_inflow - total_cash_outgoing
     """
-    from api.models import Receipt, InstallmentPayment, PurchaseInvoiceItem, Expense, ClientLicense
+    from api.models import Receipt, InstallmentPayment, PurchaseInvoiceItem, Expense
+    from api.services.receipt_service import get_first_production_license_start_date
 
-    active_lic = ClientLicense.objects.filter(is_active=True, is_deleted=False).exclude(machine_id="DEMO_MACHINE").order_by('-expiry_date').first()
+    first_start = get_first_production_license_start_date()
     is_pre_license_month = False
-    if active_lic and active_lic.start_date:
-        if (year < active_lic.start_date.year) or (year == active_lic.start_date.year and month < active_lic.start_date.month):
+    if first_start:
+        if (year < first_start.year) or (year == first_start.year and month < first_start.month):
             is_pre_license_month = True
 
     # 1. Cash Inflows

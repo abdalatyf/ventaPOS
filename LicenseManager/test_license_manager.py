@@ -114,8 +114,8 @@ class LicenseManagerCompatibilityTests(unittest.TestCase):
 
     def test_emergency_password_recovery_identification(self):
         """
-        Verify that emergency password recovery keys (product_id=16 and product_id=15)
-        are specifically flagged as recovery codes by NextGen.
+        Verify that ONLY emergency password recovery key (product_id=16) is flagged as recovery,
+        while product_id=15 (5000-invoice top-up) is NOT flagged as recovery.
         """
         # product_id=16 (Official Emergency Code in LicenseManager)
         recovery_code_16 = LicenseGenerator.generate(self.sample_machine_id, 16, self.start_date)
@@ -124,11 +124,12 @@ class LicenseManagerCompatibilityTests(unittest.TestCase):
         self.assertTrue(res_16.get("is_recovery"), "product_id=16 must be flagged as recovery")
         self.assertEqual(res_16["product_id"], 16)
 
-        # product_id=15 (Dual support for top-up / legacy recovery)
-        recovery_code_15 = LicenseGenerator.generate(self.sample_machine_id, 15, self.start_date)
-        res_15 = NextGenValidator.validate(recovery_code_15, self.sample_machine_id)
+        # product_id=15 (5000-invoice Top-up, NOT password recovery)
+        topup_code_15 = LicenseGenerator.generate(self.sample_machine_id, 15, self.start_date)
+        res_15 = NextGenValidator.validate(topup_code_15, self.sample_machine_id)
         self.assertTrue(res_15["valid"])
-        self.assertTrue(res_15.get("is_recovery"), "product_id=15 must be recognized as recovery")
+        self.assertFalse(res_15.get("is_recovery"), "product_id=15 must NOT be flagged as recovery")
+        self.assertEqual(res_15["product_id"], 15)
 
         # Standard subscription (product_id=4) must NOT be flagged as recovery
         std_code = LicenseGenerator.generate(self.sample_machine_id, 4, self.start_date)

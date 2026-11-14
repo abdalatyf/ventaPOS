@@ -34,8 +34,8 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
-# كلمة السر الموحدة لدخول لوحة التحكم
-MASTER_PASSWORD = os.environ.get("VENTA_LICENSE_MASTER_PASSWORD", "") or "123"
+# كلمة السر الموحدة لدخول لوحة التحكم (يُشترط ضبط VENTA_LICENSE_MASTER_PASSWORD)
+MASTER_PASSWORD = os.environ.get("VENTA_LICENSE_MASTER_PASSWORD", "")
 
 # Supabase Cloud Logging Configuration (Fail-Closed)
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://tgfhyyfwgcvotxfwbnhd.supabase.co")

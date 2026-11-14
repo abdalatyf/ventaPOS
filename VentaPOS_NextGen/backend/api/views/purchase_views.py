@@ -170,7 +170,7 @@ class PurchaseInvoiceViewSet(SoftDeleteModelViewSet):
                     'total_price_ar': to_arabic_numerals(it.quantity * it.purchase_price),
                 })
 
-            invoice_date_str = inv.created_at.strftime("%Y/%m/%d") if inv.created_at else f"{inv.invoice_year}/{str(inv.invoice_month).zfill(2)}"
+            invoice_date_str = f"{inv.invoice_year}/{str(inv.invoice_month).zfill(2)}"
 
             ctx = {
                 'invoice': inv,

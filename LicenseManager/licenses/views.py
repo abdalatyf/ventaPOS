@@ -1,3 +1,4 @@
+import hmac
 import requests
 from django.shortcuts import render, redirect , get_object_or_404
 from django.db.models import Sum, Q
@@ -15,8 +16,11 @@ def is_authenticated(request):
 # 2. صفحة الدخول (Login)
 def login_view(request):
     if request.method == 'POST':
-        password = request.POST.get('password')
-        if password == settings.MASTER_PASSWORD:
+        password = request.POST.get('password') or ''
+        expected_password = getattr(settings, 'MASTER_PASSWORD', '') or ''
+        if not expected_password:
+            return render(request, 'login.html', {'error': 'كلمة مرور لوحة التحكم غير مهيأة (VENTA_LICENSE_MASTER_PASSWORD)'})
+        if hmac.compare_digest(password, expected_password):
             request.session['is_logged_in'] = True
             return redirect('dashboard')
         else:

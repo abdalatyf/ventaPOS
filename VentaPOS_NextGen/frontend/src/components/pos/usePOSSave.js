@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import api from '../../api';
 import { toEnglish } from './posUtils';
 import { parseStrictInt, parseWholeMoney, parseValidMonthYear } from '../../utils/formatUtils';
+import { scheduleTransitionFocus } from '../../utils/focusUtils';
 
 export default function usePOSSave({
   branchId,
@@ -189,12 +190,12 @@ export default function usePOSSave({
         fetchNextNumber();
 
         if (isCashSale) {
-          setTimeout(() => prodQueryRef.current?.focus(), 100);
+          scheduleTransitionFocus(prodQueryRef, 100);
         } else {
           if (!keepSalesperson) {
-            setTimeout(() => salespersonRef.current?.focus(), 100);
+            scheduleTransitionFocus(salespersonRef, 100);
           } else {
-            setTimeout(() => custNameRef.current?.focus(), 100);
+            scheduleTransitionFocus(custNameRef, 100);
           }
         }
       } catch (err) {

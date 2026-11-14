@@ -5,6 +5,7 @@ import {
   parseWholeMoney,
   parseValidMonthYear,
 } from '../../utils/formatUtils';
+import { scheduleTransitionFocus } from '../../utils/focusUtils';
 
 export const fmt = (n) => Math.round(parseFloat(n) || 0).toLocaleString('en-US');
 
@@ -186,7 +187,7 @@ export const addItemToCart = async ({
       }];
     });
     setProductQuery(''); setSelectedProduct(null); setQuantity(1); setSellPrice('');
-    setTimeout(() => prodQueryRef.current?.focus(), 50);
+    scheduleTransitionFocus(prodQueryRef, 50);
   } finally {
     if (addingItemRef) addingItemRef.current = false;
   }

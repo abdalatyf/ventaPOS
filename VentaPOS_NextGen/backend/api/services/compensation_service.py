@@ -76,11 +76,11 @@ def calculate_branch_salespersons_performance(branch_id, month, year, get_cached
         for sp in salespersons
     }
 
-    from api.services.receipt_service import get_active_license
-    active_lic = get_active_license()
+    from api.services.receipt_service import get_first_production_license_start_date
+    first_start = get_first_production_license_start_date()
     is_pre_license_month = False
-    if active_lic and active_lic.start_date:
-        if (year < active_lic.start_date.year) or (year == active_lic.start_date.year and month < active_lic.start_date.month):
+    if first_start:
+        if (year < first_start.year) or (year == first_start.year and month < first_start.month):
             is_pre_license_month = True
 
     if not is_pre_license_month:

@@ -149,7 +149,7 @@ function App() {
           
           {/* مسارات المبيعات */}
           <Route path="receipts" element={<SearchReceipts />} />
-          <Route path="receipts/return/:id" element={<ReturnReceipt />} />
+          <Route path="receipts/return/:id" element={<PrintOnlyGate><ReturnReceipt /></PrintOnlyGate>} />
           
           {/* مسارات المخزون */}
           <Route path="product-ledger" element={<PrintOnlyGate><ProductLedger /></PrintOnlyGate>} />

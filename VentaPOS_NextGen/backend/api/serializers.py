@@ -654,14 +654,16 @@ class ReceiptSerializer(serializers.ModelSerializer):
                 if inv_item and inv_item.branch_id != branch.id:
                     raise ValidationError({"items": f"الصنف '{inv_item.name}' لا يتبع هذا الفرع."})
 
+        from api.services.receipt_service import get_first_production_license_start_date
         active_lic = get_active_license()
         is_print_only = bool(active_lic and active_lic.product_id in (2, 3))
 
         is_pre_license = False
-        if active_lic and active_lic.start_date and sale_year and sale_month:
+        first_start = get_first_production_license_start_date()
+        if first_start and sale_year and sale_month:
             try:
                 inv_date = datetime.date(int(sale_year), int(sale_month), 1)
-                lic_start = active_lic.start_date.replace(day=1)
+                lic_start = first_start.replace(day=1)
                 if inv_date < lic_start:
                     is_pre_license = True
             except (ValueError, TypeError):

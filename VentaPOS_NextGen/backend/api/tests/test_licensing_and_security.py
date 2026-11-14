@@ -32,7 +32,7 @@ from api.utils.security_utils import (
 def mint_test_license_code(machine_id: str, product_id: int, year: int = 2026, month: int = 1) -> str:
     """
     Synthesizes a valid 80-bit Base32 license code matching LicenseValidator.validate.
-    product_id: 1 for standard subscription, 15 for emergency admin password recovery.
+    product_id: 1 for standard subscription, 15 for +5000 top-up, 16 for emergency admin password recovery.
     """
     extracted_prod = (product_id - 1) & 0xF
     extracted_date_code = ((year - LicenseValidator.BASE_YEAR) * 12 + (month - 1)) & 0xFF
@@ -67,8 +67,8 @@ class LicensingAndSecurityTests(TestCase):
     2. First activation wipes Demo data; subsequent Production renewals preserve data without wiping.
     3. LicenseEnforcementMiddleware enforces read-only lock (403 on writes, 200 on GET and backup download).
     4. Monotonic clock-rollback detection blocks operations if future records exist.
-    5. Valid product_id=15 password recovery code resets admin credentials, records UsedLicense,
-       and rejects replay attacks or misuse as an activation code.
+    5. Valid product_id=16 password recovery code resets admin credentials, records UsedLicense,
+       and rejects replay attacks or misuse as an activation code; product_id=15 tops up 5000 invoices.
     """
 
     def setUp(self):
@@ -109,11 +109,18 @@ class LicensingAndSecurityTests(TestCase):
         self.assertEqual(res_sub["month"], 5)
         self.assertFalse(res_sub["is_recovery"])
 
-        # Recovery code (product_id=15)
-        rec_code = mint_test_license_code(self.mach_id, product_id=15, year=2026, month=8)
+        # 5000-invoice top-up code (product_id=15) must NOT be recovery
+        topup_code = mint_test_license_code(self.mach_id, product_id=15, year=2026, month=8)
+        res_topup = LicenseValidator.validate(topup_code, self.mach_id)
+        self.assertTrue(res_topup["valid"])
+        self.assertEqual(res_topup["product_id"], 15)
+        self.assertFalse(res_topup["is_recovery"])
+
+        # Recovery code (product_id=16)
+        rec_code = mint_test_license_code(self.mach_id, product_id=16, year=2026, month=8)
         res_rec = LicenseValidator.validate(rec_code, self.mach_id)
         self.assertTrue(res_rec["valid"])
-        self.assertEqual(res_rec["product_id"], 15)
+        self.assertEqual(res_rec["product_id"], 16)
         self.assertTrue(res_rec["is_recovery"])
 
         # Machine ID mismatch rejection
@@ -260,13 +267,15 @@ class LicensingAndSecurityTests(TestCase):
 
     def test_password_recovery_full_flow(self):
         """
-        Verify emergency password recovery using product_id=15 code:
-        - Changes admin password.
-        - Records UsedLicense entry to prevent replay attacks.
+        Verify emergency password recovery using product_id=16 code vs top-up product_id=15:
+        - product_id=16 changes admin password and revokes existing auth tokens.
+        - Records UsedLicense entry to prevent replay attacks (even across formatting differences).
         - Replay attempt returns 400 Bad Request.
-        - Attempting to use recovery code as an activation code returns 400 Bad Request.
+        - Attempting to use product_id=16 recovery code as an activation code returns 400 Bad Request.
+        - Attempting to use product_id=15 top-up code on recovery endpoint returns 400 Bad Request,
+          and activating product_id=15 adds +5000 to invoices_balance.
         """
-        rec_code = mint_test_license_code(self.mach_id, product_id=15, year=2026, month=3)
+        rec_code = mint_test_license_code(self.mach_id, product_id=16, year=2026, month=3)
 
         # 1. Recover password
         rec_res = self.client.post("/api/v1/auth/recover/", {
@@ -280,21 +289,53 @@ class LicensingAndSecurityTests(TestCase):
         self.admin_user.refresh_from_db()
         self.assertTrue(self.admin_user.check_password("NewSecurePassword2026!"))
 
-        # 2. Replay rejection
+        # 2. Replay rejection (including canonical hyphen-stripped lowercase variation)
         replay_res = self.client.post("/api/v1/auth/recover/", {
-            "recovery_code": rec_code,
+            "recovery_code": rec_code.replace("-", "").lower(),
             "new_password": "AnotherPassword!",
         })
         self.assertEqual(replay_res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("تم استخدام كود الاسترداد", replay_res.json()["error"])
 
-        # 3. Misuse recovery code on activation endpoint
-        rec_code_2 = mint_test_license_code(self.mach_id, product_id=15, year=2026, month=4)
+        # 3. Misuse recovery code (product_id=16) on activation endpoint
+        rec_code_2 = mint_test_license_code(self.mach_id, product_id=16, year=2026, month=4)
         act_res = self.client.post("/api/v1/license/activate/", {
             "license_code": rec_code_2,
         })
         self.assertEqual(act_res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("هذا كود استرداد وليس كود تفعيل", act_res.json()["error"])
+
+        # 4. product_id=15 is a +5000 top-up code, NOT a recovery code
+        topup_code = mint_test_license_code(self.mach_id, product_id=15, year=2026, month=5)
+        bad_rec_res = self.client.post("/api/v1/auth/recover/", {
+            "recovery_code": topup_code,
+            "new_password": "ShouldNotChange!",
+        })
+        self.assertEqual(bad_rec_res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.admin_user.refresh_from_db()
+        self.assertTrue(self.admin_user.check_password("NewSecurePassword2026!"))
+
+        active_prod = ClientLicense.objects.filter(
+            is_active=True, is_deleted=False
+        ).exclude(machine_id="DEMO_MACHINE").order_by("-expiry_date").first()
+        if not active_prod:
+            active_prod = ClientLicense.objects.create(
+                machine_id=self.mach_id,
+                product_id=1,
+                start_date=date(2026, 1, 1),
+                expiry_date=date(2027, 1, 1),
+                invoices_balance=100,
+                is_active=True,
+                license_code_hash="active_prod_hash",
+            )
+        prev_balance = active_prod.invoices_balance
+
+        topup_res = self.client.post("/api/v1/license/activate/", {
+            "license_code": topup_code,
+        })
+        self.assertEqual(topup_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(topup_res.json()["added_balance"], 5000)
+        self.assertEqual(topup_res.json()["total_invoices_balance"], prev_balance + 5000)
 
     def test_license_status_is_last_month_detection(self):
         """

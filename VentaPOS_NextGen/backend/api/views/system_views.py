@@ -101,9 +101,24 @@ class SystemApplyUpdateView(APIView):
     )
 
     def post(self, request):
+        import re
+        from api.utils.security_utils import is_authorized_for_maintenance
+
+        if not is_authorized_for_maintenance(request):
+            return Response(
+                {"error": "unauthorized", "message": "غير مصرح لك. يرجى تسجيل الدخول أولاً."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
         download_url = request.data.get('download_url', '').strip()
         expected_sha256 = request.data.get('sha256', '').strip().lower()
-        version_label = request.data.get('version', 'latest').strip().lstrip('v')
+        raw_version = request.data.get('version', 'latest').strip().lstrip('v')
+        if '..' in raw_version or '/' in raw_version or '\\' in raw_version:
+            return Response(
+                {"error": "invalid_version", "message": "رقم الإصدار غير صالح."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        version_label = re.sub(r'[^0-9A-Za-z._-]', '_', raw_version) or 'latest'
 
         if not download_url:
             return Response(
@@ -124,9 +139,14 @@ class SystemApplyUpdateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        target_dir = Path(tempfile.gettempdir()) / "VentaPOS_Update"
+        target_dir = (Path(tempfile.gettempdir()) / "VentaPOS_Update").resolve()
         target_dir.mkdir(parents=True, exist_ok=True)
-        installer_file = target_dir / f"VentaPOS_Setup_v{version_label}.exe"
+        installer_file = (target_dir / f"VentaPOS_Setup_v{version_label}.exe").resolve()
+        if not installer_file.is_relative_to(target_dir):
+            return Response(
+                {"error": "invalid_version", "message": "مسار ملف التحديث غير صالح."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         # Download and compute checksum
         hasher = hashlib.sha256()

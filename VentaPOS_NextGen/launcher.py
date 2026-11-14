@@ -62,23 +62,56 @@ def start_server(port):
 
 def check_pending_restore():
     """
-    Checks for restore_pending.bin staged by BackupUploadView and applies it before database initialization.
+    Checks for restore_pending.bin staged by BackupUploadView and applies it safely before database initialization.
     """
     try:
         from django.conf import settings
         from pathlib import Path
         import shutil
+        import sqlite3
+        from datetime import datetime
+
         db_path = Path(settings.DATABASES['default']['NAME'])
         pending_path = db_path.parent / 'restore_pending.bin'
         if pending_path.exists():
             print("Applying pending database restore...")
+            conn = None
+            res = None
+            try:
+                conn = sqlite3.connect(str(pending_path))
+                res = conn.execute("PRAGMA integrity_check;").fetchone()
+            except Exception as chk_err:
+                print(f"Pending restore file failed integrity_check ({chk_err}); removing.")
+            finally:
+                if conn is not None:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+            if not res or res[0] != "ok":
+                print("Pending restore file failed integrity_check; skipping.")
+                pending_path.unlink(missing_ok=True)
+                return
+
+            backup_copy = None
+            if db_path.exists() and db_path.stat().st_size > 0:
+                backups_dir = db_path.parent / 'backups'
+                backups_dir.mkdir(parents=True, exist_ok=True)
+                ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+                backup_copy = backups_dir / f"pre_pending_restore_{ts}.sqlite3"
+                shutil.copy2(db_path, backup_copy)
+
+            try:
+                shutil.copy2(pending_path, db_path)
+            except Exception as copy_err:
+                if backup_copy and backup_copy.exists():
+                    shutil.copy2(backup_copy, db_path)
+                raise copy_err
+
             wal_file = Path(str(db_path) + '-wal')
             shm_file = Path(str(db_path) + '-shm')
-            if wal_file.exists():
-                wal_file.unlink(missing_ok=True)
-            if shm_file.exists():
-                shm_file.unlink(missing_ok=True)
-            shutil.copy2(pending_path, db_path)
+            wal_file.unlink(missing_ok=True)
+            shm_file.unlink(missing_ok=True)
             pending_path.unlink(missing_ok=True)
             print("Pending database restore applied successfully.")
     except Exception as e:

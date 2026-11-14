@@ -262,7 +262,7 @@ def process_return_receipt(original_receipt, data):
 
 def get_active_license(select_for_update=False):
     """
-    Centralized lookup for the active license.
+    Centralized lookup for the active license (latest expiry).
     Prefers production licenses (excluding DEMO_MACHINE), falling back to DEMO_MACHINE
     when only demo licenses exist. Orders by -expiry_date.
     """
@@ -273,6 +273,46 @@ def get_active_license(select_for_update=False):
     if select_for_update:
         target_qs = target_qs.select_for_update()
     return target_qs.order_by('-expiry_date').first()
+
+
+def get_first_production_license_start_date():
+    """
+    Returns the earliest start_date across all non-demo licenses (active or archived
+    in LicenseHistory) so renewals never retroactively classify historical production
+    receipts as pre-license. Falls back to active demo license start_date in demo mode.
+    """
+    from api.models import ClientLicense, LicenseHistory
+    candidates = []
+
+    prod_qs = ClientLicense.objects.filter(
+        is_active=True, is_deleted=False
+    ).exclude(
+        machine_id="DEMO_MACHINE"
+    ).exclude(start_date__isnull=True)
+    first_prod = prod_qs.order_by('start_date').first()
+    if first_prod and first_prod.start_date:
+        candidates.append(first_prod.start_date)
+
+    if prod_qs.exists() or ClientLicense.objects.filter(is_active=True, is_deleted=False).exclude(machine_id="DEMO_MACHINE").exists():
+        first_hist = LicenseHistory.objects.filter(
+            is_deleted=False, start_date__isnull=False
+        ).order_by('start_date').first()
+        if first_hist and first_hist.start_date:
+            candidates.append(first_hist.start_date)
+        return min(candidates) if candidates else None
+
+    demo_lic = ClientLicense.objects.filter(
+        is_active=True, is_deleted=False, start_date__isnull=False
+    ).order_by('start_date').first()
+    return demo_lic.start_date if demo_lic else None
+
+
+def is_pre_license_month(year, month):
+    """Returns True iff (year, month) precedes the earliest production license start month."""
+    first_start = get_first_production_license_start_date()
+    if not first_start:
+        return False
+    return (year < first_start.year) or (year == first_start.year and month < first_start.month)
 
 
 def get_license_date_bounds(active_lic=None):
@@ -288,10 +328,13 @@ def get_license_date_bounds(active_lic=None):
     if active_lic is None:
         active_lic = get_active_license()
 
-    if not active_lic or not active_lic.expiry_date:
+    if not active_lic:
         return None, None, None
+    if not active_lic.expiry_date:
+        return active_lic.start_date, None, None
 
     from dateutil.relativedelta import relativedelta
+    from django.utils import timezone
     start_date = active_lic.start_date
     expiry_date = active_lic.expiry_date
 
@@ -300,13 +343,26 @@ def get_license_date_bounds(active_lic=None):
         grace_end = expiry_date.replace(day=25)
     else:
         last_allowed_month = expiry_date.replace(day=1)
-        today = datetime.date.today()
+        today = timezone.localdate()
         if (expiry_date.year, expiry_date.month) > (today.year, today.month):
             grace_end = max(expiry_date, expiry_date.replace(day=25))
         else:
             grace_end = expiry_date
 
     return start_date, last_allowed_month, grace_end
+
+
+def get_subscription_date_bounds(active_lic=None):
+    """
+    Returns effective multi-year bounds (first_start_date, last_allowed_month, grace_end)
+    where lower bound is the earliest production start_date and upper bound comes from
+    the latest active license.
+    """
+    if active_lic is None:
+        active_lic = get_active_license()
+    start_date, last_allowed_month, grace_end = get_license_date_bounds(active_lic)
+    first_start = get_first_production_license_start_date()
+    return first_start or start_date, last_allowed_month, grace_end
 
 
 def _validate_receipt_fk_integrity(branch, salesperson, items_data, installments_data, instance=None):
@@ -342,6 +398,7 @@ def create_receipt(validated_data, items_data, installments_data):
     from api.models import Receipt, SaleItem, InstallmentPayment, ClientLicense
     from api.utils.security_utils import generate_receipt_signature, generate_record_signature
     from api.views.base import get_default_date
+    from django.utils import timezone
     from rest_framework.exceptions import ValidationError
 
     branch = validated_data.get("branch")
@@ -359,17 +416,15 @@ def create_receipt(validated_data, items_data, installments_data):
             })
 
     is_confirmed = validated_data.get("is_confirmed", True)
+    is_pre_license = False
     with transaction.atomic():
-        active_lic = None
+        quota_lic = None
         if is_confirmed:
-            qs = ClientLicense.objects.select_for_update().filter(is_active=True, is_deleted=False, invoices_balance__gt=0)
-            prod_qs = qs.exclude(machine_id="DEMO_MACHINE")
-            active_lic = (prod_qs if prod_qs.exists() else qs).order_by('-expiry_date').first()
-            if not active_lic:
+            latest_lic = get_active_license(select_for_update=True)
+            if not latest_lic:
                 raise ValidationError({
                     "license": (
-                        "لا يمكن طباعة أو إصدار الفاتورة، رصيد الفواتير المسموح به "
-                        "للرخصة قد نفد. يرجى الشحن أولاً."
+                        "لا يمكن طباعة أو إصدار الفاتورة، لا يوجد ترخيص نشط بالنظام."
                     )
                 })
 
@@ -380,8 +435,7 @@ def create_receipt(validated_data, items_data, installments_data):
             except Exception:
                 raise ValidationError({"error": "تاريخ الفاتورة غير صحيح."})
 
-            start_date, last_allowed_month, grace_end = get_license_date_bounds(active_lic)
-            is_pre_license = False
+            start_date, last_allowed_month, grace_end = get_subscription_date_bounds(latest_lic)
             if start_date:
                 lic_start_month = start_date.replace(day=1)
                 if invoice_date < lic_start_month:
@@ -396,8 +450,27 @@ def create_receipt(validated_data, items_data, installments_data):
                 if last_allowed_month and invoice_date > last_allowed_month:
                     raise ValidationError({"error": "التاريخ بعد انتهاء الاشتراك."})
 
-                if grace_end and datetime.date.today() > grace_end:
+                today = timezone.localdate()
+                if grace_end and today > grace_end:
                     raise ValidationError({"error": "انتهت فترة الاشتراك."})
+
+                qs = ClientLicense.objects.select_for_update().filter(
+                    is_active=True, is_deleted=False, invoices_balance__gt=0
+                )
+                prod_qs = qs.exclude(machine_id="DEMO_MACHINE")
+                candidates = list((prod_qs if prod_qs.exists() else qs).order_by('expiry_date', 'id'))
+                for cand in candidates:
+                    _, _, cand_grace = get_license_date_bounds(cand)
+                    if not cand_grace or today <= cand_grace:
+                        quota_lic = cand
+                        break
+                if not quota_lic:
+                    raise ValidationError({
+                        "license": (
+                            "لا يمكن طباعة أو إصدار الفاتورة، رصيد الفواتير المسموح به "
+                            "للرخصة قد نفد. يرجى الشحن أولاً."
+                        )
+                    })
 
             if not validated_data.get("receipt_number"):
                 branch = validated_data.get("branch")
@@ -452,17 +525,17 @@ def create_receipt(validated_data, items_data, installments_data):
             )
             receipt.save(update_fields=["receipt_hash"])
 
-            if not is_pre_license:
-                machine_id = active_lic.machine_id
-                active_lic.invoices_balance -= 1
-                active_lic.license_code_hash = generate_record_signature(
-                    active_lic.expiry_date,
-                    active_lic.invoices_balance,
+            if not is_pre_license and quota_lic:
+                machine_id = quota_lic.machine_id
+                quota_lic.invoices_balance -= 1
+                quota_lic.license_code_hash = generate_record_signature(
+                    quota_lic.expiry_date,
+                    quota_lic.invoices_balance,
                     machine_id,
-                    active_lic.product_id,
-                    active_lic.is_active,
+                    quota_lic.product_id,
+                    quota_lic.is_active,
                 )
-                active_lic.save(update_fields=["invoices_balance", "license_code_hash"])
+                quota_lic.save(update_fields=["invoices_balance", "license_code_hash"])
 
     return receipt
 
@@ -501,7 +574,7 @@ def update_receipt(instance, validated_data, items_data, installments_data):
                 "error": "إجمالي الأقساط والمقدم لا يتطابق مع إجمالي الفاتورة المدخلة بالنظام."
             })
 
-    # Date Boundary Validation using centralized bounds
+    # Date Boundary Validation using centralized multi-year bounds
     active_lic = get_active_license()
     if not active_lic:
         raise ValidationError({"license": "لا يوجد ترخيص ساري."})
@@ -513,7 +586,7 @@ def update_receipt(instance, validated_data, items_data, installments_data):
     except Exception:
         raise ValidationError({"error": "تاريخ الفاتورة غير صحيح."})
 
-    start_date, last_allowed_month, grace_end = get_license_date_bounds(active_lic)
+    start_date, last_allowed_month, grace_end = get_subscription_date_bounds(active_lic)
     is_pre_license = False
     if start_date:
         lic_start_month = start_date.replace(day=1)
@@ -529,7 +602,8 @@ def update_receipt(instance, validated_data, items_data, installments_data):
         if last_allowed_month and invoice_date > last_allowed_month:
             raise ValidationError({"error": "التاريخ بعد انتهاء الاشتراك."})
 
-        if grace_end and datetime.date.today() > grace_end:
+        from django.utils import timezone
+        if grace_end and timezone.localdate() > grace_end:
             raise ValidationError({"error": "انتهت فترة الاشتراك."})
 
     with transaction.atomic():

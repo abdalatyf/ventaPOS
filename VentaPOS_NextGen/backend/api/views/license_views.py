@@ -33,6 +33,7 @@ from api.serializers import (
 )
 from api.utils.license_validator import LicenseValidator
 from api.utils.security_utils import (
+    canonical_code_hash,
     generate_record_signature,
     get_machine_id,
 )
@@ -53,8 +54,16 @@ class LicenseStatusView(views.APIView):
 
     def get(self, request):
         from django.contrib.auth.models import User
+        from api.services.receipt_service import (
+            get_first_production_license_start_date,
+            get_license_date_bounds,
+        )
+        from django.utils import timezone
+
         admin_user = User.objects.filter(is_superuser=True).first()
         has_password = bool(admin_user and admin_user.has_usable_password() and not admin_user.check_password(""))
+        cs = CompanySetting.objects.first()
+        company_name = cs.name if cs and cs.name else ""
 
         machine_id = get_machine_id()
         active_lics = ClientLicense.objects.filter(is_active=True, is_deleted=False)
@@ -66,25 +75,40 @@ class LicenseStatusView(views.APIView):
                 "message": "لا توجد تراخيص نشطة.",
                 "machine_id": machine_id,
                 "is_demo": is_demo,
+                "is_expired": not is_demo,
                 "has_password": has_password,
+                "company_name": company_name,
             })
 
-        total_balance = sum(lic.invoices_balance for lic in active_lics)
+        today = timezone.localdate()
         valid_time_lics = active_lics.exclude(machine_id="DEMO_MACHINE")
         if not valid_time_lics.exists():
             valid_time_lics = active_lics
         latest = valid_time_lics.order_by("-expiry_date").first()
 
+        if is_demo:
+            total_balance = sum(lic.invoices_balance for lic in active_lics)
+        else:
+            total_balance = 0
+            for lic in valid_time_lics:
+                _, _, lic_grace = get_license_date_bounds(lic)
+                if not lic_grace or today <= lic_grace:
+                    total_balance += lic.invoices_balance
+
         is_last_month = False
+        is_expired = False
         if latest and latest.expiry_date:
-            from api.services.receipt_service import get_license_date_bounds
-            from django.utils import timezone
-            start_date, last_allowed_month, grace_end = get_license_date_bounds(latest)
-            today = timezone.localdate()
+            _, last_allowed_month, grace_end = get_license_date_bounds(latest)
+            if grace_end and today > grace_end and not is_demo:
+                is_expired = True
             if last_allowed_month:
                 if (today.year == last_allowed_month.year and today.month == last_allowed_month.month) or (grace_end and last_allowed_month < today <= grace_end):
                     is_last_month = True
+        elif not latest and not is_demo:
+            is_expired = True
 
+        first_start = get_first_production_license_start_date() or (latest.start_date if latest else None)
+        first_start_iso = first_start.isoformat() if first_start else None
         needs_support = (total_balance <= 100)
 
         return Response({
@@ -93,13 +117,15 @@ class LicenseStatusView(views.APIView):
             "expiry_date": latest.expiry_date if latest else None,
             "machine_id": machine_id,
             "is_last_month": is_last_month,
+            "is_expired": is_expired,
             "needs_support": needs_support,
             "is_demo": is_demo,
             "has_password": has_password,
+            "company_name": company_name,
             "product_id": latest.product_id if latest else None,
             "is_print_only": bool(latest and latest.product_id in (2, 3)),
-            "start_date": latest.start_date.isoformat() if (latest and latest.start_date) else None,
-            "lic_start_date": latest.start_date.isoformat() if (latest and latest.start_date) else None,
+            "start_date": first_start_iso,
+            "lic_start_date": first_start_iso,
         })
 
 
@@ -120,8 +146,9 @@ class LicenseActivateView(views.APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        code_hash = hashlib.sha256(license_code.encode()).hexdigest()
-        if UsedLicense.objects.filter(code_hash=code_hash, is_deleted=False).exists():
+        code_hash = canonical_code_hash(license_code)
+        raw_hash = hashlib.sha256(license_code.encode()).hexdigest()
+        if UsedLicense.objects.filter(code_hash__in=[code_hash, raw_hash], is_deleted=False).exists():
             return Response(
                 {"error": "هذا الكود مستخدم من قبل، يرجى إدخال كود جديد."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -134,7 +161,7 @@ class LicenseActivateView(views.APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if result.get("product_id") in (15, 16) or result.get("is_recovery"):
+        if result.get("product_id") == 16 or result.get("is_recovery"):
             return Response(
                 {"error": "هذا كود استرداد وليس كود تفعيل. الرجاء استخدامه في شاشة استعادة كلمة المرور."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -147,6 +174,7 @@ class LicenseActivateView(views.APIView):
             12: 500,
             13: 1000,
             14: 3000,
+            15: 5000,
         }
 
         # Check for top-up codes
