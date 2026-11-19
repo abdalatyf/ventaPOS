@@ -3,9 +3,22 @@
 
 :root {
   --brand-primary: #123F68;
-  /* Override tabler primary color if needed */
   --tblr-primary: #123F68;
+  --tblr-primary-rgb: 18, 63, 104;
+  --tblr-primary-bg-subtle: #e7ecf0;
+  --tblr-primary-lt: #e7ecf0;
   --tblr-success: #1DA368;
+  --tblr-success-rgb: 29, 163, 104;
+  --tblr-success-bg-subtle: #e8f6f0;
+  --tblr-success-lt: #e8f6f0;
+  --tblr-danger: #D63939;
+  --tblr-danger-rgb: 214, 57, 57;
+  --tblr-warning: #F59F00;
+  --tblr-warning-rgb: 245, 159, 0;
+  --tblr-info: #206BC4;
+  --tblr-info-rgb: 32, 107, 196;
+  --tblr-link-color: #123F68;
+  --tblr-link-color-rgb: 18, 63, 104;
   --tblr-font-sans-serif: 'Cairo', sans-serif;
   
   /* Table Scroll UX Architecture */
@@ -19,7 +32,7 @@ body {
   margin: 0;
   height: auto !important; /* Override Tabler's height:100% — moves scroll from body to viewport so window.scrollBy() works */
   overflow-y: visible !important; /* MUST be visible, otherwise position: sticky on children won't stick to the window */
-  background-color: #f4f6f8; /* default tabler background */
+  background-color: #f8f9fa;
 }
 
 /* 1. Global Page Wrapper & Top Section */
@@ -64,18 +77,10 @@ body {
   border-top-right-radius: 6px;
 }
 
-/* Optional Two-Tier Selection Strip between .sticky-toolbar and table */
-.sticky-selection-strip {
-  position: sticky !important;
-  top: calc(var(--navbar-height, 56px) + var(--toolbar-height-actual, 48px)) !important;
-  z-index: 1019;
-}
-
 /* 2-Scroll Table Container (Window Scroll -> Internal Table Y & X Scroll) */
 .report-table-container {
   overflow-x: auto !important;
   overflow-y: auto;
-  scrollbar-gutter: stable;
   max-height: calc((100vh / var(--app-zoom, 1)) - 114px);
 }
 
@@ -193,6 +198,47 @@ html {
   background: transparent;
 }
 
+/* Unified Deep Navy Brand Overrides (Prevent Tabler #066fd1 Leaks) */
+.table-primary,
+.table-primary > th,
+.table-primary > td {
+  --tblr-table-bg: #e7ecf0 !important;
+  --tblr-table-color: #123F68 !important;
+  background-color: #e7ecf0 !important;
+  color: #123F68 !important;
+}
+
+.bg-primary-lt,
+.bg-blue-lt,
+.bg-primary-subtle {
+  background-color: #e7ecf0 !important;
+  color: #123F68 !important;
+}
+
+.bg-success-lt,
+.bg-success-subtle {
+  background-color: #e8f6f0 !important;
+  color: #1DA368 !important;
+}
+
+.text-primary {
+  color: #123F68 !important;
+}
+
+.text-success {
+  color: #1DA368 !important;
+}
+
+.text-danger {
+  color: #D63939 !important;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #123F68 !important;
+  box-shadow: 0 0 0 0.2rem rgba(18, 63, 104, 0.2) !important;
+}
+
 /* Custom Button Overrides for Brand Colors */
 .btn-primary {
   background-color: var(--brand-primary) !important;
@@ -232,7 +278,7 @@ html {
   color: #fff !important;
 }
 
-/* Slim Navbars — fits cleanly single-row at 1280px under 125% CSS zoom */
+/* Slim Navbars — fits cleanly single-row at 1280px/1366px under 125% CSS zoom */
 .navbar > .container-fluid {
   flex-wrap: wrap !important;
   row-gap: 0.25rem;
@@ -242,16 +288,76 @@ html {
   padding-bottom: 0.25rem !important;
 }
 .navbar .nav-link {
-  padding: 0.35rem 0.35rem !important;
+  padding: 0.35rem 0.5rem !important;
   font-size: 0.875rem;
+  font-weight: 600;
+  color: #334155 !important;
   white-space: nowrap;
+  border-radius: 4px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.navbar .nav-link:hover {
+  color: #123F68 !important;
+  background-color: rgba(18, 63, 104, 0.05);
+}
+.navbar .nav-item.active > .nav-link,
+.navbar .nav-link.active {
+  color: #123F68 !important;
+  font-weight: 700;
+  background-color: #e7ecf0;
+  box-shadow: inset 0 -2px 0 #123F68;
 }
 .navbar .nav-link-icon {
-  margin-inline-end: 0.2rem !important;
-  width: 1rem !important;
+  margin-inline-end: 0.35rem !important;
+  width: 1.15rem !important;
+  color: inherit !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
 }
 .navbar-brand-image {
   height: 1.9rem !important;
+}
+
+/* Global 6px Thin Windows Scrollbars */
+html,
+body,
+*,
+.table-responsive,
+.report-table-container,
+.modal-body,
+.hide-vertical-scroll {
+  scrollbar-width: thin !important;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar,
+.table-responsive::-webkit-scrollbar,
+.report-table-container::-webkit-scrollbar,
+.modal-body::-webkit-scrollbar,
+.hide-vertical-scroll::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track,
+.modal-body::-webkit-scrollbar-track {
+  background: #f1f1f1 !important;
+}
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb,
+.modal-body::-webkit-scrollbar-thumb {
+  background: #c1c1c1 !important;
+  border-radius: 4px !important;
+}
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover,
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8 !important;
 }
 
 /* Hide number arrows */

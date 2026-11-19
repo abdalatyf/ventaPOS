@@ -175,17 +175,17 @@ export default function ReceiptsReport() {
     { key: 'receipt_number', label: 'رقم الفاتورة', align: 'center', className: 'fw-bold' },
     { key: 'salesperson', label: 'المندوب', align: 'center', className: 'fw-bold text-nowrap' },
     { key: 'customer_name', label: 'العميل', align: 'start', className: 'px-2' },
-    { key: 'phone', label: 'رقم الموبايل', align: 'center', className: 'text-nowrap', dir: 'ltr' },
-    { key: 'area', label: 'المنطقة', align: 'center', className: 'text-nowrap' },
+    { key: 'phone', label: 'رقم الموبايل', align: 'center', className: 'text-nowrap', style: { minWidth: '130px' }, dir: 'ltr' },
+    { key: 'area', label: 'المنطقة', align: 'center', className: 'text-nowrap', style: { minWidth: '130px' } },
     { key: 'down_payment', label: 'المقدم', align: 'center', className: 'text-nowrap' },
     { key: 'total_amount', label: 'الإجمالي', align: 'center', className: 'fw-bold text-primary text-nowrap fs-5' }
   ];
 
   const summaryCards = [
-    { label: 'التاريخ', value: formatMMYYYY(month, year), color: 'secondary' },
-    { label: 'عدد الفواتير', value: fmtNum(totalInvoicesCount), color: 'dark', icon: IconReceipt },
+    { label: 'التاريخ', value: formatMMYYYY(month, year), color: 'primary' },
+    { label: 'عدد الفواتير', value: fmtNum(totalInvoicesCount), color: 'primary', icon: IconReceipt },
     { label: 'إجمالي الكاش', value: fmtNum(totalCashSum), color: 'success' },
-    { label: 'إجمالي المقدمات', value: fmtNum(totalDownPaymentSum), color: 'info' },
+    { label: 'إجمالي المقدمات', value: fmtNum(totalDownPaymentSum), color: 'success' },
     { label: 'إجمالي المبيعات', value: fmtNum(totalAmountSum), color: 'primary' }
   ];
 
@@ -200,15 +200,6 @@ export default function ReceiptsReport() {
       area = r.items[0].area;
     }
     const salespersonName = getSalespersonName(r.salesperson);
-    let dateStr = '';
-    try {
-      const dateObj = new Date(r.created_at || r.date);
-      if (!isNaN(dateObj.getTime())) {
-        dateStr = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${dateObj.getFullYear()}`;
-      }
-    } catch (e) {
-      dateStr = r.created_at || r.date || '';
-    }
 
     return (
       <tr key={r.id} ref={index === receipts.length - 1 ? lastRowElementRef : null}>
@@ -231,10 +222,10 @@ export default function ReceiptsReport() {
         <td className="text-start px-2 align-middle border-secondary-subtle">
           {custName || 'بدون اسم'}
         </td>
-        <td className="text-center align-middle border-secondary-subtle text-nowrap" dir="ltr">
+        <td className="text-center align-middle border-secondary-subtle text-nowrap" style={{ minWidth: '130px' }} dir="ltr">
           {phone || '-'}
         </td>
-        <td className="text-center align-middle border-secondary-subtle text-nowrap">
+        <td className="text-center align-middle border-secondary-subtle text-nowrap" style={{ minWidth: '130px' }}>
           {area || '-'}
         </td>
         <td className="text-center align-middle border-secondary-subtle text-nowrap">
@@ -247,95 +238,135 @@ export default function ReceiptsReport() {
     );
   };
 
+  const handleReceiptBoundBlur = (field) => {
+    const rawFrom = String(filters.receipt_from ?? '').trim();
+    const rawTo = String(filters.receipt_to ?? '').trim();
+    let numFrom = rawFrom ? parseInt(rawFrom, 10) : null;
+    let numTo = rawTo ? parseInt(rawTo, 10) : null;
+    if (numFrom !== null && (isNaN(numFrom) || numFrom < 1)) numFrom = 1;
+    if (numTo !== null && (isNaN(numTo) || numTo < 1)) numTo = 1;
+    if (numFrom !== null && numTo !== null && numFrom > numTo) {
+      if (field === 'receipt_from') numFrom = numTo;
+      else numTo = numFrom;
+    }
+    const nextFrom = numFrom !== null ? String(numFrom) : '';
+    const nextTo = numTo !== null ? String(numTo) : '';
+    if (nextFrom !== rawFrom || nextTo !== rawTo) {
+      setFilters(prev => {
+        const nextFilters = { ...prev, receipt_from: nextFrom, receipt_to: nextTo };
+        fetchReceipts(nextFilters);
+        return nextFilters;
+      });
+    }
+  };
+
   const subFiltersRow1 = () => (
     <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Sale Type */}
-      <div style={{ width: '120px' }} className="flex-shrink-0">
-        <select 
-          name="sale_type" 
-          className="form-select form-select-sm fw-bold border-secondary-subtle px-1 text-center" 
-          value={filters.sale_type} 
-          onChange={(e) => {
-            const val = e.target.value;
-            setFilters(prev => {
-              const newFilters = { ...prev, sale_type: val };
-              fetchReceipts(newFilters);
-              return newFilters;
-            });
-          }}
-        >
-          <option value="ALL">جميع الأنواع</option>
-          <option value="CASH">كاش فقط</option>
-          <option value="INSTALLMENT">قسط فقط</option>
-          <option value="HAS_DOWN_PAYMENT">بمقدم فقط</option>
-        </select>
+      <div style={{ width: '165px' }} className="flex-shrink-0">
+        <div className="input-group input-group-sm flex-nowrap">
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">النوع</span>
+          <select 
+            name="sale_type" 
+            className="form-select form-select-sm fw-bold border-secondary-subtle px-1 text-center" 
+            value={filters.sale_type} 
+            onChange={(e) => {
+              const val = e.target.value;
+              setFilters(prev => {
+                const newFilters = { ...prev, sale_type: val };
+                fetchReceipts(newFilters);
+                return newFilters;
+              });
+            }}
+          >
+            <option value="ALL">جميع الأنواع</option>
+            <option value="CASH">كاش فقط</option>
+            <option value="INSTALLMENT">قسط فقط</option>
+            <option value="HAS_DOWN_PAYMENT">بمقدم فقط</option>
+          </select>
+        </div>
       </div>
 
       {/* From Receipt */}
-      <div style={{ width: '85px' }} className="flex-shrink-0">
-        <DebouncedInput 
-          type="text" 
-          inputMode="numeric"
-          name="receipt_from" 
-          className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
-          placeholder="من رقم"
-          value={filters.receipt_from} 
-          onChange={handleFilterChange} 
-        />
+      <div style={{ width: '125px' }} className="flex-shrink-0">
+        <div className="input-group input-group-sm flex-nowrap">
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">من رقم</span>
+          <DebouncedInput 
+            type="number" 
+            min={1}
+            inputMode="numeric"
+            dir="ltr"
+            name="receipt_from" 
+            className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1 hide-arrows" 
+            placeholder="الكل"
+            value={filters.receipt_from} 
+            onChange={handleFilterChange} 
+            onBlur={() => handleReceiptBoundBlur('receipt_from')}
+          />
+        </div>
       </div>
 
       {/* To Receipt */}
-      <div style={{ width: '85px' }} className="flex-shrink-0">
-        <DebouncedInput 
-          type="text" 
-          inputMode="numeric"
-          name="receipt_to" 
-          className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
-          placeholder="إلى رقم"
-          value={filters.receipt_to} 
-          onChange={handleFilterChange} 
-        />
+      <div style={{ width: '125px' }} className="flex-shrink-0">
+        <div className="input-group input-group-sm flex-nowrap">
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">إلى رقم</span>
+          <DebouncedInput 
+            type="number" 
+            min={1}
+            inputMode="numeric"
+            dir="ltr"
+            name="receipt_to" 
+            className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1 hide-arrows" 
+            placeholder="الكل"
+            value={filters.receipt_to} 
+            onChange={handleFilterChange} 
+            onBlur={() => handleReceiptBoundBlur('receipt_to')}
+          />
+        </div>
       </div>
 
       {/* Salesperson */}
-      <div className="flex-grow-1" style={{ minWidth: '180px' }}>
-        <ReportAutocomplete
-          items={salespersons}
-          value={salespersonQuery}
-          onChange={(text) => {
-            setSalespersonQuery(text);
-            if (!text) {
-              setFilters(prev => {
-                const newFilters = { ...prev, salesperson_id: '' };
-                fetchReceipts(newFilters);
-                return newFilters;
-              });
-            }
-          }}
-          onSelect={(item) => {
-            if (item) {
-              setFilters(prev => {
-                const newFilters = { ...prev, salesperson_id: String(item.id || item.local_id) };
-                fetchReceipts(newFilters);
-                return newFilters;
-              });
-              setSalespersonQuery(item.name || '');
-            } else {
-              setFilters(prev => {
-                const newFilters = { ...prev, salesperson_id: '' };
-                fetchReceipts(newFilters);
-                return newFilters;
-              });
-              setSalespersonQuery('');
-            }
-          }}
-          placeholder="جميع المناديب..."
-          displayKey="name"
-          searchKeys={['name', 'username', 'local_id']}
-          idKey="id"
-          allowClear={true}
-          className="form-control form-control-sm fw-bold border-secondary-subtle"
-        />
+      <div className="flex-grow-1" style={{ minWidth: '200px' }}>
+        <div className="input-group input-group-sm flex-nowrap">
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">المندوب</span>
+          <ReportAutocomplete
+            items={salespersons}
+            value={salespersonQuery}
+            onChange={(text) => {
+              setSalespersonQuery(text);
+              if (!text) {
+                setFilters(prev => {
+                  const newFilters = { ...prev, salesperson_id: '' };
+                  fetchReceipts(newFilters);
+                  return newFilters;
+                });
+              }
+            }}
+            onSelect={(item) => {
+              if (item) {
+                setFilters(prev => {
+                  const newFilters = { ...prev, salesperson_id: String(item.id || item.local_id) };
+                  fetchReceipts(newFilters);
+                  return newFilters;
+                });
+                setSalespersonQuery(item.name || '');
+              } else {
+                setFilters(prev => {
+                  const newFilters = { ...prev, salesperson_id: '' };
+                  fetchReceipts(newFilters);
+                  return newFilters;
+                });
+                setSalespersonQuery('');
+              }
+            }}
+            placeholder="جميع المناديب..."
+            displayKey="name"
+            searchKeys={['name', 'username', 'local_id']}
+            idKey="id"
+            allowClear={true}
+            className="form-control form-control-sm fw-bold border-secondary-subtle"
+          />
+        </div>
       </div>
     </div>
   );
@@ -343,63 +374,80 @@ export default function ReceiptsReport() {
   const subFiltersRow2 = () => (
     <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Customer Name */}
-      <div className="flex-grow-1" style={{ minWidth: '150px' }}>
-        <DebouncedInput 
-          type="text" 
-          name="customer_name" 
-          className="form-control form-control-sm fw-bold border-secondary-subtle" 
-          placeholder="اسم العميل..."
-          value={filters.customer_name} 
-          onChange={handleFilterChange} 
-        />
+      <div className="flex-grow-1" style={{ minWidth: '170px' }}>
+        <div className="input-group input-group-sm flex-nowrap">
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">العميل</span>
+          <DebouncedInput 
+            type="text" 
+            name="customer_name" 
+            className="form-control form-control-sm fw-bold border-secondary-subtle" 
+            placeholder="اسم العميل..."
+            value={filters.customer_name} 
+            onChange={handleFilterChange} 
+          />
+        </div>
       </div>
 
-      {/* Phone */}
-      <div style={{ width: '130px' }} className="flex-shrink-0">
-        <DebouncedInput 
-          type="text" 
-          name="phone" 
-          className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
-          dir="ltr"
-          placeholder="الموبايل..."
-          value={filters.phone} 
-          onChange={handleFilterChange} 
-        />
+      {/* Phone (equal width to Area) */}
+      <div style={{ width: '190px' }} className="flex-shrink-0">
+        <div className="input-group input-group-sm flex-nowrap">
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">الموبايل</span>
+          <DebouncedInput 
+            type="text" 
+            name="phone" 
+            className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
+            dir="ltr"
+            placeholder="الموبايل..."
+            value={filters.phone} 
+            onChange={handleFilterChange} 
+          />
+        </div>
       </div>
 
-      {/* Area Autocomplete */}
-      <div style={{ width: '180px' }} className="flex-shrink-0">
-        <ReportAutocomplete
-          value={filters.area || ''}
-          onChange={(val) => {
-            setFilters(prev => {
-              const newFilters = { ...prev, area: val };
-              fetchReceipts(newFilters);
-              return newFilters;
-            });
-          }}
-          onSelect={(item) => {
-            const val = typeof item === 'object' ? (item.area || item.name || '') : String(item);
-            setFilters(prev => {
-              const newFilters = { ...prev, area: val };
-              fetchReceipts(newFilters);
-              return newFilters;
-            });
-          }}
-          fetchSuggestions={async (query) => {
-            try {
-              const res = await api.get('/customer-suggestions/', {
-                params: { field: 'area', term: query || '', branch_id: branchId }
+      {/* Area Autocomplete (equal width to Phone) */}
+      <div style={{ width: '190px' }} className="flex-shrink-0">
+        <div className="input-group input-group-sm flex-nowrap">
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">المنطقة</span>
+          <ReportAutocomplete
+            value={filters.area || ''}
+            onChange={(val) => {
+              setFilters(prev => {
+                const newFilters = { ...prev, area: val };
+                fetchReceipts(newFilters);
+                return newFilters;
               });
-              const data = res.data || [];
-              return data.map(i => typeof i === 'object' ? i : { name: i, id: i });
-            } catch {
-              return [];
-            }
-          }}
-          placeholder="المنطقة..."
-          className="form-control form-control-sm fw-bold border-secondary-subtle px-1"
-        />
+            }}
+            onSelect={(item) => {
+              if (!item) {
+                setFilters(prev => {
+                  const newFilters = { ...prev, area: '' };
+                  fetchReceipts(newFilters);
+                  return newFilters;
+                });
+                return;
+              }
+              const val = typeof item === 'object' ? (item.area || item.name || '') : String(item);
+              setFilters(prev => {
+                const newFilters = { ...prev, area: val };
+                fetchReceipts(newFilters);
+                return newFilters;
+              });
+            }}
+            fetchSuggestions={async (query) => {
+              try {
+                const res = await api.get('/customer-suggestions/', {
+                  params: { field: 'area', term: query || '', branch_id: branchId }
+                });
+                const data = res.data || [];
+                return data.map(i => typeof i === 'object' ? i : { name: i, id: i });
+              } catch {
+                return [];
+              }
+            }}
+            placeholder="المنطقة..."
+            className="form-control form-control-sm fw-bold border-secondary-subtle px-1"
+          />
+        </div>
       </div>
 
       {/* Reset */}

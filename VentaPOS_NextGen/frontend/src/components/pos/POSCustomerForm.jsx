@@ -3,7 +3,7 @@ import SuggestionList from '../purchases/SuggestionList';
 
 const Field = ({ label, children, labelCol = 'col-sm-3', inputCol = 'col-sm-9', className = '' }) => (
   <div className={`row mb-2 align-items-center ${className}`}>
-    <label className={`${labelCol} col-form-label fw-bold text-dark pe-1`}>{label}</label>
+    <label className={`${labelCol} col-form-label fw-bold text-dark pe-2`}>{label}</label>
     <div className={inputCol}>{children}</div>
   </div>
 );
@@ -163,7 +163,7 @@ export default function POSCustomerForm({
               <div className="col-auto">
                 <label className="col-form-label fw-bold text-dark">هاتف</label>
               </div>
-              <div className="col-4">
+              <div className="col">
                 <div className="position-relative">
                   <input
                     type="tel"

@@ -289,7 +289,7 @@ const AppAutocomplete = forwardRef(function AppAutocomplete({
     <div
       ref={containerRef}
       className="position-relative d-inline-block w-100"
-      style={{ minWidth: '130px', ...style }}
+      style={{ flex: '1 1 auto', minWidth: 0, ...style }}
     >
       <div className="input-icon w-100">
         <input
@@ -297,12 +297,13 @@ const AppAutocomplete = forwardRef(function AppAutocomplete({
           type="text"
           name={name}
           id={id}
-          className={`${className} ${hasValue && allowClear ? 'pe-4' : ''}`}
+          className={className}
           style={{
             textAlign: 'right',
             direction: 'rtl',
             borderRadius: '4px',
-            borderColor: isOpen ? '#206bc4' : undefined,
+            borderColor: isOpen ? '#123F68' : undefined,
+            paddingLeft: hasValue && allowClear ? '2rem' : undefined,
             ...inputStyle,
           }}
           placeholder={placeholder}
@@ -343,6 +344,7 @@ const AppAutocomplete = forwardRef(function AppAutocomplete({
               transform: 'translateY(-50%)',
               zIndex: 3,
               cursor: 'pointer',
+              pointerEvents: 'auto',
               color: '#6c757d',
               fontSize: '14px',
               lineHeight: 1,

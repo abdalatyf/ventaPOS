@@ -85,8 +85,8 @@ const ReceiptRow = React.memo(React.forwardRef(({
       <td className="text-start px-2 align-middle border-secondary-subtle">
         {custName}
       </td>
-      <td className="text-center align-middle border-secondary-subtle" dir="ltr">{phone}</td>
-      <td className="text-center align-middle border-secondary-subtle">
+      <td className="text-center align-middle border-secondary-subtle" dir="ltr" style={{ minWidth: '125px' }}>{phone}</td>
+      <td className="text-center align-middle border-secondary-subtle" style={{ minWidth: '125px' }}>
         {area}
       </td>
       <td className="text-start px-2 align-middle border-secondary-subtle text-truncate" style={{ maxWidth: '150px' }} title={addr}>

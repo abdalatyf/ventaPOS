@@ -92,10 +92,10 @@ export default function SalespersonPerformanceReport() {
   }, [processedItems]);
 
   const summaryCards = [
-    { label: 'إجمالي الفواتير', value: fmtNum(totals.receipts), color: 'dark', icon: IconReceipt },
+    { label: 'إجمالي الفواتير', value: fmtNum(totals.receipts), color: 'primary', icon: IconReceipt },
     { label: 'مبيعات كاش', value: fmtNum(totals.cash), color: 'success', icon: IconCash },
     { label: 'مبيعات قسط', value: fmtNum(totals.credit), color: 'warning', icon: IconCoin },
-    { label: 'إجمالي المقدمات', value: fmtNum(totals.down_payments), color: 'info' },
+    { label: 'إجمالي المقدمات', value: fmtNum(totals.down_payments), color: 'success' },
     { label: 'إجمالي المبيعات', value: fmtNum(totals.sales), color: 'primary' },
     { label: 'إجمالي التحصيل', value: fmtNum(totals.collected), color: 'success' },
     { label: 'إجمالي المرتبات المستحقة', value: fmtNum(totals.due_salary), color: 'danger' }
@@ -169,7 +169,7 @@ export default function SalespersonPerformanceReport() {
         return (
           <Link 
             to={`/reports/receipts?year=${year}&month=${month}&salesperson_id=${spId}&has_down_payment=true`} 
-            className="text-decoration-none text-info fw-bold"
+            className="text-decoration-none text-success fw-bold"
             title="عرض فواتير المقدمات"
           >
             {fmtNum(row.down_payments)}
@@ -341,7 +341,7 @@ export default function SalespersonPerformanceReport() {
           }}
           onSelect={(sp) => {
             setSelectedSalesperson(sp);
-            if (sp) setSearchQuery(sp.name || '');
+            setSearchQuery(sp ? (sp.name || '') : '');
           }}
           placeholder="ابحث عن مندوب..."
           displayKey="name"
@@ -358,6 +358,10 @@ export default function SalespersonPerformanceReport() {
           value={areaFilter}
           onChange={(val) => setAreaFilter(val)}
           onSelect={(item) => {
+            if (!item) {
+              setAreaFilter('');
+              return;
+            }
             const val = typeof item === 'object' ? (item.area || item.name || '') : String(item);
             setAreaFilter(val);
           }}

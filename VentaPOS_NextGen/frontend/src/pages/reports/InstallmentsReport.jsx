@@ -29,7 +29,7 @@ export default function InstallmentsReport() {
 
   const [selectedIds, setSelectedIds] = useState([]);
   const [printModalOpen, setPrintModalOpen] = useState(false);
-  const [printReceiptIds, setPrintReceiptIds] = useState([]);
+  const [printPaymentIds, setPrintPaymentIds] = useState([]);
 
   useEffect(() => {
     const spId = searchParams.get('salesperson_id');
@@ -73,8 +73,14 @@ export default function InstallmentsReport() {
           area: area ? area.trim() : undefined,
         }
       });
-      setData(res.data || { total_installments_amount: 0, installments_count: 0, installments: [] });
-      setSelectedIds([]);
+      const rawData = res.data || { total_installments_amount: 0, installments_count: 0, installments: [] };
+      const rawList = Array.isArray(rawData.installments) ? rawData.installments : (Array.isArray(rawData.schedules) ? rawData.schedules : []);
+      const installmentsList = rawList.map((inst, idx) => ({
+        ...inst,
+        payment_id: inst.payment_id ?? inst.id ?? idx + 1,
+      }));
+      setData({ ...rawData, installments: installmentsList });
+      setSelectedIds(installmentsList.map(inst => inst.payment_id));
     } catch (err) {
       console.error('Error fetching installments report:', err);
       setError(err.response?.data?.detail || 'حدث خطأ أثناء تحميل بيانات الأقساط');
@@ -106,53 +112,42 @@ export default function InstallmentsReport() {
     if (selectedIds.length === 0) return;
     const selectedSet = new Set(selectedIds);
     const selectedRows = (data.installments || []).filter(inst => selectedSet.has(inst.payment_id));
-    const receiptIds = [...new Set(selectedRows.map(r => r.receipt_id).filter(Boolean))];
-    if (receiptIds.length === 0) {
-      toast.error('لم يتم العثور على فواتير صالحة للطباعة');
+    const validPaymentIds = selectedRows.map(r => r.payment_id).filter(Boolean);
+    if (validPaymentIds.length === 0) {
+      toast.error('لم يتم العثور على أقساط صالحة للطباعة');
       return;
     }
-    setPrintReceiptIds(receiptIds);
+    setPrintPaymentIds(validPaymentIds);
     setPrintModalOpen(true);
   };
 
   const executeChunkReceipts = async (chunk, { action, targetPrinter }) => {
+    const chunkSet = new Set(chunk);
+    const selectedRows = (data.installments || []).filter(inst => chunkSet.has(inst.payment_id));
+    const receiptIds = [...new Set(selectedRows.map(r => r.receipt_id).filter(Boolean))];
     const payload = {
-      receipt_ids: chunk,
+      receipt_ids: receiptIds.length > 0 ? receiptIds : chunk,
+      installment_ids: chunk,
+      month: month ? Number(month) : undefined,
+      year: year ? Number(year) : undefined,
       action,
       target_printer: targetPrinter || null
     };
     await api.post('/receipts/desktop_print/', payload);
   };
 
-  // Helper for displaying sale_date in MM/YYYY format
+  // Helper for displaying sale_date in YYYY/MM format
   const formatSaleDate = (rawSaleDate) => {
     if (!rawSaleDate) return '-';
-    // If format is YYYY/MM or YYYY-MM
     const parts = String(rawSaleDate).split(/[\/\-]/);
     if (parts.length >= 2) {
       if (parts[0].length === 4) {
-        // YYYY/MM
         return formatMMYYYY(parts[1], parts[0]);
       } else {
-        // MM/YYYY
         return formatMMYYYY(parts[0], parts[1]);
       }
     }
     return rawSaleDate;
-  };
-
-  // Helper for displaying due date in MM/YYYY format
-  const formatDueDate = (rawDate) => {
-    if (!rawDate) return '-';
-    try {
-      const d = new Date(rawDate);
-      if (!isNaN(d.getTime())) {
-        return formatMMYYYY(d.getMonth() + 1, d.getFullYear());
-      }
-    } catch (e) {
-      // fallback
-    }
-    return rawDate;
   };
 
   const columns = [
@@ -181,6 +176,7 @@ export default function InstallmentsReport() {
       label: 'المنطقة', 
       align: 'center', 
       className: 'text-nowrap', 
+      style: { minWidth: '130px' },
       render: (row) => row.area || '-' 
     },
     { 
@@ -195,6 +191,7 @@ export default function InstallmentsReport() {
       label: 'رقم الموبايل', 
       align: 'center', 
       className: 'text-muted text-nowrap', 
+      style: { minWidth: '130px' },
       dir: 'ltr', 
       render: (row) => row.phone || '-' 
     },
@@ -226,13 +223,13 @@ export default function InstallmentsReport() {
     {
       label: 'تاريخ الدفع',
       value: formatMMYYYY(month, year),
-      color: 'info',
+      color: 'primary',
       icon: IconCalendarEvent
     },
     { 
       label: 'عدد الأقساط', 
       value: fmtNum(data.installments_count || (data.installments || []).length), 
-      color: 'dark', 
+      color: 'primary', 
       icon: IconReceipt 
     },
     { 
@@ -262,66 +259,79 @@ export default function InstallmentsReport() {
   const subFiltersRow1 = () => (
     <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Salesperson */}
-      <div style={{ width: '220px' }} className="flex-shrink-0">
-        <ReportAutocomplete
-          items={salespersonsList}
-          value={salespersonQuery}
-          onChange={(text) => {
-            setSalespersonQuery(text);
-            if (!text) setSalespersonId('');
-          }}
-          onSelect={(item) => {
-            if (item) {
-              setSalespersonId(String(item.id || item.local_id));
-              setSalespersonQuery(item.name || '');
-            } else {
-              setSalespersonId('');
-              setSalespersonQuery('');
-            }
-          }}
-          placeholder="جميع المناديب..."
-          displayKey="name"
-          searchKeys={['name', 'local_id']}
-          idKey="id"
-          allowClear={true}
-          className="form-control form-control-sm fw-bold border-secondary-subtle"
-        />
+      <div style={{ width: '230px' }} className="flex-shrink-0">
+        <div className="input-group input-group-sm flex-nowrap">
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">المندوب</span>
+          <ReportAutocomplete
+            items={salespersonsList}
+            value={salespersonQuery}
+            onChange={(text) => {
+              setSalespersonQuery(text);
+              if (!text) setSalespersonId('');
+            }}
+            onSelect={(item) => {
+              if (item) {
+                setSalespersonId(String(item.id || item.local_id));
+                setSalespersonQuery(item.name || '');
+              } else {
+                setSalespersonId('');
+                setSalespersonQuery('');
+              }
+            }}
+            placeholder="جميع المناديب..."
+            displayKey="name"
+            searchKeys={['name', 'local_id']}
+            idKey="id"
+            allowClear={true}
+            className="form-control form-control-sm fw-bold border-secondary-subtle"
+          />
+        </div>
       </div>
 
       {/* Customer Name */}
-      <div className="flex-grow-1" style={{ minWidth: '160px' }}>
-        <DebouncedInput 
-          type="text" 
-          className="form-control form-control-sm fw-bold border-secondary-subtle" 
-          placeholder="اسم العميل..." 
-          value={customerName} 
-          onChange={(e) => setCustomerName(e.target.value)} 
-        />
+      <div className="flex-grow-1" style={{ minWidth: '170px' }}>
+        <div className="input-group input-group-sm flex-nowrap">
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">العميل</span>
+          <DebouncedInput 
+            type="text" 
+            className="form-control form-control-sm fw-bold border-secondary-subtle" 
+            placeholder="اسم العميل..." 
+            value={customerName} 
+            onChange={(e) => setCustomerName(e.target.value)} 
+          />
+        </div>
       </div>
 
       {/* Area Autocomplete */}
-      <div style={{ width: '180px' }} className="flex-shrink-0">
-        <ReportAutocomplete
-          value={area}
-          onChange={(val) => setArea(val)}
-          onSelect={(item) => {
-            const val = typeof item === 'object' ? (item.area || item.name || '') : String(item);
-            setArea(val);
-          }}
-          fetchSuggestions={async (query) => {
-            try {
-              const res = await api.get('/customer-suggestions/', {
-                params: { field: 'area', term: query || '', branch_id: branchId }
-              });
-              const data = res.data || [];
-              return data.map(i => typeof i === 'object' ? i : { name: i, id: i });
-            } catch {
-              return [];
-            }
-          }}
-          placeholder="المنطقة..."
-          className="form-control form-control-sm fw-bold border-secondary-subtle"
-        />
+      <div style={{ width: '190px' }} className="flex-shrink-0">
+        <div className="input-group input-group-sm flex-nowrap">
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">المنطقة</span>
+          <ReportAutocomplete
+            value={area}
+            onChange={(val) => setArea(val)}
+            onSelect={(item) => {
+              if (!item) {
+                setArea('');
+                return;
+              }
+              const val = typeof item === 'object' ? (item.area || item.name || '') : String(item);
+              setArea(val);
+            }}
+            fetchSuggestions={async (query) => {
+              try {
+                const res = await api.get('/customer-suggestions/', {
+                  params: { field: 'area', term: query || '', branch_id: branchId }
+                });
+                const data = res.data || [];
+                return data.map(i => typeof i === 'object' ? i : { name: i, id: i });
+              } catch {
+                return [];
+              }
+            }}
+            placeholder="المنطقة..."
+            className="form-control form-control-sm fw-bold border-secondary-subtle"
+          />
+        </div>
       </div>
     </div>
   );
@@ -329,15 +339,18 @@ export default function InstallmentsReport() {
   const subFiltersRow2 = () => (
     <div className="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap" style={{ overflow: 'visible' }}>
       {/* Phone */}
-      <div style={{ width: '140px' }} className="flex-shrink-0">
-        <DebouncedInput 
-          type="text" 
-          className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
-          dir="ltr"
-          placeholder="الموبايل..." 
-          value={phone} 
-          onChange={(e) => setPhone(e.target.value)} 
-        />
+      <div style={{ width: '190px' }} className="flex-shrink-0">
+        <div className="input-group input-group-sm flex-nowrap">
+          <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">الموبايل</span>
+          <DebouncedInput 
+            type="text" 
+            className="form-control form-control-sm fw-bold border-secondary-subtle text-center px-1" 
+            dir="ltr"
+            placeholder="الموبايل..." 
+            value={phone} 
+            onChange={(e) => setPhone(e.target.value)} 
+          />
+        </div>
       </div>
 
       {/* Reset */}
@@ -351,20 +364,24 @@ export default function InstallmentsReport() {
         <IconRefresh size={14} />
         <span>إعادة ضبط</span>
       </button>
-
-      {/* Print Selected Invoices */}
-      {selectedIds.length > 0 && (
-        <button 
-          type="button"
-          className="btn btn-sm btn-outline-primary fw-bold px-3 py-1 d-flex align-items-center gap-1 flex-shrink-0 border-secondary-subtle" 
-          onClick={handlePrintSelected}
-        >
-          <IconPrinter size={15} />
-          <span>طباعة جداول المحدد ({fmtNum(selectedIds.length)})</span>
-        </button>
-      )}
     </div>
   );
+
+  const headerToolbarExtra = selectedIds.length > 0 ? (
+    <div className="d-flex align-items-center gap-2 border-end border-secondary-subtle pe-2 me-1 flex-shrink-0">
+      <span className="badge bg-secondary-lt text-dark fw-bold px-2 py-1">
+        تم تحديد {fmtNum(selectedIds.length)}
+      </span>
+      <button 
+        type="button"
+        className="btn btn-sm btn-outline-primary fw-bold px-3 py-1 d-flex align-items-center gap-1 flex-shrink-0 border-secondary-subtle" 
+        onClick={handlePrintSelected}
+      >
+        <IconPrinter size={15} />
+        <span>طباعة جداول المحدد ({fmtNum(selectedIds.length)})</span>
+      </button>
+    </div>
+  ) : null;
 
   return (
     <div className="w-100 p-0">
@@ -381,6 +398,7 @@ export default function InstallmentsReport() {
         summaryCards={summaryCards}
         subFiltersRow1={subFiltersRow1}
         subFiltersRow2={subFiltersRow2}
+        headerToolbarExtra={headerToolbarExtra}
         checkboxSelection={true}
         idField="payment_id"
         selectedIds={selectedIds}
@@ -392,9 +410,10 @@ export default function InstallmentsReport() {
       <PrintModal
         isOpen={printModalOpen}
         onClose={() => setPrintModalOpen(false)}
-        title="طباعة جداول الأقساط"
-        items={printReceiptIds}
-        itemLabel="جدول قسط"
+        title="طباعة إيصالات الأقساط المستحقة"
+        items={printPaymentIds}
+        itemLabel="إيصال قسط"
+        chunkSize={20}
         executeChunk={executeChunkReceipts}
       />
     </div>

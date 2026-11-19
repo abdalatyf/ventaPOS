@@ -222,7 +222,7 @@ export default function SubscriptionTab() {
             {licenseInfo.isPrintOnly ? ' • باقة طباعة فقط' : ''}
           </span>
         </div>
-        <div className="table-responsive">
+        <div className="table-responsive hide-vertical-scroll">
           <table className="table table-bordered table-vcenter table-hover table-sticky-header text-nowrap tabular-nums mb-0 text-center align-middle">
             <thead className="bg-light">
               <tr>

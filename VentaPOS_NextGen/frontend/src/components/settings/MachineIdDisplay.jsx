@@ -15,7 +15,7 @@ export default function MachineIdDisplay({ machineId }) {
       <div className="card-header bg-white fw-bold">🆔 بصمة الجهاز (Machine ID)</div>
       <div className="card-body">
         <p className="text-muted small mb-2">انسخ هذا الكود وأرسله للدعم الفني لتفعيل النظام أو الدفع.</p>
-        <div className="input-group input-group-lg" style={{ border: '2px dashed #0d6efd', backgroundColor: '#f0f8ff', borderRadius: '10px', padding: '10px' }}>
+        <div className="input-group input-group-lg" style={{ border: '2px dashed #123F68', backgroundColor: '#e7ecf0', borderRadius: '10px', padding: '10px' }}>
           <input 
             type="text" 
             className="form-control text-center" 

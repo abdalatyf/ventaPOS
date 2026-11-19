@@ -2,6 +2,17 @@ import React from 'react';
 import Autocomplete from '../Autocomplete';
 import { IconSearch, IconRefresh } from '@tabler/icons-react';
 
+function clampNumberFilter(rawVal, min, max) {
+  const s = String(rawVal ?? '').trim();
+  if (!s) return '';
+  const n = parseInt(s, 10);
+  if (isNaN(n)) return '';
+  let clamped = n;
+  if (min !== undefined && clamped < min) clamped = min;
+  if (max !== undefined && clamped > max) clamped = max;
+  return String(clamped);
+}
+
 export function PurchaseFilterRow1({
   filters,
   handleFilterChange,
@@ -31,12 +42,21 @@ export function PurchaseFilterRow1({
         <div className="input-group input-group-sm">
           <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">رقم الفاتورة</span>
           <input 
-            type="text" 
-            className="form-control fw-bold border-secondary-subtle text-center px-1" 
+            type="number" 
+            min={1}
+            inputMode="numeric"
+            className="form-control fw-bold border-secondary-subtle text-center px-1 hide-arrows" 
             dir="ltr" 
             name="invoice_number" 
+            placeholder="الكل"
             value={filters.invoice_number} 
             onChange={handleFilterChange} 
+            onBlur={() => {
+              const clamped = clampNumberFilter(filters.invoice_number, 1);
+              if (clamped !== String(filters.invoice_number ?? '')) {
+                handleFilterChange({ target: { name: 'invoice_number', value: clamped } });
+              }
+            }}
           />
         </div>
       </div>
@@ -46,7 +66,9 @@ export function PurchaseFilterRow1({
         <div className="input-group input-group-sm">
           <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">الشهر</span>
           <input
-            type="text"
+            type="number"
+            min={1}
+            max={12}
             inputMode="numeric"
             dir="ltr"
             className="form-control fw-bold border-secondary-subtle text-center px-1 hide-arrows"
@@ -54,6 +76,12 @@ export function PurchaseFilterRow1({
             placeholder="الكل"
             value={filters.month}
             onChange={handleFilterChange}
+            onBlur={() => {
+              const clamped = clampNumberFilter(filters.month, 1, 12);
+              if (clamped !== String(filters.month ?? '')) {
+                handleFilterChange({ target: { name: 'month', value: clamped } });
+              }
+            }}
           />
         </div>
       </div>
@@ -63,7 +91,9 @@ export function PurchaseFilterRow1({
         <div className="input-group input-group-sm">
           <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">السنة</span>
           <input
-            type="text"
+            type="number"
+            min={2020}
+            max={2100}
             inputMode="numeric"
             dir="ltr"
             className="form-control fw-bold border-secondary-subtle text-center px-1 hide-arrows"
@@ -71,6 +101,12 @@ export function PurchaseFilterRow1({
             placeholder="الكل"
             value={filters.year}
             onChange={handleFilterChange}
+            onBlur={() => {
+              const clamped = clampNumberFilter(filters.year, 2020, 2100);
+              if (clamped !== String(filters.year ?? '')) {
+                handleFilterChange({ target: { name: 'year', value: clamped } });
+              }
+            }}
           />
         </div>
       </div>

@@ -180,29 +180,138 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
         import json
         try:
             ps_cmd = (
-                "Get-Printer | Select-Object Name, PrinterStatus, WorkOffline, "
-                "@{Name='IsDefault'; Expression={[bool]$_.Default}} | ConvertTo-Json -Compress"
+                "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; "
+                "$map = [ordered]@{}; "
+                "$defName = ''; "
+                "try { "
+                "  $dev = (Get-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Windows' -Name 'Device' -ErrorAction SilentlyContinue).Device; "
+                "  if ($dev) { $defName = ($dev -split ',')[0].Trim() } "
+                "} catch {} "
+                "try { "
+                "  $cimList = @(Get-CimInstance -ClassName Win32_Printer -ErrorAction SilentlyContinue); "
+                "  foreach ($p in $cimList) { "
+                "    if (-not $p.Name) { continue }; "
+                "    $n = [string]$p.Name; "
+                "    $map[$n] = @{ "
+                "      Name = $n; "
+                "      WorkOffline = [bool]$p.WorkOffline; "
+                "      CimPrinterStatus = $p.PrinterStatus; "
+                "      ExtendedPrinterStatus = $p.ExtendedPrinterStatus; "
+                "      PrinterState = $p.PrinterState; "
+                "      PrinterStatus = $null; "
+                "      IsDefault = ([bool]$p.Default -or ($n -eq $defName)); "
+                "    }; "
+                "  } "
+                "} catch {} "
+                "try { "
+                "  $gpList = @(Get-Printer -ErrorAction SilentlyContinue); "
+                "  foreach ($p in $gpList) { "
+                "    if (-not $p.Name) { continue }; "
+                "    $n = [string]$p.Name; "
+                "    if ($map.Contains($n)) { "
+                "      $map[$n].PrinterStatus = $p.PrinterStatus; "
+                "      if ($p.WorkOffline) { $map[$n].WorkOffline = $true }; "
+                "    } else { "
+                "      $map[$n] = @{ "
+                "        Name = $n; "
+                "        WorkOffline = [bool]$p.WorkOffline; "
+                "        CimPrinterStatus = $null; "
+                "        ExtendedPrinterStatus = $null; "
+                "        PrinterState = $null; "
+                "        PrinterStatus = $p.PrinterStatus; "
+                "        IsDefault = ($n -eq $defName); "
+                "      }; "
+                "    } "
+                "  } "
+                "} catch {} "
+                "try { "
+                "  $regList = @(Get-ChildItem -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Print\\Printers' -ErrorAction SilentlyContinue); "
+                "  foreach ($r in $regList) { "
+                "    $n = [string]$r.PSChildName; "
+                "    if ($n -and -not $map.Contains($n)) { "
+                "      $map[$n] = @{ "
+                "        Name = $n; "
+                "        WorkOffline = $false; "
+                "        CimPrinterStatus = $null; "
+                "        ExtendedPrinterStatus = $null; "
+                "        PrinterState = $null; "
+                "        PrinterStatus = 0; "
+                "        IsDefault = ($n -eq $defName); "
+                "      }; "
+                "    } "
+                "  } "
+                "} catch {} "
+                "@($map.Values) | ConvertTo-Json -Compress"
             )
             result = subprocess.run(
                 ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
                 capture_output=True,
                 text=True,
-                check=True
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
-            raw_stdout = result.stdout.strip()
+            raw_stdout = (result.stdout or "").strip()
             printers_list = []
             if raw_stdout:
                 parsed = json.loads(raw_stdout)
                 items = [parsed] if isinstance(parsed, dict) else (parsed if isinstance(parsed, list) else [])
+                offline_state_mask = 0x1 | 0x2 | 0x4 | 0x8 | 0x10 | 0x20 | 0x40 | 0x80 | 0x400 | 0x80000
+                offline_tokens = (
+                    "offline", "error", "paused", "stopped", "paperjam",
+                    "paperout", "pendingdeletion", "paperproblem", "manualfeed", "notavailable",
+                )
                 for item in items:
+                    if not isinstance(item, dict):
+                        continue
                     name = str(item.get("Name", "")).strip()
                     if not name:
                         continue
                     work_offline = bool(item.get("WorkOffline", False))
-                    raw_status = str(item.get("PrinterStatus", "")).strip().lower()
-                    is_offline = work_offline or (raw_status in ("offline", "7", "error", "3", "4", "5", "paused", "1"))
+
+                    if item.get("CimPrinterStatus") is not None:
+                        cim_status = item.get("CimPrinterStatus")
+                        msft_status = item.get("PrinterStatus")
+                    elif "ExtendedPrinterStatus" in item or "PrinterState" in item or ("Default" in item and "IsDefault" not in item):
+                        cim_status = item.get("PrinterStatus")
+                        msft_status = item.get("MsftPrinterStatus")
+                    else:
+                        cim_status = None
+                        msft_status = item.get("PrinterStatus")
+
+                    cim_offline = False
+                    if cim_status is not None:
+                        cim_str = str(cim_status).strip().lower()
+                        if cim_str in ("1", "2", "6", "7") or any(tok in cim_str for tok in offline_tokens):
+                            cim_offline = True
+
+                    ext_status = item.get("ExtendedPrinterStatus")
+                    ext_offline = False
+                    if ext_status is not None:
+                        ext_str = str(ext_status).strip().lower()
+                        if ext_str in ("6", "7") or any(tok in ext_str for tok in offline_tokens):
+                            ext_offline = True
+
+                    printer_state = item.get("PrinterState")
+                    state_offline = False
+                    if printer_state is not None and not isinstance(printer_state, bool):
+                        try:
+                            state_int = int(printer_state)
+                            if (state_int & offline_state_mask) != 0:
+                                state_offline = True
+                        except (ValueError, TypeError):
+                            pass
+
+                    msft_offline = False
+                    if msft_status is not None:
+                        msft_str = str(msft_status).strip().lower()
+                        if msft_str in ("1", "2", "3", "4", "5", "6", "7", "8") or any(tok in msft_str for tok in offline_tokens):
+                            msft_offline = True
+
+                    is_offline = bool(work_offline or cim_offline or ext_offline or state_offline or msft_offline)
                     status_str = "offline" if is_offline else "ready"
-                    is_default = bool(item.get("IsDefault", False))
+                    is_default = bool(item.get("IsDefault", False) or item.get("Default", False))
                     printers_list.append({
                         "name": name,
                         "status": status_str,
@@ -214,43 +323,97 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
 
     @action(detail=False, methods=["post"])
     def desktop_print(self, request):
-        receipt_ids = request.data.get("receipt_ids", [])
+        receipt_ids = request.data.get("receipt_ids", None)
+        raw_inst_ids = request.data.get("installment_ids", request.data.get("payment_ids", None))
+        raw_month = request.data.get("month", request.data.get("target_month", None))
+        raw_year = request.data.get("year", request.data.get("target_year", None))
         action_type = request.data.get("action", "print")
         target_printer = request.data.get("target_printer", None)
 
-        if not isinstance(receipt_ids, list) or not receipt_ids:
-            return Response({"error": "receipt_ids must be a non-empty list"}, status=status.HTTP_400_BAD_REQUEST)
+        clean_installment_ids = []
+        if raw_inst_ids is not None:
+            if not isinstance(raw_inst_ids, list):
+                return Response({"error": "installment_ids must be a list"}, status=status.HTTP_400_BAD_REQUEST)
+            for raw_inst_id in raw_inst_ids:
+                if isinstance(raw_inst_id, bool):
+                    return Response({"error": "installment_ids must contain valid integers"}, status=status.HTTP_400_BAD_REQUEST)
+                try:
+                    clean_installment_ids.append(int(to_english_numerals(str(raw_inst_id).strip())))
+                except (ValueError, TypeError):
+                    return Response({"error": "installment_ids must contain valid integers"}, status=status.HTTP_400_BAD_REQUEST)
+
+        filter_month = None
+        if raw_month is not None and str(raw_month).strip() != "":
+            if isinstance(raw_month, bool):
+                return Response({"error": "month must be a valid integer"}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                filter_month = int(to_english_numerals(str(raw_month).strip()))
+            except (ValueError, TypeError):
+                return Response({"error": "month must be a valid integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+        filter_year = None
+        if raw_year is not None and str(raw_year).strip() != "":
+            if isinstance(raw_year, bool):
+                return Response({"error": "year must be a valid integer"}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                filter_year = int(to_english_numerals(str(raw_year).strip()))
+            except (ValueError, TypeError):
+                return Response({"error": "year must be a valid integer"}, status=status.HTTP_400_BAD_REQUEST)
 
         clean_ids = []
-        for raw_id in receipt_ids:
-            if isinstance(raw_id, bool):
-                return Response({"error": "receipt_ids must contain valid integers"}, status=status.HTTP_400_BAD_REQUEST)
-            try:
-                clean_ids.append(int(raw_id))
-            except (ValueError, TypeError):
-                return Response({"error": "receipt_ids must contain valid integers"}, status=status.HTTP_400_BAD_REQUEST)
+        if isinstance(receipt_ids, list) and receipt_ids:
+            for raw_id in receipt_ids:
+                if isinstance(raw_id, bool):
+                    return Response({"error": "receipt_ids must contain valid integers"}, status=status.HTTP_400_BAD_REQUEST)
+                try:
+                    clean_ids.append(int(to_english_numerals(str(raw_id).strip())))
+                except (ValueError, TypeError):
+                    return Response({"error": "receipt_ids must contain valid integers"}, status=status.HTTP_400_BAD_REQUEST)
+        elif clean_installment_ids:
+            inst_rows = list(
+                InstallmentPayment.objects.filter(
+                    id__in=clean_installment_ids, is_deleted=False
+                ).values_list("id", "receipt_id")
+            )
+            inst_to_receipt = {inst_id: rec_id for inst_id, rec_id in inst_rows}
+            seen_rec_ids = set()
+            for req_inst_id in clean_installment_ids:
+                rec_id = inst_to_receipt.get(req_inst_id)
+                if rec_id and rec_id not in seen_rec_ids:
+                    seen_rec_ids.add(rec_id)
+                    clean_ids.append(rec_id)
+            if not clean_ids:
+                return Response({"error": "No valid receipts found"}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            return Response({"error": "receipt_ids must be a non-empty list"}, status=status.HTTP_400_BAD_REQUEST)
 
-        receipts = self.get_queryset().filter(id__in=clean_ids).prefetch_related('payments')
-        if not receipts.exists():
+        receipts_qs = self.get_queryset().filter(id__in=clean_ids).prefetch_related('payments')
+        if not receipts_qs.exists():
             return Response({"error": "No valid receipts found"}, status=status.HTTP_404_NOT_FOUND)
 
-        if receipts.filter(is_cash_sale=True).exists():
+        if receipts_qs.filter(is_cash_sale=True).exists():
             return Response({"error": "الطباعة مخصصة لجداول الأقساط فقط"}, status=status.HTTP_400_BAD_REQUEST)
+
+        receipt_map = {r.id: r for r in receipts_qs}
+        ordered_receipts = [receipt_map[rid] for rid in clean_ids if rid in receipt_map]
 
         from django.template.loader import render_to_string
         from api.print_utils import generate_and_open_pdf, ed2ad
 
         pages_html = []
+        has_inst_filter = bool(clean_installment_ids) or (filter_month is not None) or (filter_year is not None)
+        clean_installment_ids_set = set(clean_installment_ids)
 
-        for receipt in receipts:
+        for receipt in ordered_receipts:
             installments_from_db = list(receipt.payments.filter(is_deleted=False).order_by('payment_date', 'id'))
             total_installments = len(installments_from_db)
             paid_so_far = receipt.down_payment
 
             if not installments_from_db:
-                ctx = self._prepare_pdf_context(receipt)
-                part = render_to_string('api/pdf_invoice_content.html', ctx)
-                pages_html.append(part)
+                if not has_inst_filter:
+                    ctx = self._prepare_pdf_context(receipt)
+                    part = render_to_string('api/pdf_invoice_content.html', ctx)
+                    pages_html.append(part)
             else:
                 for i, inst in enumerate(installments_from_db):
                     total = int(receipt.total_amount)
@@ -263,11 +426,22 @@ class ReceiptViewSet(SoftDeleteModelViewSet):
                     rem = total - paid_so_far
                     rem_text = ed2ad(str(rem)) if rem > 0 else "خالص"
 
+                    if has_inst_filter:
+                        if clean_installment_ids_set and inst.id not in clean_installment_ids_set:
+                            continue
+                        if filter_month is not None and (not inst.payment_date or inst.payment_date.month != filter_month):
+                            continue
+                        if filter_year is not None and (not inst.payment_date or inst.payment_date.year != filter_year):
+                            continue
+
                     ctx = self._prepare_pdf_context(receipt, inst, i + 1, total_installments)
                     ctx['remaining_amount'] = rem_text
 
                     part = render_to_string('api/pdf_invoice_content.html', ctx)
                     pages_html.append(part)
+
+        if not pages_html:
+            return Response({"error": "No matching installments found"}, status=status.HTTP_404_NOT_FOUND)
 
         full_content_body = '<div style="page-break-after: always; display: block; clear: both; height: 1px;"></div>'.join(pages_html)
         final_html = render_to_string('api/pdf_base.html', {'content': full_content_body})

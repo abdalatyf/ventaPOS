@@ -239,10 +239,11 @@ export default function SearchReceipts() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.length > 0) {
+    const targetAllIds = globalAllIds.length > 0 ? globalAllIds : receipts.map(r => r.id);
+    if (selectedIds.length === targetAllIds.length && targetAllIds.length > 0) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(receipts.map(r => r.id));
+      setSelectedIds(targetAllIds);
     }
   };
 
@@ -262,7 +263,7 @@ export default function SearchReceipts() {
         showCancelButton: true,
         confirmButtonText: 'نعم، احذف',
         cancelButtonText: 'إلغاء',
-        confirmButtonColor: '#d33',
+        confirmButtonColor: '#D63939',
         cancelButtonColor: '#6c757d',
       });
 
@@ -293,7 +294,7 @@ export default function SearchReceipts() {
         showCancelButton: true,
         confirmButtonText: 'نعم، احذف',
         cancelButtonText: 'إلغاء',
-        confirmButtonColor: '#d33',
+        confirmButtonColor: '#D63939',
         cancelButtonColor: '#6c757d',
       });
 
@@ -434,6 +435,7 @@ export default function SearchReceipts() {
             title="طباعة جداول الأقساط"
             items={printModalIds}
             itemLabel="جدول أقساط"
+            chunkSize={2}
             executeChunk={executeChunkReceipts}
           />
         </>

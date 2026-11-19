@@ -76,7 +76,7 @@ export default function LicenseKeyInput({ onSubmit, isLoading }) {
               }}
               onFocus={(e) => {
                 e.target.style.backgroundColor = '#fff';
-                e.target.style.borderColor = '#198754';
+                e.target.style.borderColor = '#123F68';
                 e.target.style.transform = 'scale(1.05)';
               }}
               onBlur={(e) => {

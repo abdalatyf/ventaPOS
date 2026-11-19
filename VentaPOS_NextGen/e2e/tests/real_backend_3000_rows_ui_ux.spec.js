@@ -755,7 +755,7 @@ print(json.dumps({
 
     await expect(page.getByText('نتائج البحث: 3,050 فاتورة')).toBeVisible();
     await expect(page.getByText('محدد 3,050')).toBeVisible();
-    await expect(page.getByText(/تم تحديد كافة الـ 3,050 فاتورة المطابقة للبحث/)).toBeVisible();
+    await expect(page.locator('.sticky-selection-strip')).toHaveCount(0);
 
     const initialRowCount = await page.locator('table tbody tr').count();
     expect(initialRowCount).toBe(200);
@@ -792,13 +792,11 @@ print(json.dumps({
       window.scrollTo({ top: 0, behavior: 'instant' });
     });
 
-    // Test 3-Tier selection: uncheck first row -> 3,049 selected, click re-select banner -> 3,050
+    // Test global selection: uncheck first row -> 3,049 selected (indeterminate), click header checkbox -> 3,050 selected
     const firstRowCheckbox = page.locator('table tbody tr').first().locator('input[type="checkbox"]');
     await firstRowCheckbox.click();
     await expect(page.getByText('محدد 3,049')).toBeVisible();
-    const reselectBannerBtn = page.getByRole('button', { name: /تحديد كافة الـ 3,050 فاتورة المطابقة للبحث/ });
-    await expect(reselectBannerBtn).toBeVisible();
-    await reselectBannerBtn.click();
+    await page.locator('table thead input[type="checkbox"]').click();
     await expect(page.getByText('محدد 3,050')).toBeVisible();
 
     // Cash-only bulk print block when only cash receipt(s) are selected

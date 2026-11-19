@@ -31,9 +31,9 @@ export default function ReceiptsTable({
   const [focusedRowIndex, setFocusedRowIndex] = useState(-1);
   const tableContainerElemRef = useRef(null);
 
-  const isAllMatchingSelected = globalAllIds.length > 0 && selectedIds.length === globalAllIds.length;
-  const isCurrentPageSelected = receipts.length > 0 && receipts.every(r => selectedSet.has(r.id));
-  const isPartiallySelected = selectedIds.length > 0 && !isAllMatchingSelected && !isCurrentPageSelected;
+  const targetCount = globalAllIds.length > 0 ? globalAllIds.length : receipts.length;
+  const isAllMatchingSelected = targetCount > 0 && selectedIds.length === targetCount;
+  const isPartiallySelected = selectedIds.length > 0 && selectedIds.length < targetCount;
 
   const handleSetTableRef = (node) => {
     tableContainerElemRef.current = node;
@@ -92,7 +92,7 @@ export default function ReceiptsTable({
               </span>
               <button 
                 type="button"
-                className="btn btn-outline-success btn-sm fw-bold py-1 px-2 border-secondary-subtle d-flex align-items-center gap-1" 
+                className="btn btn-outline-primary btn-sm fw-bold py-1 px-2 border-secondary-subtle d-flex align-items-center gap-1" 
                 onClick={() => handlePrint && handlePrint(selectedIds, 'print')}
               >
                 <IconPrinter size={14} />
@@ -120,32 +120,11 @@ export default function ReceiptsTable({
 
         <div className="text-dark fw-bold fs-4 border px-3 py-1 bg-white rounded shadow-sm flex-shrink-0" style={{ borderColor: '#adb5bd' }}>
           إجمالي فواتير البيع:{' '}
-          <span className="text-danger fw-bolder fs-4">
+          <span className="text-primary fw-bolder fs-4">
             {formatCurrency ? formatCurrency(totalAmountSum || 0) : fmtNum(totalAmountSum || 0)}
           </span>
         </div>
       </div>
-
-      {/* Two-Tier Selection Alert Strip (Sticky below toolbar) */}
-      {selectedIds.length > 0 && totalInvoicesCount > receipts.length && (
-        <div className="sticky-selection-strip bg-light border-bottom px-3 py-1 text-center small fw-bold text-dark d-flex align-items-center justify-content-center gap-2 d-print-none">
-          {isAllMatchingSelected ? (
-            <>
-              <span>تم تحديد كافة الـ {fmtNum(totalInvoicesCount)} فاتورة المطابقة للبحث.</span>
-              <button type="button" className="btn btn-link btn-sm p-0 fw-bold text-danger text-decoration-none" onClick={() => toggleSelectAll && toggleSelectAll()}>
-                إلغاء التحديد
-              </button>
-            </>
-          ) : (
-            <>
-              <span>تم تحديد {fmtNum(selectedIds.length)} فاتورة في هذه الصفحة.</span>
-              <button type="button" className="btn btn-link btn-sm p-0 fw-bold text-primary text-decoration-none" onClick={() => selectAllMatching && selectAllMatching()}>
-                تحديد كافة الـ {fmtNum(totalInvoicesCount)} فاتورة المطابقة للبحث
-              </button>
-            </>
-          )}
-        </div>
-      )}
 
       {/* Row 2 of Table Card: Table Container */}
       <div
@@ -162,7 +141,7 @@ export default function ReceiptsTable({
                 <input 
                   type="checkbox" 
                   className="form-check-input" 
-                  checked={receipts.length > 0 && (isCurrentPageSelected || isAllMatchingSelected)}
+                  checked={isAllMatchingSelected}
                   ref={el => { if (el) el.indeterminate = isPartiallySelected; }}
                   onChange={toggleSelectAll} 
                 />
@@ -172,8 +151,8 @@ export default function ReceiptsTable({
               <th className="text-center">تاريخ البيع</th>
               <th className="text-center">المندوب</th>
               <th className="text-start px-2">اسم العميل</th>
-              <th className="text-center">الهاتف</th>
-              <th className="text-center">المنطقة</th>
+              <th className="text-center" style={{ minWidth: '125px' }}>الهاتف</th>
+              <th className="text-center" style={{ minWidth: '125px' }}>المنطقة</th>
               <th className="text-start px-2">العنوان</th>
               <th className="text-start px-2">الأصناف</th>
               <th className="text-center">المقدم</th>

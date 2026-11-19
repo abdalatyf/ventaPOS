@@ -232,10 +232,12 @@ print(json.dumps({
     // Demo auto-login lands on /select-branch or directly /receipts
     await expect(page).toHaveURL(/\/(select-branch|receipts)/, { timeout: 15000 });
     if (page.url().includes('/select-branch')) {
-      const branchCards = page.locator('.card.cursor-pointer');
-      await expect(branchCards.first()).toBeVisible();
-      await branchCards.first().click();
-      await expect(page).toHaveURL(/\/receipts/);
+      // SelectBranch may auto-redirect to /receipts when only 1 branch exists
+      await Promise.race([
+        page.waitForURL(/\/receipts/, { timeout: 15000 }),
+        page.locator('.card.cursor-pointer').first().click({ timeout: 15000 }).catch(() => {}),
+      ]);
+      await expect(page).toHaveURL(/\/receipts/, { timeout: 15000 });
     }
 
     // DemoBanner should be visible with Activate button
@@ -619,8 +621,12 @@ print(json.dumps({
     await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
     await expect(page).toHaveURL(/\/(select-branch|receipts)/, { timeout: 15000 });
     if (page.url().includes('/select-branch')) {
-      await page.locator('.card.cursor-pointer').first().click();
-      await expect(page).toHaveURL(/\/receipts/);
+      // SelectBranch may auto-redirect to /receipts when only 1 branch exists
+      await Promise.race([
+        page.waitForURL(/\/receipts/, { timeout: 15000 }),
+        page.locator('.card.cursor-pointer').first().click({ timeout: 15000 }).catch(() => {}),
+      ]);
+      await expect(page).toHaveURL(/\/receipts/, { timeout: 15000 });
     }
 
     liveIds.token = await page.evaluate(() => localStorage.getItem('token'));

@@ -158,3 +158,39 @@
     4. طباعة جداول الأقساط وتقارير النظام وفواتير المشتريات.
     5. كارت الصنف (تعديل المندبة وتسجيل العجز) والمرتجعات.
     6. المصروفات وتصنيفها، والتقارير المالية والسيولة ومرتبات المناديب.
+
+---
+
+## 2. v1.0.0 — Live Manual QA Polish & Bug Fixes (11 Items — Track 1 & Track 2)
+
+### Track 1 — Backend, Printers, Collections Single-Slip Print, Demo Company Data & DL PDF Templates
+
+- [x] **QA-1 (Backend) — Collections Single-Month Installment Slip Printing (`receipt_views.py`)**:
+  - Support optional `installment_ids` (`payment_ids`) and/or `month` + `year` in `POST /api/v1/receipts/desktop_print/`.
+  - Walk each receipt's full ordered `InstallmentPayment` schedule first to compute exact 1-based installment sequence numbers (`1..N`) and cumulative remaining balances (`remaining_amount` / `"خالص"`), then filter rendered DL slips exclusively to the requested month/installment IDs (~1 DL slip per collection row).
+- [x] **QA-2 (Backend) — Robust Multi-Source Disconnected Windows Printer Enumeration (`receipt_views.py`)**:
+  - Enforce `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`, `encoding="utf-8"`, `timeout=10`, and `CREATE_NO_WINDOW` in `GET /api/v1/receipts/printers/`.
+  - Query and merge both `Get-CimInstance -ClassName Win32_Printer` and `Get-Printer` (with Registry `HKLM:\SYSTEM\CurrentControlSet\Control\Print\Printers` and `HKCU` default printer fallbacks) and accurately map `WorkOffline`, `Win32_Printer.PrinterStatus` / `ExtendedPrinterStatus` / `PrinterState`, and `MSFT_Printer.PrinterStatus` (`1..8`, including `8=Offline`) so disconnected USB, paused, offline, network, and Arabic-named printers always appear with accurate `ready` / `offline` and `is_default` flags.
+- [x] **QA-3 (Backend) — Short Realistic Demo Company Data (`init_demo_db.py`)**:
+  - Update Demo Mode `CompanySetting` to `name="شركة النور للتجارة"`, `description="مفروشات - أدوات منزلية - أجهزة كهربائية"`, `phone1="01012345678"`, `phone2="01112345678"`, and `footer_text="رجاء الاحتفاظ بهذا الإيصال"`.
+- [x] **QA-4 (Backend) — DL (`220mm × 110mm`) PDF Single-Slip Fit & Overflow Guard (`pdf_base.html`, `pdf_invoice_content.html`, `pdf_purchase_content.html`)**:
+  - Tighten `.company-title` (`font-size: 24px; line-height: 1.15; word-break: break-word;`), add `max-height` and `overflow: hidden` guards on `.evl` (`110mm`) and `.main` (`99mm`), remove trailing `margin-bottom: 30px` on `.evl` in `pdf_purchase_content.html`, and compact header description and footer rows so a single DL slip never wraps onto a second blank page.
+
+### Track 2 — Frontend UI/UX, Selection, Chunked Printing, Clear Buttons, Filter Bounds & Palette Normalization
+
+- [x] **QA-5 (Frontend) — Select-All on Load, Remove Duplicate `sticky-selection-strip` & Fix Header Checkbox (`ReceiptsTable.jsx`, `PurchaseTable.jsx`, `SearchReceipts.jsx`, `SearchPurchases.jsx`, `InstallmentsReport.jsx`, `ReportTable.jsx`)**:
+  - Start all matching rows selected on load across `SearchReceipts`, `SearchPurchases`, and `InstallmentsReport` ("التحصيل").
+  - Remove the redundant `sticky-selection-strip` banner and fix header checkbox toggle between `[]` and all matching rows (`globalAllIds`) with proper `indeterminate` state.
+- [x] **QA-6 (Frontend) — Move Collections Print Button to Sticky Toolbar & Configurable Print Chunk Sizes (`InstallmentsReport.jsx`, `ReportTable.jsx`, `PrintModal.jsx`, `SearchReceipts.jsx`, `SearchPurchases.jsx`)**:
+  - Move `"طباعة جداول المحدد"` into `ReportTable.jsx` sticky toolbar, dispatch single-month installment print with `chunkSize={20}` in `InstallmentsReport.jsx`, `chunkSize={2}` in `SearchReceipts.jsx`, `chunkSize={20}` in `SearchPurchases.jsx`, and suppress false batch alerts on single-PDF A4 reports.
+- [x] **QA-7 (Frontend) — Unified Deep Navy (`#123F68`) Color Palette & Semantic KPI/Total Colors (`index.css`, `Navbar.jsx`, `POS.jsx`, `ReceiptsTable.jsx`, `ProductLedger`, Reports)**:
+  - Override Tabler CSS variables (`--tblr-primary-rgb`, `--tblr-success-rgb`, `--tblr-danger-rgb`), normalize inactive `Navbar.jsx` links to neutral slate with `#123F68` active state, remove purple (`#6f42c1`) leaks, and stop coloring sales totals red (`text-danger`) in `ReceiptsTable.jsx` and `POS.jsx`.
+- [x] **QA-8 (Frontend) — Working Left-Side `✕` Clear Buttons & Null-Safe `onSelect(null)` (`AppAutocomplete.jsx`, `DebouncedInput.jsx`, Filter Toolbars & Reports)**:
+  - Fix Tabler `.input-icon-addon` pointer-events block so clicking `✕` clears `AppAutocomplete` and filter text inputs (`Customer`, `Phone`, `Address`, live search), and guard all 10 `onSelect` callers against `null`.
+- [x] **QA-9 (Frontend) — Filter Toolbar Numeric Inputs (`type="number"`) & Safe Bounds Clamping (`ReceiptsFilterToolbar.jsx`, `PurchaseFilterToolbar.jsx`, `ReportsLayout.jsx`, `InstallmentsReport.jsx`, `ReceiptsReport.jsx`, `Expenses.jsx`)**:
+  - Convert filter toolbar `Month` (`1–12`), `Year` (`2020–2100`), `From/To Receipt Num` (`min 1`, `From <= To`), and `Invoice Num` (`min 1`) inputs to `type="number"` with `.hide-arrows`, and prevent `ReportsLayout.jsx` from unmounting when `month`/`year` is cleared during typing.
+- [x] **QA-10 (Frontend) — Navbar & Filter Label Padding (`px-2`) + Global `6px` Thin Windows Scrollbars (`index.css`, `Navbar.jsx`, Filter Toolbars)**:
+  - Restore balanced `.navbar .nav-link` horizontal padding and icon-to-text gap, upgrade cramped `px-1` filter labels to `px-2`, and shrink Windows scrollbars globally from `16px` to `6px` (`scrollbar-width: thin`).
+- [x] **QA-11 (Frontend) — Equalize `Phone` (`الهاتف` / `رقم الموبايل`) Width to Match `Area` (`المنطقة`) Across Forms, Filters & Tables (`POSCustomerForm.jsx`, `ReceiptsFilterToolbar.jsx`, `ReceiptsTable.jsx`, `ReceiptRow.jsx`, `InstallmentsReport.jsx`, `ReceiptsReport.jsx`)**:
+  - Set matching column and input flex/width proportions on `الهاتف` and `المنطقة` across customer forms, filter toolbars, and receipt/report tables.
+

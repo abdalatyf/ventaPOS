@@ -139,7 +139,7 @@ export default function POSItemsTable({
               type="text"
               inputMode="numeric"
               dir="ltr"
-              className="form-control py-1 fs-3 border-secondary-subtle text-danger fw-bold text-center"
+              className="form-control py-1 fs-3 border-secondary-subtle text-primary fw-bold text-center"
               value={sellPrice}
               onChange={e => setSellPrice(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddItem(); } }}
@@ -160,7 +160,7 @@ export default function POSItemsTable({
       </div>
 
       {/* Cart Items Table */}
-      <div className="table-responsive" style={{ minHeight: 200, maxHeight: 'calc(100vh - 380px)', overflowY: 'auto' }}>
+      <div className="table-responsive hide-vertical-scroll" style={{ minHeight: 200, maxHeight: 'calc(100vh - 380px)', overflowY: 'auto' }}>
         <table className="table table-vcenter table-hover table-sm text-nowrap tabular-nums mb-0 table-sticky-header">
           <thead className="table-light border-bottom">
             <tr>

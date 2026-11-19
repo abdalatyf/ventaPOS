@@ -344,31 +344,55 @@ export default function Expenses() {
       row2={
         <div className="d-flex align-items-center gap-2 w-100 flex-nowrap" style={{ overflow: 'visible' }}>
           {/* Month */}
-          <div style={{ width: '110px' }} className="flex-shrink-0">
+          <div style={{ width: '115px' }} className="flex-shrink-0">
             <div className="input-group input-group-sm">
               <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">الشهر</span>
               <input 
-                type="text"
+                type="number"
+                min={1}
+                max={12}
                 inputMode="numeric"
                 dir="ltr"
-                className="form-control text-center fw-bold border-secondary-subtle px-1" 
+                className="form-control text-center fw-bold border-secondary-subtle px-1 hide-arrows" 
                 value={expenseMonth} 
                 onChange={(e) => setExpenseMonth(toEnglish(e.target.value))} 
+                onBlur={() => {
+                  const n = parseInt(expenseMonth, 10);
+                  if (isNaN(n)) {
+                    setExpenseMonth(String(defaultMonth || new Date().getMonth() + 1));
+                  } else if (n < 1) {
+                    setExpenseMonth('1');
+                  } else if (n > 12) {
+                    setExpenseMonth('12');
+                  }
+                }}
               />
             </div>
           </div>
 
           {/* Year */}
-          <div style={{ width: '120px' }} className="flex-shrink-0">
+          <div style={{ width: '125px' }} className="flex-shrink-0">
             <div className="input-group input-group-sm">
               <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">السنة</span>
               <input 
-                type="text"
+                type="number"
+                min={2020}
+                max={2100}
                 inputMode="numeric"
                 dir="ltr"
-                className="form-control text-center fw-bold border-secondary-subtle px-1" 
+                className="form-control text-center fw-bold border-secondary-subtle px-1 hide-arrows" 
                 value={expenseYear} 
                 onChange={(e) => setExpenseYear(toEnglish(e.target.value))} 
+                onBlur={() => {
+                  const n = parseInt(expenseYear, 10);
+                  if (isNaN(n)) {
+                    setExpenseYear(String(defaultYear || new Date().getFullYear()));
+                  } else if (n < 2020) {
+                    setExpenseYear('2020');
+                  } else if (n > 2100) {
+                    setExpenseYear('2100');
+                  }
+                }}
               />
             </div>
           </div>
@@ -395,15 +419,38 @@ export default function Expenses() {
 
           {/* Live Search */}
           <div className="flex-grow-1" style={{ minWidth: '180px' }}>
-            <div className="input-icon">
+            <div className="input-icon position-relative">
               <span className="input-icon-addon"><IconSearch size={14}/></span>
               <input 
                 type="text" 
                 className="form-control form-control-sm border-secondary-subtle fw-bold" 
+                style={{ paddingLeft: searchQuery ? '2rem' : undefined }}
                 placeholder="بحث في المصروفات..." 
                 value={searchQuery} 
                 onChange={(e) => setSearchQuery(e.target.value)} 
               />
+              {searchQuery && (
+                <span
+                  className="input-icon-addon cursor-pointer"
+                  title="مسح الحقل"
+                  onClick={() => setSearchQuery('')}
+                  style={{
+                    position: 'absolute',
+                    left: '8px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    zIndex: 3,
+                    cursor: 'pointer',
+                    pointerEvents: 'auto',
+                    color: '#6c757d',
+                    fontSize: '14px',
+                    lineHeight: 1,
+                    padding: '2px 4px',
+                  }}
+                >
+                  ✕
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -432,7 +479,7 @@ export default function Expenses() {
         </div>
 
         {/* Row 2 of Table Card: Table Container */}
-        <div ref={setTableRef} className="table-responsive report-table-container">
+        <div ref={setTableRef} className="table-responsive report-table-container hide-vertical-scroll">
           <table className="table table-vcenter table-hover card-table table-bordered m-0 table-sticky-header text-nowrap tabular-nums" style={{ borderCollapse: 'collapse' }}>
             <thead>
               <tr>
@@ -464,7 +511,7 @@ export default function Expenses() {
                     <td className="text-center align-middle border-secondary-subtle text-muted fw-bold">{fmtNum(exp.id)}</td>
                     <td className="text-start px-3 align-middle border-secondary-subtle fw-bold text-primary">{exp.description}</td>
                     <td className="text-center align-middle border-secondary-subtle">
-                      <span className="badge bg-blue-lt text-primary fw-bold px-2 py-1">{exp.category || 'مصروفات عامة'}</span>
+                      <span className="badge bg-primary-lt text-primary fw-bold px-2 py-1">{exp.category || 'مصروفات عامة'}</span>
                     </td>
                     <td className="text-end px-3 align-middle border-secondary-subtle fw-bold text-danger fs-4">{fmtNum(exp.amount)}</td>
                     <td className="text-center align-middle border-secondary-subtle text-muted fw-bold" dir="ltr">{formatMMYYYY(exp.expense_month || expenseMonth, exp.expense_year || expenseYear)}</td>

@@ -236,17 +236,40 @@ export default function SalespersonsTab() {
         {/* Row 1 of Table Card: Sticky Toolbar directly above <thead> */}
         <div className="sticky-toolbar border-bottom px-3 d-flex align-items-center justify-content-between gap-2 d-print-none">
           <div className="d-flex align-items-center gap-2">
-            <div className="input-icon" style={{ width: '260px' }}>
+            <div className="input-icon position-relative" style={{ width: '260px' }}>
               <span className="input-icon-addon"><IconSearch size={14}/></span>
               <input 
                 type="text" 
                 className="form-control form-control-sm border-secondary-subtle fw-bold" 
+                style={{ paddingLeft: searchQuery ? '2rem' : undefined }}
                 placeholder="بحث حي عن مندوب..." 
                 value={searchQuery} 
                 onChange={(e) => setSearchQuery(e.target.value)} 
               />
+              {searchQuery && (
+                <span
+                  className="input-icon-addon cursor-pointer"
+                  title="مسح الحقل"
+                  onClick={() => setSearchQuery('')}
+                  style={{
+                    position: 'absolute',
+                    left: '8px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    zIndex: 3,
+                    cursor: 'pointer',
+                    pointerEvents: 'auto',
+                    color: '#6c757d',
+                    fontSize: '14px',
+                    lineHeight: 1,
+                    padding: '2px 4px',
+                  }}
+                >
+                  ✕
+                </span>
+              )}
             </div>
-            <span className="badge bg-secondary text-white rounded-pill px-2 py-1 tabular-nums flex-shrink-0">
+            <span className="badge bg-primary text-white rounded-pill px-2 py-1 tabular-nums flex-shrink-0">
               {filteredAndSortedSalespersons.length} مندوب
             </span>
           </div>
@@ -259,7 +282,7 @@ export default function SalespersonsTab() {
         </div>
 
         {/* Row 2 of Table Card: Table Container */}
-        <div ref={setTableRef} className="table-responsive report-table-container">
+        <div ref={setTableRef} className="table-responsive report-table-container hide-vertical-scroll">
           <table className="table table-vcenter table-bordered table-hover text-nowrap table-sticky-header mb-0">
             <thead className="bg-light">
               <tr>

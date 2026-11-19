@@ -843,3 +843,154 @@ class PrintEngineHardeningTests(TestCase):
             self.assertEqual(rep_purch.status_code, status.HTTP_200_OK)
             self.assertIn("شاشة ٥٠ بوصة", captured_html[-1])
             self.assertIn("مورد أجهزة", captured_html[-1])
+
+    def test_collections_single_month_installment_slip_printing_by_ids_and_month_year(self):
+        receipt = Receipt.objects.create(
+            branch=self.branch,
+            salesperson=self.sp,
+            receipt_number=88,
+            customer_name="طارق محمود",
+            area="مدينة نصر",
+            total_amount=6000,
+            down_payment=0,
+            is_cash_sale=False,
+            installment_system="6 شهور",
+            sale_month=12,
+            sale_year=2025,
+            products_text="ثلاجة عرض",
+        )
+        SaleItem.objects.create(receipt=receipt, inventory_item=self.item, quantity=1, unit_price=6000)
+        inst_list = []
+        for m in range(1, 7):
+            inst_list.append(
+                InstallmentPayment.objects.create(
+                    receipt=receipt,
+                    amount=1000,
+                    payment_date=date(2026, m, 25),
+                )
+            )
+
+        captured_html = []
+
+        def _capture_pdf(html_str, full_path, configuration=None, options=None):
+            captured_html.append(html_str)
+            return True
+
+        with tempfile.TemporaryDirectory() as tmpdir, \
+             unittest.mock.patch("api.print_utils.pdfkit.from_string", side_effect=_capture_pdf), \
+             unittest.mock.patch("api.print_utils.get_wkhtmltopdf_config", return_value=None), \
+             unittest.mock.patch("api.print_utils.os.startfile", create=True), \
+             unittest.mock.patch("time.sleep"), \
+             unittest.mock.patch("api.print_utils.get_save_directory", return_value=tmpdir):
+
+            # 1. Print single installment slip by installment_ids ONLY (receipt_ids derived automatically)
+            inst_3 = inst_list[2]  # Month 3 (installment 3 of 6), remaining should be 6000 - 3000 = 3000 (٣٠٠٠)
+            res_single = self.client.post(
+                "/api/v1/receipts/desktop_print/",
+                {"installment_ids": [inst_3.id], "action": "view"},
+                format="json",
+            )
+            self.assertEqual(res_single.status_code, status.HTTP_200_OK)
+            html_single = captured_html[-1]
+            self.assertEqual(html_single.count('<div class="evl">'), 1)
+            self.assertIn("٢٠٢٦/٠٣/٢٥", html_single)
+            self.assertNotIn("٢٠٢٦/٠١/٢٥", html_single)
+            self.assertNotIn("٢٠٢٦/٠٢/٢٥", html_single)
+            self.assertIn(">٣<", html_single)
+            self.assertIn(">٦<", html_single)
+            self.assertIn(">٣٠٠٠<", html_single)
+
+            # 2. Print single installment slip by receipt_ids + month/year (Month 6 -> installment 6 of 6 -> خالص)
+            res_month = self.client.post(
+                "/api/v1/receipts/desktop_print/",
+                {"receipt_ids": [receipt.id], "month": 6, "year": 2026, "action": "view"},
+                format="json",
+            )
+            self.assertEqual(res_month.status_code, status.HTTP_200_OK)
+            html_month = captured_html[-1]
+            self.assertEqual(html_month.count('<div class="evl">'), 1)
+            self.assertIn("٢٠٢٦/٠٦/٢٥", html_month)
+            self.assertNotIn("٢٠٢٦/٠٥/٢٥", html_month)
+            self.assertIn("خالص", html_month)
+
+            # 3. Full schedule print when neither installment_ids nor month/year is passed
+            res_all = self.client.post(
+                "/api/v1/receipts/desktop_print/",
+                {"receipt_ids": [receipt.id], "action": "view"},
+                format="json",
+            )
+            self.assertEqual(res_all.status_code, status.HTTP_200_OK)
+            html_all = captured_html[-1]
+            self.assertEqual(html_all.count('<div class="evl">'), 6)
+
+    def test_printers_utf8_arabic_names_msft_status_8_and_win32_printer_offline_and_default(self):
+        import json as _json
+        mock_payload = [
+            {
+                "Name": "طابعة المكتب HP LaserJet",
+                "PrinterStatus": 8,  # MSFT_Printer 8 = Offline
+                "WorkOffline": False,
+                "IsDefault": False,
+            },
+            {
+                "Name": "طابعة كاشير رئيسية",
+                "PrinterStatus": 3,  # Win32_Printer 3 = Idle, but WorkOffline=True
+                "WorkOffline": True,
+                "Default": True,
+            },
+            {
+                "Name": "EPSON USB Disconnected",
+                "CimPrinterStatus": 3,
+                "ExtendedPrinterStatus": 7,  # Win32_Printer ExtendedPrinterStatus 7 = Offline
+                "PrinterStatus": 0,
+                "WorkOffline": False,
+                "IsDefault": False,
+            },
+            {
+                "Name": "Canon Ready Printer",
+                "CimPrinterStatus": 3,
+                "ExtendedPrinterStatus": 2,
+                "PrinterState": 0,
+                "PrinterStatus": 0,
+                "WorkOffline": False,
+                "IsDefault": False,
+            },
+        ]
+        mock_proc = unittest.mock.MagicMock()
+        mock_proc.stdout = _json.dumps(mock_payload, ensure_ascii=False)
+
+        with unittest.mock.patch("subprocess.run", return_value=mock_proc) as spy_run:
+            res = self.client.get("/api/v1/receipts/printers/")
+            self.assertEqual(res.status_code, status.HTTP_200_OK)
+            _, run_kwargs = spy_run.call_args
+            self.assertEqual(run_kwargs.get("encoding"), "utf-8")
+            self.assertEqual(run_kwargs.get("timeout"), 10)
+
+            printers = res.json()["printers"]
+            self.assertEqual(len(printers), 4)
+            self.assertEqual(printers[0], {"name": "طابعة المكتب HP LaserJet", "status": "offline", "is_default": False})
+            self.assertEqual(printers[1], {"name": "طابعة كاشير رئيسية", "status": "offline", "is_default": True})
+            self.assertEqual(printers[2], {"name": "EPSON USB Disconnected", "status": "offline", "is_default": False})
+            self.assertEqual(printers[3], {"name": "Canon Ready Printer", "status": "ready", "is_default": False})
+
+    def test_init_demo_db_creates_short_realistic_company_setting(self):
+        from django.core.management import call_command
+        from dateutil.relativedelta import relativedelta as real_relativedelta
+
+        ClientLicense.all_objects.all().delete()
+        with unittest.mock.patch(
+            "api.management.commands.init_demo_db.relativedelta",
+            side_effect=lambda *args, **kwargs: (
+                real_relativedelta(months=-1) if kwargs.get("months") == 25 else real_relativedelta(*args, **kwargs)
+            ),
+        ):
+            call_command("init_demo_db")
+
+        cs = CompanySetting.objects.first()
+        self.assertIsNotNone(cs)
+        self.assertEqual(cs.name, "شركة النور للتجارة")
+        self.assertEqual(cs.description, "مفروشات - أدوات منزلية - أجهزة كهربائية")
+        self.assertEqual(cs.footer_text, "رجاء الاحتفاظ بهذا الإيصال")
+        self.assertEqual(cs.phone1, "01012345678")
+        self.assertEqual(cs.phone2, "01112345678")
+

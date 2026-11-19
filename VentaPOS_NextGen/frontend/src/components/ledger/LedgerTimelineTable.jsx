@@ -27,14 +27,14 @@ export default function LedgerTimelineTable({
         return ev.is_cash_sale ? (
           <span className="badge bg-primary text-white px-2 py-1"><IconCash size={14} className="me-1 inline" />فاتورة بيع كاش</span>
         ) : (
-          <span className="badge bg-info text-white px-2 py-1"><IconCreditCard size={14} className="me-1 inline" />فاتورة بيع قسط</span>
+          <span className="badge bg-warning text-dark px-2 py-1"><IconCreditCard size={14} className="me-1 inline" />فاتورة بيع قسط</span>
         );
       case 'SALE_RETURN':
         return <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">مرتجع مبيعات عميل</span>;
       case 'DEFICIT':
         return <span className="badge bg-danger text-white px-2 py-1"><IconAlertTriangle size={14} className="me-1 inline" />تسوية عجز مخزن</span>;
       case 'COMMISSION_CHANGE':
-        return <span className="badge bg-purple-subtle text-purple border border-purple-subtle px-2 py-1"><IconClockHour4 size={14} className="me-1 inline" />تعديل مندبة</span>;
+        return <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1"><IconClockHour4 size={14} className="me-1 inline" />تعديل مندبة</span>;
       default:
         return <span className="badge bg-light text-dark">{ev.type}</span>;
     }
@@ -67,7 +67,7 @@ export default function LedgerTimelineTable({
           </div>
         </div>
 
-        <div className="table-responsive">
+        <div className="table-responsive hide-vertical-scroll">
           <table className="table table-vcenter table-bordered table-hover text-nowrap table-sticky-header tabular-nums mb-0">
             <thead className="bg-light">
               <tr>
@@ -152,7 +152,7 @@ export default function LedgerTimelineTable({
                           </span>
                         )}
                         {isCommission && (
-                          <span className="small fw-bold text-purple" style={{ color: '#6f42c1' }}>
+                          <span className="small fw-bold text-primary">
                             مندبة: {fmtNum(ev.commission_amount)} جنيه
                           </span>
                         )}
@@ -187,7 +187,7 @@ export default function LedgerTimelineTable({
           <div className="card-header bg-light py-2">
             <span className="fw-bold text-dark fs-5">ملخص الحركة الشهري للصنف ({monthlySummary.length} شهر)</span>
           </div>
-          <div className="table-responsive">
+          <div className="table-responsive hide-vertical-scroll">
             <table className="table table-vcenter table-bordered table-hover table-sm text-nowrap tabular-nums mb-0">
               <thead className="bg-light">
                 <tr>

@@ -1,7 +1,6 @@
 .report-table-container {
   overflow-y: auto;
   overflow-x: auto;
-  scrollbar-gutter: stable;
   border: 1px solid var(--tblr-border-color, #dee2e6);
 }
 

@@ -1,16 +1,16 @@
-<div class="evl" style="margin-bottom: 30px;">
+<div class="evl">
     <div class="main">
         <table class="table table-bordered table-sm mb-0">
             <tbody>
                 <tr style="{% if invoice.invoice_type == 'RETURN' %}background-color: #fee2e2;{% else %}background-color: #f8f9fa;{% endif %}">
                     <td colspan="4" class="text-center">
-                        <h3 style="margin: 0; font-weight: bold;">
+                        <h3 class="company-title" style="margin: 0; font-size: 22px; line-height: 1.15; font-weight: bold;">
                             {{ company_settings.name|default:"اسم المؤسسة" }}
                         </h3>
-                        <p style="margin: 5px 0 0 0; font-size: 14px;">
+                        <p style="margin: 2px 0 0 0; font-size: 13px; line-height: 1.15;">
                             {{ company_settings.description|default:"" }}
                         </p>
-                        <p style="margin: 0; font-size: 14px; direction: ltr;">
+                        <p style="margin: 0; font-size: 13px; line-height: 1.15; direction: ltr;">
                             {{ phone1_ar|default:company_settings.phone1|default:"" }} {% if phone2_ar or company_settings.phone2 %} - {{ phone2_ar|default:company_settings.phone2 }} {% endif %}
                         </p>
                     </td>
@@ -30,7 +30,7 @@
                 </tr>
             </tbody>
         </table>
-        <table class="table table-bordered table-sm mt-2 mb-0">
+        <table class="table table-bordered table-sm mt-1 mb-0">
             <thead style="background-color: #e9ecef;">
                 <tr>
                     <th class="text-center" style="width: 50%;">اسم الصنف</th>
@@ -60,7 +60,7 @@
                 </tr>
             </tfoot>
         </table>
-        <div class="mt-2 text-center small text-muted">
+        <div class="mt-1 text-center small text-muted" style="font-size: 13px; line-height: 1.15;">
             {{ company_settings.footer_text|default:"" }}
         </div>
     </div>

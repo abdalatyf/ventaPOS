@@ -23,7 +23,7 @@ export default function LedgerCommissionForm({
     <div className="card shadow-sm border-0 h-100">
       <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
         <span className="fw-bold text-dark d-flex align-items-center">
-          <IconClockHour4 size={18} className="me-2 text-purple" style={{ color: '#6f42c1' }} />
+          <IconClockHour4 size={18} className="me-2 text-primary" />
           تعديل المندبة
           <span className="text-muted small ms-2">— تغيير عمولة البيع</span>
         </span>

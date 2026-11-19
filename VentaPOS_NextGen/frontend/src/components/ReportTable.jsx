@@ -5,7 +5,7 @@ import PrintModal from './common/PrintModal';
 import api from '../api';
 import './ReportTable.css';
 import { useStandardTableSlots } from './common/StandardTablePageLayout';
-import { ReportsContext } from '../pages/Reports/ReportsLayout';
+import { ReportsContext } from '../pages/reports/ReportsLayout';
 import { fmtNum } from '../utils/formatUtils';
 
 const SortDropdown = ({ sortRules, setSortRules, sortableColumns }) => {
@@ -222,12 +222,14 @@ export default function ReportTable({
     });
   }, [data, sortRules]);
 
-  const handleSelectAll = (e) => {
+  const allRowIds = useMemo(() => processedData.map(item => item[idField]), [processedData, idField]);
+
+  const handleSelectAll = () => {
     if (!onSelectionChange) return;
-    if (e.target.checked && processedData.length > 0) {
-      onSelectionChange(processedData.map(item => item[idField]));
-    } else {
+    if (selectedIds.length === allRowIds.length && allRowIds.length > 0) {
       onSelectionChange([]);
+    } else {
+      onSelectionChange(allRowIds);
     }
   };
 
@@ -396,7 +398,7 @@ export default function ReportTable({
             </div>
           ) : (
             <div className="d-flex align-items-center gap-2 flex-shrink-0">
-              <span className="badge bg-secondary text-white rounded-pill px-2 py-1 tabular-nums">
+              <span className="badge bg-primary text-white rounded-pill px-2 py-1 tabular-nums">
                 {fmtNum(processedData.length || (data ? data.length : 0))} سجل
               </span>
             </div>
@@ -448,7 +450,8 @@ export default function ReportTable({
                         <input 
                           type="checkbox" 
                           className="form-check-input border-secondary-subtle" 
-                          checked={processedData.length > 0 && selectedIds.length === processedData.length}
+                          checked={allRowIds.length > 0 && selectedIds.length === allRowIds.length}
+                          ref={el => { if (el) el.indeterminate = selectedIds.length > 0 && selectedIds.length < allRowIds.length; }}
                           onChange={handleSelectAll} 
                         />
                       </th>

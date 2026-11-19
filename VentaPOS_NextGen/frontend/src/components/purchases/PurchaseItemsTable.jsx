@@ -13,7 +13,7 @@ export default function PurchaseItemsTable({
   return (
     <>
       {/* Cart Table */}
-      <div className="table-responsive" style={{ minHeight: 200, maxHeight: 'calc(100vh - 380px)', overflowY: 'auto' }}>
+      <div className="table-responsive hide-vertical-scroll" style={{ minHeight: 200, maxHeight: 'calc(100vh - 380px)', overflowY: 'auto' }}>
         <table className="table table-sm table-vcenter table-hover card-table text-nowrap tabular-nums m-0 table-sticky-header">
           <thead className="bg-white">
             <tr>
@@ -60,8 +60,7 @@ export default function PurchaseItemsTable({
           </div>
           <div>
             <button 
-              className="btn btn-lg fw-bold shadow-sm d-flex justify-content-center align-items-center gap-2 text-white px-5" 
-              style={{ backgroundColor: '#1DA368', borderColor: '#1DA368' }}
+              className="btn btn-success btn-lg fw-bold shadow-sm d-flex justify-content-center align-items-center gap-2 text-white px-5" 
               onClick={handleSaveInvoice} 
               disabled={saving || items.length === 0}
             >

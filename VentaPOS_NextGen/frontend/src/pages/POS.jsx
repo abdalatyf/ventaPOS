@@ -463,7 +463,7 @@ const POS = () => {
                   بيان البضاعة والأصناف
                 </span>
                 {licenseInfo.isPrintOnly ? (
-                  <span className="badge bg-purple-lt text-purple fw-bold px-2 py-1">باقة طباعة فقط</span>
+                  <span className="badge bg-primary-lt text-primary fw-bold px-2 py-1">باقة طباعة فقط</span>
                 ) : (
                   <span className="badge bg-warning-lt text-warning fw-bold px-2 py-1">
                     فاتورة سابقة للاشتراك ({licenseInfo.licStartDate})
@@ -495,7 +495,7 @@ const POS = () => {
                       type="text"
                       inputMode="numeric"
                       dir="ltr"
-                      className="form-control py-1 fs-3 border-secondary-subtle text-danger fw-bold text-center"
+                      className="form-control py-1 fs-3 border-secondary-subtle text-primary fw-bold text-center"
                       value={manualTotalAmount}
                       onChange={(e) => setManualTotalAmount(e.target.value)}
                       placeholder="0"

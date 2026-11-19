@@ -157,10 +157,11 @@ class Command(BaseCommand):
 
                 # Demo Environment Setup
                 CompanySetting.objects.create(
-                    name="محلات الأمانة للبيع بالتجزئة (نسخة تجريبية)",
+                    name="شركة النور للتجارة",
+                    description="مفروشات - أدوات منزلية - أجهزة كهربائية",
                     phone1="01012345678",
                     phone2="01112345678",
-                    footer_text="نسخة تجريبية - جميع البيانات وهمية وسيتم حذفها عند تفعيل النظام",
+                    footer_text="رجاء الاحتفاظ بهذا الإيصال",
                 )
                 
                 # Ensure Master Admin User exists

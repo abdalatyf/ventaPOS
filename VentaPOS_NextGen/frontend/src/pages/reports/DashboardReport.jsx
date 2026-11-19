@@ -40,6 +40,11 @@ export default function DashboardReport() {
                 if (!val) setSalespersonId('');
               }}
               onSelect={(item) => {
+                if (!item) {
+                  setSalespersonName('');
+                  setSalespersonId('');
+                  return;
+                }
                 setSalespersonName(item.name || '');
                 setSalespersonId(item.id || item.local_id || '');
               }}
@@ -56,6 +61,10 @@ export default function DashboardReport() {
               value={areaFilter}
               onChange={(val) => setAreaFilter(val)}
               onSelect={(item) => {
+                if (!item) {
+                  setAreaFilter('');
+                  return;
+                }
                 const val = typeof item === 'object' ? (item.area || item.name || '') : String(item);
                 setAreaFilter(val);
               }}
@@ -170,7 +179,7 @@ export default function DashboardReport() {
               <IconTrendingUp size={20} className="me-2" />
               <span>تفاصيل المكسب</span>
             </div>
-            <div className="table-responsive">
+            <div className="table-responsive hide-vertical-scroll">
               <table className="table table-vcenter table-hover card-table text-nowrap tabular-nums m-0">
                 <tbody>
                   <tr className="cursor-pointer" onClick={() => navigate(`/reports/receipts?${dateParams}`)} title="عرض فواتير المبيعات">
@@ -216,7 +225,7 @@ export default function DashboardReport() {
               <IconWallet size={20} className="me-2" />
               <span>تفاصيل السيولة</span>
             </div>
-            <div className="table-responsive">
+            <div className="table-responsive hide-vertical-scroll">
               <table className="table table-vcenter table-hover card-table text-nowrap tabular-nums m-0">
                 <tbody>
                   <tr className="cursor-pointer" onClick={() => navigate(`/reports/receipts?${dateParams}&is_cash_sale=true`)} title="عرض مبيعات الكاش">

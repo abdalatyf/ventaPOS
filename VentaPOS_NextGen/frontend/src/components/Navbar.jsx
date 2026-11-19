@@ -280,7 +280,7 @@ export default function Navbar() {
           </div>
           
           <div className={`nav-item dropdown ${openDropdown === 'user' ? 'show' : ''}`}>
-            <a href="#" className="nav-link d-flex lh-1 text-reset p-0" onClick={(e) => toggleDropdown('user', e)}>
+            <a href="#" className="nav-link d-flex lh-1 text-reset px-2 py-1" onClick={(e) => toggleDropdown('user', e)}>
               <span className="avatar avatar-sm bg-primary-lt"><IconBuildingStore size={18} /></span>
               <div className="d-none d-xl-block ps-2">
                 <div className="text-truncate" style={{ maxWidth: '95px' }}>{branchName}</div>
@@ -334,18 +334,18 @@ export default function Navbar() {
             <ul className="navbar-nav">
               
               <li className={`nav-item ${location.pathname.startsWith('/receipts') || location.pathname.startsWith('/pos') || location.pathname === '/' ? 'active' : ''}`}>
-                <Link className="nav-link text-success" to="/receipts" onClick={() => setOpenDropdown(null)}>
+                <Link className="nav-link" to="/receipts" onClick={() => setOpenDropdown(null)}>
                   <span className="nav-link-icon d-md-none d-lg-inline-block">
-                    <IconReceipt stroke={1.5} />
+                    <IconReceipt size={17} stroke={1.5} />
                   </span>
                   <span className="nav-link-title">دفتر المبيعات</span>
                 </Link>
               </li>
 
               <li className={`nav-item ${location.pathname.startsWith('/dimensions') ? 'active' : ''}`}>
-                <Link className="nav-link text-primary" to="/dimensions" onClick={() => setOpenDropdown(null)}>
+                <Link className="nav-link" to="/dimensions" onClick={() => setOpenDropdown(null)}>
                   <span className="nav-link-icon d-md-none d-lg-inline-block">
-                    <IconBuildingStore stroke={1.5} />
+                    <IconBuildingStore size={17} stroke={1.5} />
                   </span>
                   <span className="nav-link-title">الإدارة</span>
                 </Link>
@@ -353,9 +353,9 @@ export default function Navbar() {
 
               {!isPrintOnly && (
                 <li className={`nav-item ${location.pathname.startsWith('/search-purchases') || location.pathname.startsWith('/purchases') ? 'active' : ''}`}>
-                  <Link className="nav-link text-info" to="/search-purchases" onClick={() => setOpenDropdown(null)}>
+                  <Link className="nav-link" to="/search-purchases" onClick={() => setOpenDropdown(null)}>
                     <span className="nav-link-icon d-md-none d-lg-inline-block">
-                      <IconPackage stroke={1.5} />
+                      <IconPackage size={17} stroke={1.5} />
                     </span>
                     <span className="nav-link-title">المشتريات</span>
                   </Link>
@@ -364,9 +364,9 @@ export default function Navbar() {
 
               {!isPrintOnly && (
                 <li className={`nav-item ${location.pathname.startsWith('/expenses') ? 'active' : ''}`}>
-                  <Link className="nav-link text-danger" to="/expenses" onClick={() => setOpenDropdown(null)}>
+                  <Link className="nav-link" to="/expenses" onClick={() => setOpenDropdown(null)}>
                     <span className="nav-link-icon d-md-none d-lg-inline-block">
-                      <IconCash stroke={1.5} />
+                      <IconCash size={17} stroke={1.5} />
                     </span>
                     <span className="nav-link-title">المصروفات</span>
                   </Link>
@@ -375,9 +375,9 @@ export default function Navbar() {
 
               {!isPrintOnly && (
                 <li className={`nav-item ${location.pathname.startsWith('/reports') ? 'active' : ''}`}>
-                  <Link className="nav-link text-warning" to="/reports/dashboard" onClick={() => setOpenDropdown(null)}>
+                  <Link className="nav-link" to="/reports/dashboard" onClick={() => setOpenDropdown(null)}>
                     <span className="nav-link-icon d-md-none d-lg-inline-block">
-                      <IconChartBar stroke={1.5} />
+                      <IconChartBar size={17} stroke={1.5} />
                     </span>
                     <span className="nav-link-title">التقارير</span>
                   </Link>
@@ -385,18 +385,18 @@ export default function Navbar() {
               )}
 
               <li className={`nav-item ${location.pathname.startsWith('/tools') ? 'active' : ''}`}>
-                <Link className="nav-link text-secondary" to="/tools" onClick={() => setOpenDropdown(null)}>
+                <Link className="nav-link" to="/tools" onClick={() => setOpenDropdown(null)}>
                   <span className="nav-link-icon d-md-none d-lg-inline-block">
-                    <IconTool stroke={1.5} />
+                    <IconTool size={17} stroke={1.5} />
                   </span>
                   <span className="nav-link-title">الأدوات</span>
                 </Link>
               </li>
 
               <li className={`nav-item ${location.pathname.startsWith('/settings') ? 'active' : ''}`}>
-                <Link className="nav-link text-dark" to="/settings" onClick={() => setOpenDropdown(null)}>
+                <Link className="nav-link" to="/settings" onClick={() => setOpenDropdown(null)}>
                   <span className="nav-link-icon d-md-none d-lg-inline-block">
-                    <IconSettings stroke={1.5} />
+                    <IconSettings size={17} stroke={1.5} />
                   </span>
                   <span className="nav-link-title">الإعدادات</span>
                 </Link>

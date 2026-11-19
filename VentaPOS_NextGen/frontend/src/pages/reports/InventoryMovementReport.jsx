@@ -210,7 +210,7 @@ export default function InventoryMovementReport() {
           }}
           onSelect={(prod) => {
             setSelectedProduct(prod);
-            if (prod) setSearchQuery(prod.product_name || '');
+            setSearchQuery(prod ? (prod.product_name || '') : '');
           }}
           placeholder="ابحث عن صنف..."
           displayKey="product_name"
@@ -254,6 +254,10 @@ export default function InventoryMovementReport() {
           value={areaFilter}
           onChange={(val) => setAreaFilter(val)}
           onSelect={(item) => {
+            if (!item) {
+              setAreaFilter('');
+              return;
+            }
             const val = typeof item === 'object' ? (item.area || item.name || '') : String(item);
             setAreaFilter(val);
           }}

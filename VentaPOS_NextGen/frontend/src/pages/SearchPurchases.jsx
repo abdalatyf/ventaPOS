@@ -245,7 +245,16 @@ export default function SearchPurchases() {
   };
 
   const handleSupplierSelect = (item) => {
-    if (!item) return;
+    if (!item) {
+      setSupplierSearchQuery('');
+      setFilters(prev => {
+        const newFilters = { ...prev, supplier_id: '' };
+        if (filterTimeout.current) clearTimeout(filterTimeout.current);
+        filterTimeout.current = setTimeout(() => { fetchInvoices(newFilters); }, 300);
+        return newFilters;
+      });
+      return;
+    }
     setSupplierSearchQuery(item.name || '');
     setFilters(prev => {
       const newFilters = { ...prev, supplier_id: item.id };
@@ -273,10 +282,11 @@ export default function SearchPurchases() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.length > 0) {
+    const targetAllIds = globalAllIds.length > 0 ? globalAllIds : invoices.map(r => r.id);
+    if (selectedIds.length === targetAllIds.length && targetAllIds.length > 0) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(invoices.map(r => r.id));
+      setSelectedIds(targetAllIds);
     }
   };
 
@@ -296,7 +306,7 @@ export default function SearchPurchases() {
         showCancelButton: true,
         confirmButtonText: 'نعم، احذف',
         cancelButtonText: 'إلغاء',
-        confirmButtonColor: '#d33',
+        confirmButtonColor: '#D63939',
         cancelButtonColor: '#6c757d',
       });
 
@@ -328,7 +338,7 @@ export default function SearchPurchases() {
         showCancelButton: true,
         confirmButtonText: 'نعم، احذف',
         cancelButtonText: 'إلغاء',
-        confirmButtonColor: '#d33',
+        confirmButtonColor: '#D63939',
         cancelButtonColor: '#6c757d',
       });
 
@@ -409,6 +419,7 @@ export default function SearchPurchases() {
             title="طباعة فواتير الشراء / المرتجع"
             items={printModalIds}
             itemLabel="فاتورة شراء"
+            chunkSize={20}
             executeChunk={executeChunkPurchases}
           />
         </>

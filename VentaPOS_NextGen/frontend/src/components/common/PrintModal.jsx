@@ -34,12 +34,14 @@ export default function PrintModal({
   itemCount = 1,
   itemLabel = 'بند',
   items = null,
+  chunkSize = 20,
   executeChunk = null,
   onExecute = null,
 }) {
   const [printers, setPrinters] = useState([]);
   const [selectedPrinter, setSelectedPrinter] = useState('');
   const [loadingPrinters, setLoadingPrinters] = useState(false);
+  const [printerFetchError, setPrinterFetchError] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
@@ -70,11 +72,43 @@ export default function PrintModal({
     }).filter((p) => Boolean(p.name));
   };
 
+  const fetchPrinters = async () => {
+    setLoadingPrinters(true);
+    setPrinterFetchError(false);
+    try {
+      const res = await api.get('/receipts/printers/');
+      const rawList = res.data?.printers ?? (Array.isArray(res.data) ? res.data : []);
+      const normalized = normalizePrinters(rawList);
+      setPrinters(normalized);
+
+      const savedPrinter = localStorage.getItem('preferred_printer');
+      const foundSaved = normalized.find((p) => p.name === savedPrinter);
+      const defaultPrinter = normalized.find((p) => p.is_default);
+
+      if (foundSaved) {
+        setSelectedPrinter(foundSaved.name);
+      } else if (defaultPrinter) {
+        setSelectedPrinter(defaultPrinter.name);
+      } else if (normalized.length > 0) {
+        setSelectedPrinter(normalized[0].name);
+      } else {
+        setSelectedPrinter('');
+      }
+    } catch (err) {
+      console.error('Failed to load printers:', err);
+      setPrinters([]);
+      setPrinterFetchError(true);
+    } finally {
+      setLoadingPrinters(false);
+    }
+  };
+
   useEffect(() => {
     if (!isOpen) {
       setIsProcessing(false);
       setProgress(null);
       setErrorMessage(null);
+      setPrinterFetchError(false);
       setShowOfflineWarning(false);
       setIsPaused(false);
       setPausedChunkIndex(null);
@@ -85,34 +119,6 @@ export default function PrintModal({
       return;
     }
 
-    const fetchPrinters = async () => {
-      setLoadingPrinters(true);
-      try {
-        const res = await api.get('/receipts/printers/');
-        const normalized = normalizePrinters(res.data?.printers);
-        setPrinters(normalized);
-
-        const savedPrinter = localStorage.getItem('preferred_printer');
-        const foundSaved = normalized.find((p) => p.name === savedPrinter);
-        const defaultPrinter = normalized.find((p) => p.is_default);
-
-        if (foundSaved) {
-          setSelectedPrinter(foundSaved.name);
-        } else if (defaultPrinter) {
-          setSelectedPrinter(defaultPrinter.name);
-        } else if (normalized.length > 0) {
-          setSelectedPrinter(normalized[0].name);
-        } else {
-          setSelectedPrinter('');
-        }
-      } catch (err) {
-        console.error('Failed to load printers:', err);
-        setPrinters([]);
-      } finally {
-        setLoadingPrinters(false);
-      }
-    };
-
     fetchPrinters();
   }, [isOpen]);
 
@@ -120,7 +126,9 @@ export default function PrintModal({
 
   const currentPrinterObj = printers.find((p) => p.name === selectedPrinter);
   const effectiveCount = items && Array.isArray(items) ? items.length : itemCount;
-  const isBatch = effectiveCount > 20;
+  const effectiveChunkSize = Number(chunkSize) > 0 ? Number(chunkSize) : 20;
+  const isChunkedMode = Array.isArray(items) && typeof executeChunk === 'function';
+  const isBatch = isChunkedMode && effectiveCount > effectiveChunkSize;
 
   const handlePrinterChange = (e) => {
     const val = e.target.value;
@@ -131,8 +139,8 @@ export default function PrintModal({
     }
   };
 
-  // Helper to split array into chunks of 20
-  const buildChunks = (arr, size = 20) => {
+  // Helper to split array into chunks
+  const buildChunks = (arr, size = effectiveChunkSize) => {
     const chunks = [];
     for (let i = 0; i < arr.length; i += size) {
       chunks.push(arr.slice(i, i + size));
@@ -142,7 +150,7 @@ export default function PrintModal({
 
   // Run chunk-based execution with pause/retry support
   const runChunkedExecution = async (actionType, startChunkIdx = 0) => {
-    const CHUNK_SIZE = 20;
+    const CHUNK_SIZE = effectiveChunkSize;
     const allChunks = buildChunks(items, CHUNK_SIZE);
     const totalChunks = allChunks.length;
     // For view action with multiple chunks, preview only first chunk
@@ -427,12 +435,25 @@ export default function PrintModal({
               <div className="form-text small text-muted">
                 يتم تذكر الطابعة المختارة تلقائياً للعمليات اللاحقة.
               </div>
+              {printerFetchError && !loadingPrinters && (
+                <div className="alert alert-warning py-1 px-2 small mt-2 mb-0 d-flex align-items-center justify-content-between gap-2">
+                  <span>تعذر فحص حالة الطابعات من النظام</span>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-dark py-0 px-2 fw-bold d-flex align-items-center gap-1"
+                    onClick={fetchPrinters}
+                  >
+                    <IconRefresh size={14} />
+                    <span>إعادة المحاولة</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Batch Notice */}
             {isBatch && !isProcessing && !isPaused && (
               <div className="alert alert-info py-2 px-3 small mb-3">
-                <strong>تقسيم الدفعات التلقائي:</strong> سيتم تجزئة هذا الطلب ({effectiveCount} عنصر) إلى دفعات متتابعة من 20 عنصراً لضمان سرعة واستقرار الطابعة.
+                <strong>تقسيم الدفعات التلقائي:</strong> سيتم تجزئة هذا الطلب ({effectiveCount} عنصر) إلى دفعات متتابعة من {effectiveChunkSize} عنصراً لضمان سرعة واستقرار الطابعة.
               </div>
             )}
 

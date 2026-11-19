@@ -141,7 +141,7 @@ export default function PurchaseItemForm({
         <div className="col-auto">
           <button 
             type="button"
-            className="btn btn-primary fw-bold fs-4 d-flex align-items-center gap-1" 
+            className="btn btn-success fw-bold fs-4 d-flex align-items-center gap-1" 
             onClick={handleAddItem}
             style={{ padding: '0.375rem 1rem' }}
           >

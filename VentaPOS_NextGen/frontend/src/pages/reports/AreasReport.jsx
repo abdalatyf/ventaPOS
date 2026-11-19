@@ -107,12 +107,12 @@ export default function AreasReport() {
           areaFilter ? { label: 'المنطقة', value: areaFilter } : null,
         ].filter(Boolean),
         kpis: [
-          { label: 'إجمالي المبيعات', value: `${fmtNum(summary.total_sales || 0)} ج.م`, color: 'success' },
+          { label: 'إجمالي المبيعات', value: `${fmtNum(summary.total_sales || 0)} ج.م`, color: 'primary' },
           { label: 'صافي المبيعات', value: `${fmtNum(summary.net_sales || 0)} ج.م`, color: 'primary' },
-          { label: 'المقدمات', value: `${fmtNum(summary.total_down_payments || 0)} ج.م`, color: 'info' },
+          { label: 'المقدمات', value: `${fmtNum(summary.total_down_payments || 0)} ج.م`, color: 'success' },
           { label: 'الأقساط المستحقة', value: `${fmtNum(summary.total_due_installments || 0)} ج.م`, color: 'warning' },
           { label: 'المرتجعات', value: `${fmtNum(summary.total_returns_amount || 0)} ج.م`, color: 'danger' },
-          { label: 'عدد المناطق', value: fmtNum(summary.areas_count || 0), color: 'secondary' },
+          { label: 'عدد المناطق', value: fmtNum(summary.areas_count || 0), color: 'primary' },
         ],
         columns: [
           { key: 'index', label: 'م', width: '40px', align: 'center' },
@@ -145,12 +145,12 @@ export default function AreasReport() {
   }, [registerPrintHandler, branchId, year, month, salespersonName, areaFilter, summary, filteredAreas]);
 
   const summaryCards = [
-    { label: 'إجمالي المبيعات', value: `${fmtNum(summary.total_sales || 0)} ج.م`, color: 'success' },
+    { label: 'إجمالي المبيعات', value: `${fmtNum(summary.total_sales || 0)} ج.م`, color: 'primary' },
     { label: 'صافي المبيعات', value: `${fmtNum(summary.net_sales || 0)} ج.م`, color: 'primary' },
-    { label: 'إجمالي المقدمات', value: `${fmtNum(summary.total_down_payments || 0)} ج.م`, color: 'info' },
+    { label: 'إجمالي المقدمات', value: `${fmtNum(summary.total_down_payments || 0)} ج.م`, color: 'success' },
     { label: 'الأقساط المستحقة بالشهر', value: `${fmtNum(summary.total_due_installments || 0)} ج.م`, color: 'warning' },
     { label: 'إجمالي المرتجعات', value: `${fmtNum(summary.total_returns_amount || 0)} ج.م`, color: 'danger' },
-    { label: 'عدد المناطق النشطة', value: fmtNum(summary.areas_count || 0), color: 'secondary' },
+    { label: 'عدد المناطق النشطة', value: fmtNum(summary.areas_count || 0), color: 'primary' },
   ];
 
   const subFiltersRow1 = () => (
@@ -166,6 +166,11 @@ export default function AreasReport() {
               if (!val) setSalespersonId('');
             }}
             onSelect={(item) => {
+              if (!item) {
+                setSalespersonName('');
+                setSalespersonId('');
+                return;
+              }
               setSalespersonName(item.name || '');
               setSalespersonId(item.id || item.local_id || '');
             }}
@@ -184,6 +189,10 @@ export default function AreasReport() {
             value={areaFilter}
             onChange={(val) => setAreaFilter(val)}
             onSelect={(item) => {
+              if (!item) {
+                setAreaFilter('');
+                return;
+              }
               const val = typeof item === 'object' ? (item.area || item.name || '') : String(item);
               setAreaFilter(val);
             }}
@@ -215,7 +224,7 @@ export default function AreasReport() {
           className="form-control form-control-sm border-secondary-subtle fw-bold"
           placeholder="بحث سريع باسم المنطقة أو المندوب..."
           value={searchQuery}
-          onChange={(val) => setSearchQuery(val)}
+          onChange={(e) => setSearchQuery(e?.target ? e.target.value : e)}
         />
       </div>
 
@@ -279,7 +288,7 @@ export default function AreasReport() {
       key: 'installment_sales',
       label: 'مبيعات تقسيط (ج.م)',
       align: 'center',
-      className: 'tabular-nums fw-bold text-info',
+      className: 'tabular-nums fw-bold text-warning',
       render: (r) => fmtNum(r.installment_sales || 0),
       getValue: (r) => r.installment_sales || 0,
     },

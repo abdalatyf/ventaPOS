@@ -322,7 +322,7 @@ export default function ReturnReceipt() {
               <h3 className="card-title m-0">تحديد الأصناف المسترجعة</h3>
             </div>
             <div className="card-body p-0">
-              <div className="table-responsive" style={{ minHeight: 200, maxHeight: 'calc(100vh - 380px)', overflowY: 'auto' }}>
+              <div className="table-responsive hide-vertical-scroll" style={{ minHeight: 200, maxHeight: 'calc(100vh - 380px)', overflowY: 'auto' }}>
                 <table className="table table-vcenter table-hover table-sm text-nowrap tabular-nums mb-0 table-sticky-header" style={{ fontSize: '0.95rem' }}>
                   <thead className="bg-light">
                     <tr>

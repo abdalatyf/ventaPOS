@@ -70,25 +70,27 @@ export default function ReportsLayout() {
     }
   }, [location.pathname, location.search, navigate]);
 
-  // Sync with URL params or default
+  // Sync with URL params or default on initial load
+  const initializedRef = React.useRef(false);
   useEffect(() => {
-    if (!dateLoading) {
+    if (!dateLoading && !initializedRef.current) {
+      initializedRef.current = true;
       const searchParams = new URLSearchParams(location.search);
       const urlYear = searchParams.get('year') || defaultYear;
       const urlMonth = searchParams.get('month') || defaultMonth;
-      if (!year || !month) {
-        setYear(urlYear);
-        setMonth(urlMonth);
-      }
+      setYear(urlYear);
+      setMonth(urlMonth);
     }
   }, [dateLoading, defaultYear, defaultMonth, location.search]);
 
-  // Update URL when date range changes
+  // Update URL when date range changes to valid values
   useEffect(() => {
-    if (year && month) {
+    const mNum = parseInt(month, 10);
+    const yNum = parseInt(year, 10);
+    if (!isNaN(mNum) && mNum >= 1 && mNum <= 12 && !isNaN(yNum) && yNum >= 2020 && yNum <= 2100) {
       const searchParams = new URLSearchParams(location.search);
-      searchParams.set('year', year);
-      searchParams.set('month', month);
+      searchParams.set('year', String(yNum));
+      searchParams.set('month', String(mNum));
 
       const newSearch = searchParams.toString();
       if (location.search !== `?${newSearch}`) {
@@ -98,16 +100,16 @@ export default function ReportsLayout() {
   }, [year, month, navigate, location.pathname, location.search]);
 
   const contextValue = useMemo(() => ({
-    year,
-    month,
+    year: year || defaultYear,
+    month: month || defaultMonth,
     branchId,
     registerPrintHandler,
     handlePrint: () => {
       if (activePrintHandler) activePrintHandler();
     }
-  }), [year, month, branchId, registerPrintHandler, activePrintHandler]);
+  }), [year, month, defaultYear, defaultMonth, branchId, registerPrintHandler, activePrintHandler]);
 
-  if (dateLoading || !year || !month) {
+  if (dateLoading) {
     return (
       <div className="page-wrapper flex-fill d-flex align-items-center justify-content-center" style={{ height: '100vh' }}>
         <div className="text-center py-5">
@@ -148,31 +150,57 @@ export default function ReportsLayout() {
             </div>
 
             {/* Date Filter: Month */}
-            <div style={{ width: '105px' }} className="flex-shrink-0">
+            <div style={{ width: '110px' }} className="flex-shrink-0">
               <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">شهر</span>
+                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">شهر</span>
                 <input
-                  type="text"
+                  type="number"
+                  min={1}
+                  max={12}
                   inputMode="numeric"
                   dir="ltr"
                   className="form-control form-control-sm fw-bold text-center border-secondary-subtle px-1 hide-arrows"
                   placeholder="شهر"
-                  value={month} onChange={(e) => setMonth(toEnglish(e.target.value))}
+                  value={month}
+                  onChange={(e) => setMonth(toEnglish(e.target.value))}
+                  onBlur={() => {
+                    const n = parseInt(month, 10);
+                    if (isNaN(n)) {
+                      setMonth(String(defaultMonth || new Date().getMonth() + 1));
+                    } else if (n < 1) {
+                      setMonth('1');
+                    } else if (n > 12) {
+                      setMonth('12');
+                    }
+                  }}
                 />
               </div>
             </div>
 
             {/* Date Filter: Year */}
-            <div style={{ width: '110px' }} className="flex-shrink-0">
+            <div style={{ width: '115px' }} className="flex-shrink-0">
               <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-1">سنة</span>
+                <span className="input-group-text bg-light fw-bold text-dark border-secondary-subtle px-2">سنة</span>
                 <input
-                  type="text"
+                  type="number"
+                  min={2020}
+                  max={2100}
                   inputMode="numeric"
                   dir="ltr"
                   className="form-control form-control-sm fw-bold text-center border-secondary-subtle px-1 hide-arrows"
                   placeholder="سنة"
-                  value={year} onChange={(e) => setYear(toEnglish(e.target.value))}
+                  value={year}
+                  onChange={(e) => setYear(toEnglish(e.target.value))}
+                  onBlur={() => {
+                    const n = parseInt(year, 10);
+                    if (isNaN(n)) {
+                      setYear(String(defaultYear || new Date().getFullYear()));
+                    } else if (n < 2020) {
+                      setYear('2020');
+                    } else if (n > 2100) {
+                      setYear('2100');
+                    }
+                  }}
                 />
               </div>
             </div>

@@ -116,9 +116,9 @@ export default function PurchasesReport() {
           { label: 'صافي المشتريات', value: `${fmtNum(summary.total_purchases_amount || 0)} ج.م`, color: 'primary' },
           { label: 'إجمالي الشراء', value: `${fmtNum(summary.gross_purchases_amount || 0)} ج.م`, color: 'success' },
           { label: 'إجمالي المرتجع', value: `${fmtNum(summary.total_returns_amount || 0)} ج.م`, color: 'danger' },
-          { label: 'صافي القطع', value: fmtNum(summary.total_items_quantity || 0), color: 'info' },
-          { label: 'عدد الأصناف', value: fmtNum(summary.distinct_products_count || 0), color: 'secondary' },
-          { label: 'عدد الموردين', value: fmtNum(summary.suppliers_count || 0), color: 'warning' },
+          { label: 'صافي القطع', value: fmtNum(summary.total_items_quantity || 0), color: 'primary' },
+          { label: 'عدد الأصناف', value: fmtNum(summary.distinct_products_count || 0), color: 'primary' },
+          { label: 'عدد الموردين', value: fmtNum(summary.suppliers_count || 0), color: 'primary' },
         ],
         columns: [
           { key: 'index', label: 'م', width: '40px', align: 'center' },
@@ -154,9 +154,9 @@ export default function PurchasesReport() {
     { label: 'صافي المشتريات', value: `${fmtNum(summary.total_purchases_amount || 0)} ج.م`, color: 'primary' },
     { label: 'إجمالي الشراء', value: `${fmtNum(summary.gross_purchases_amount || 0)} ج.م`, color: 'success' },
     { label: 'إجمالي المرتجع', value: `${fmtNum(summary.total_returns_amount || 0)} ج.م`, color: 'danger' },
-    { label: 'صافي القطع المشتراة', value: `${fmtNum(summary.total_items_quantity || 0)} قطعة`, color: 'info' },
-    { label: 'عدد الأصناف', value: fmtNum(summary.distinct_products_count || 0), color: 'secondary' },
-    { label: 'عدد الموردين', value: fmtNum(summary.suppliers_count || 0), color: 'warning' },
+    { label: 'صافي القطع المشتراة', value: `${fmtNum(summary.total_items_quantity || 0)} قطعة`, color: 'primary' },
+    { label: 'عدد الأصناف', value: fmtNum(summary.distinct_products_count || 0), color: 'primary' },
+    { label: 'عدد الموردين', value: fmtNum(summary.suppliers_count || 0), color: 'primary' },
   ];
 
   const subFiltersRow1 = () => (
@@ -204,6 +204,11 @@ export default function PurchasesReport() {
               if (!val) setSelectedProductId('');
             }}
             onSelect={(item) => {
+              if (!item) {
+                setSelectedProductName('');
+                setSelectedProductId('');
+                return;
+              }
               setSelectedProductName(item.name || '');
               setSelectedProductId(item.id || '');
             }}
@@ -250,7 +255,7 @@ export default function PurchasesReport() {
           className="form-control form-control-sm border-secondary-subtle fw-bold"
           placeholder="بحث سريع باسم الصنف أو المورد..."
           value={searchQuery}
-          onChange={(val) => setSearchQuery(val)}
+          onChange={(e) => setSearchQuery(e?.target ? e.target.value : e)}
         />
       </div>
 

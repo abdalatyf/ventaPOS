@@ -7,8 +7,8 @@ import Swal from 'sweetalert2';
 import SuggestionList from '../components/purchases/SuggestionList';
 import ReportTable from '../components/ReportTable';
 import SearchReceipts from '../pages/SearchReceipts';
-import PurchasesReport from '../pages/Reports/PurchasesReport';
-import { ReportsContext } from '../pages/Reports/ReportsLayout';
+import PurchasesReport from '../pages/reports/PurchasesReport';
+import ReportsLayout, { ReportsContext } from '../pages/reports/ReportsLayout';
 import Expenses from '../pages/Expenses';
 import LedgerDeficitForm from '../components/ledger/LedgerDeficitForm';
 import LedgerCommissionForm from '../components/ledger/LedgerCommissionForm';
@@ -16,6 +16,10 @@ import POS from '../pages/POS';
 import AppAutocomplete from '../components/common/AppAutocomplete';
 import QuickRestoreModal from '../components/common/QuickRestoreModal';
 import CompanyTab from '../pages/settings/tabs/CompanyTab';
+import InstallmentsReport from '../pages/reports/InstallmentsReport';
+import PrintModal from '../components/common/PrintModal';
+import StandardTablePageLayout from '../components/common/StandardTablePageLayout';
+import { Routes, Route } from 'react-router-dom';
 
 vi.mock('react-hot-toast', () => {
   const fn = vi.fn();
@@ -447,5 +451,205 @@ describe('Wave 3 UI/UX & Interaction Regressions', () => {
       expect(screen.getByText('كلمة المرور مطلوبة')).toBeInTheDocument();
     });
     expect(onSetupComplete).not.toHaveBeenCalled();
+  });
+
+  it('InstallmentsReport auto-selects all rows on load, renders print button in sticky toolbar, and dispatches single-month installment_ids with chunkSize=20', async () => {
+    apiMock.get.mockImplementation((url) => {
+      if (url.includes('/printers/')) {
+        return Promise.resolve({ data: { printers: [{ name: 'HP_LaserJet', status: 'ready', is_default: true }] } });
+      }
+      if (url.includes('/salespersons/')) {
+        return Promise.resolve({ data: [{ id: 1, name: 'مندوب ١' }] });
+      }
+      if (url.includes('/reports/installments/')) {
+        return Promise.resolve({
+          data: {
+            total_installments_amount: 1500,
+            installments_count: 3,
+            installments: [
+              { payment_id: 501, receipt_id: 9001, receipt_num: 101, customer_name: 'عميل أ', amount: 500, area: 'الدقي', phone: '0101' },
+              { payment_id: 502, receipt_id: 9001, receipt_num: 101, customer_name: 'عميل أ', amount: 500, area: 'الدقي', phone: '0101' },
+              { payment_id: 503, receipt_id: 9002, receipt_num: 102, customer_name: 'عميل ب', amount: 500, area: 'المعادي', phone: '0102' },
+            ],
+          },
+        });
+      }
+      return Promise.resolve({ data: [] });
+    });
+
+    const { container } = render(
+      <MemoryRouter>
+        <ReportsContext.Provider value={{ year: 2026, month: 8, branchId: 1, registerPrintHandler: () => {} }}>
+          <StandardTablePageLayout title="التقارير">
+            <InstallmentsReport />
+          </StandardTablePageLayout>
+        </ReportsContext.Provider>
+      </MemoryRouter>
+    );
+
+    // Auto-selects all 3 rows on load and renders print button inside .sticky-toolbar
+    const printSelectedBtn = await screen.findByRole('button', { name: /طباعة جداول المحدد \(3\)/ });
+    expect(printSelectedBtn.closest('.sticky-toolbar')).not.toBeNull();
+    expect(screen.getByText('تم تحديد 3')).toBeInTheDocument();
+
+    // Unselect all via header checkbox -> 0 selected, then re-select all -> 3 selected
+    const headerCheckbox = container.querySelector('thead input[type="checkbox"]');
+    expect(headerCheckbox.checked).toBe(true);
+    fireEvent.click(headerCheckbox);
+    await waitFor(() => expect(headerCheckbox.checked).toBe(false));
+    expect(screen.queryByText('تم تحديد 3')).toBeNull();
+
+    fireEvent.click(headerCheckbox);
+    await waitFor(() => expect(headerCheckbox.checked).toBe(true));
+    expect(screen.getByText('تم تحديد 3')).toBeInTheDocument();
+
+    // Click print selected -> opens PrintModal with 3 items (no batch split alert since 3 <= 20)
+    fireEvent.click(screen.getByRole('button', { name: /طباعة جداول المحدد \(3\)/ }));
+    const previewBtn = await screen.findByText('معاينة ملف PDF');
+    expect(screen.queryByText(/تقسيم الدفعات التلقائي/)).toBeNull();
+    fireEvent.click(previewBtn.closest('button'));
+
+    await waitFor(() => {
+      const printCall = apiMock.post.mock.calls.find(([u]) => u === '/receipts/desktop_print/');
+      expect(printCall).toBeTruthy();
+      expect(printCall[1]).toMatchObject({
+        receipt_ids: [9001, 9002],
+        installment_ids: [501, 502, 503],
+        month: 8,
+        year: 2026,
+        action: 'view',
+      });
+    });
+  });
+
+  it('PrintModal supports chunkSize=2 for SearchReceipts, hides batch banner on A4 ReportTable (>20 rows), and shows retry alert on printer fetch error', async () => {
+    // 1. Printer fetch error -> renders retry warning alert; clicking retry loads printers
+    let printerAttempt = 0;
+    apiMock.get.mockImplementation((url) => {
+      if (url.includes('/printers/')) {
+        printerAttempt++;
+        if (printerAttempt === 1) return Promise.reject(new Error('Spooler unavailable'));
+        return Promise.resolve({ data: { printers: [{ name: 'Offline_USB_Printer', status: 'offline', is_default: true }] } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+
+    const executeChunkMock = vi.fn(() => Promise.resolve());
+    const { unmount } = render(
+      <PrintModal
+        isOpen={true}
+        onClose={() => {}}
+        title="طباعة جداول الأقساط"
+        items={[1, 2, 3, 4, 5]}
+        itemLabel="جدول أقساط"
+        chunkSize={2}
+        executeChunk={executeChunkMock}
+      />
+    );
+
+    // Verify dynamic chunkSize=2 batch banner
+    expect(await screen.findByText(/إلى دفعات متتابعة من 2 عنصراً/)).toBeInTheDocument();
+
+    // Verify printer error alert & retry button
+    expect(await screen.findByText('تعذر فحص حالة الطابعات من النظام')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /إعادة المحاولة/ }));
+    await waitFor(() => {
+      expect(screen.getByText('غير متصل (Offline)')).toBeInTheDocument();
+    });
+
+    // Click direct print on offline printer -> shows pre-print offline warning -> confirm -> runs 3 chunks of size 2 ([1,2], [3,4], [5])
+    fireEvent.click(screen.getByRole('button', { name: /طباعة فورية/ }));
+    expect(await screen.findByText(/غير متصلة حالياً \(Offline\)/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /متابعة الطباعة على أي حال/ }));
+
+    await waitFor(() => {
+      expect(executeChunkMock).toHaveBeenCalledTimes(3);
+      expect(executeChunkMock.mock.calls[0][0]).toEqual([1, 2]);
+      expect(executeChunkMock.mock.calls[1][0]).toEqual([3, 4]);
+      expect(executeChunkMock.mock.calls[2][0]).toEqual([5]);
+    });
+    unmount();
+
+    // 2. Single-PDF A4 Report (items=null, itemCount=35) must NOT show batch-split banner
+    render(
+      <PrintModal
+        isOpen={true}
+        onClose={() => {}}
+        title="طباعة تقرير تحليلي"
+        itemCount={35}
+        itemLabel="سجل"
+        onExecute={vi.fn(() => Promise.resolve())}
+      />
+    );
+    expect(screen.queryByText(/تقسيم الدفعات التلقائي/)).toBeNull();
+  });
+
+  it('AppAutocomplete clear X button has pointerEvents: auto, clears without null crash, and filter toolbar number inputs clamp bounds cleanly', async () => {
+    const onSelectMock = vi.fn();
+    const onChangeMock = vi.fn();
+    const { unmount } = render(
+      <AppAutocomplete
+        value="الهرم"
+        onChange={onChangeMock}
+        onSelect={onSelectMock}
+        items={[{ id: 1, name: 'الهرم' }]}
+        placeholder="المنطقة..."
+      />
+    );
+
+    const clearBtn = screen.getByTitle('مسح الحقل');
+    expect(clearBtn).toBeInTheDocument();
+    expect(clearBtn.style.pointerEvents).toBe('auto');
+    fireEvent.click(clearBtn);
+    expect(onChangeMock).toHaveBeenCalledWith('');
+    expect(onSelectMock).toHaveBeenCalledWith(null);
+    unmount();
+
+    // SearchReceipts filter toolbar numeric limits & From <= To clamping on blur
+    const { container } = render(
+      <MemoryRouter>
+        <SearchReceipts />
+      </MemoryRouter>
+    );
+
+    const monthInput = container.querySelector('input[name="month"]');
+    const yearInput = container.querySelector('input[name="year"]');
+    const fromInput = container.querySelector('input[name="receipt_from"]');
+    const toInput = container.querySelector('input[name="receipt_to"]');
+
+    expect(monthInput.getAttribute('type')).toBe('number');
+    expect(yearInput.getAttribute('type')).toBe('number');
+    expect(fromInput.getAttribute('type')).toBe('number');
+    expect(toInput.getAttribute('type')).toBe('number');
+
+    fireEvent.change(monthInput, { target: { name: 'month', value: '15' } });
+    fireEvent.blur(monthInput);
+    expect(monthInput.value).toBe('12');
+
+    fireEvent.change(yearInput, { target: { name: 'year', value: '2015' } });
+    fireEvent.blur(yearInput);
+    expect(yearInput.value).toBe('2020');
+
+    fireEvent.change(toInput, { target: { name: 'receipt_to', value: '50' } });
+    fireEvent.change(fromInput, { target: { name: 'receipt_from', value: '100' } });
+    fireEvent.blur(fromInput);
+    expect(fromInput.value).toBe('50');
+
+    // ReportsLayout must not unmount filter inputs when month is temporarily cleared while typing
+    render(
+      <MemoryRouter initialEntries={['/reports/purchases?year=2026&month=8']}>
+        <Routes>
+          <Route path="/reports" element={<ReportsLayout />}>
+            <Route path="purchases" element={<PurchasesReport />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const repMonthInput = await screen.findByPlaceholderText('شهر');
+    fireEvent.change(repMonthInput, { target: { value: '' } });
+    expect(screen.getByPlaceholderText('شهر')).toBeInTheDocument();
+    fireEvent.blur(repMonthInput);
+    expect(repMonthInput.value).toBe('8');
   });
 });

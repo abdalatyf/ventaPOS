@@ -28,9 +28,9 @@ export default function PurchaseTable({
   const [focusedRowIndex, setFocusedRowIndex] = useState(-1);
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
-  const isAllMatchingSelected = globalAllIds.length > 0 && selectedIds.length === globalAllIds.length;
-  const isCurrentPageSelected = invoices.length > 0 && invoices.every(r => selectedSet.has(r.id));
-  const isPartiallySelected = selectedIds.length > 0 && !isAllMatchingSelected && !isCurrentPageSelected;
+  const targetCount = globalAllIds.length > 0 ? globalAllIds.length : invoices.length;
+  const isAllMatchingSelected = targetCount > 0 && selectedIds.length === targetCount;
+  const isPartiallySelected = selectedIds.length > 0 && selectedIds.length < targetCount;
 
   const handleSetTableRef = (node) => {
     tableContainerElemRef.current = node;
@@ -110,27 +110,6 @@ export default function PurchaseTable({
         </div>
       </div>
 
-      {/* Two-Tier Selection Alert Strip (Sticky below toolbar) */}
-      {selectedIds.length > 0 && totalInvoicesCount > invoices.length && (
-        <div className="sticky-selection-strip bg-light border-bottom px-3 py-1 text-center small fw-bold text-dark d-flex align-items-center justify-content-center gap-2 d-print-none">
-          {isAllMatchingSelected ? (
-            <>
-              <span>تم تحديد كافة الـ {fmtNum(totalInvoicesCount)} فاتورة المطابقة للبحث.</span>
-              <button type="button" className="btn btn-link btn-sm p-0 fw-bold text-danger text-decoration-none" onClick={() => toggleSelectAll && toggleSelectAll()}>
-                إلغاء التحديد
-              </button>
-            </>
-          ) : (
-            <>
-              <span>تم تحديد {fmtNum(selectedIds.length)} فاتورة في هذه الصفحة.</span>
-              <button type="button" className="btn btn-link btn-sm p-0 fw-bold text-primary text-decoration-none" onClick={() => selectAllMatching && selectAllMatching()}>
-                تحديد كافة الـ {fmtNum(totalInvoicesCount)} فاتورة المطابقة للبحث
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
       {/* Row 2 of Table Card: Table Container */}
       <div
         ref={handleSetTableRef}
@@ -146,7 +125,7 @@ export default function PurchaseTable({
                 <input 
                   type="checkbox" 
                   className="form-check-input" 
-                  checked={invoices.length > 0 && (isCurrentPageSelected || isAllMatchingSelected)}
+                  checked={isAllMatchingSelected}
                   ref={el => { if (el) el.indeterminate = isPartiallySelected; }}
                   onChange={toggleSelectAll} 
                 />

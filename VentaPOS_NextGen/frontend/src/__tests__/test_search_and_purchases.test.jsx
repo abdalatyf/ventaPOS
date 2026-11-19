@@ -100,27 +100,27 @@ describe('Search & Purchases Suite (3-Tier Selection & CRUD)', () => {
     vi.clearAllMocks();
   });
 
-  it('verifies SearchReceipts 3-Tier Selection State (3000 -> 0 -> 197 -> 3000)', async () => {
-    render(
+  it('verifies SearchReceipts Global Selection State without sticky-selection-strip (3000 -> 0 -> 3000 & 2999 -> 3000)', async () => {
+    const { container } = render(
       <BrowserRouter>
         <SearchReceipts />
       </BrowserRouter>
     );
 
-    // 1. Initial Load: Should show 3,000 results and 3,000 selected by default
+    // 1. Initial Load: Should show 3,000 results and 3,000 selected by default, with NO sticky-selection-strip
     await waitFor(() => {
       expect(screen.getByText(/نتائج البحث: 3,000 فاتورة/i)).toBeInTheDocument();
       expect(screen.getByText(/محدد 3,000/i)).toBeInTheDocument();
     });
-
-    // Check banner: "تم تحديد كافة الـ 3,000 فاتورة المطابقة للبحث"
-    expect(screen.getByText(/تم تحديد كافة الـ 3,000 فاتورة المطابقة للبحث/i)).toBeInTheDocument();
+    expect(container.querySelector('.sticky-selection-strip')).toBeNull();
+    expect(screen.queryByText(/تم تحديد كافة الـ 3,000 فاتورة المطابقة للبحث/i)).toBeNull();
 
     // 2. Click the header checkbox to clear all selection (3,000 -> 0)
     const thead = document.querySelector('thead');
     const headerCheckbox = thead.querySelector('input[type="checkbox"]');
     expect(headerCheckbox).toBeInTheDocument();
     expect(headerCheckbox.checked).toBe(true);
+    expect(headerCheckbox.indeterminate).toBe(false);
 
     fireEvent.click(headerCheckbox);
 
@@ -128,26 +128,33 @@ describe('Search & Purchases Suite (3-Tier Selection & CRUD)', () => {
     await waitFor(() => {
       expect(screen.queryByText(/محدد 3,000/i)).toBeNull();
       expect(screen.queryByText(/محدد/i)).toBeNull();
+      expect(headerCheckbox.checked).toBe(false);
     });
 
-    // 3. Click the header checkbox again (0 -> 197 on current page)
+    // 3. Click the header checkbox again (0 -> all 3,000 matching rows across all pages)
     fireEvent.click(headerCheckbox);
-
-    // Now selected should be 197 (current page count)
-    await waitFor(() => {
-      expect(screen.getByText(/محدد 197/i)).toBeInTheDocument();
-    });
-
-    // Banner should now invite selecting all 3,000
-    const selectAllBannerBtn = screen.getByText(/تحديد كافة الـ 3,000 فاتورة المطابقة للبحث/i);
-    expect(selectAllBannerBtn).toBeInTheDocument();
-
-    // 4. Click the banner button to re-select all 3,000
-    fireEvent.click(selectAllBannerBtn);
 
     await waitFor(() => {
       expect(screen.getByText(/محدد 3,000/i)).toBeInTheDocument();
-      expect(screen.getByText(/تم تحديد كافة الـ 3,000 فاتورة المطابقة للبحث/i)).toBeInTheDocument();
+      expect(headerCheckbox.checked).toBe(true);
+    });
+
+    // 4. Uncheck first row checkbox (3,000 -> 2,999, indeterminate = true), then click header checkbox (2,999 -> 3,000)
+    const firstRowCheckbox = container.querySelector('tbody tr input[type="checkbox"]');
+    fireEvent.click(firstRowCheckbox);
+
+    await waitFor(() => {
+      expect(screen.getByText(/محدد 2,999/i)).toBeInTheDocument();
+      expect(headerCheckbox.checked).toBe(false);
+      expect(headerCheckbox.indeterminate).toBe(true);
+    });
+
+    fireEvent.click(headerCheckbox);
+
+    await waitFor(() => {
+      expect(screen.getByText(/محدد 3,000/i)).toBeInTheDocument();
+      expect(headerCheckbox.checked).toBe(true);
+      expect(headerCheckbox.indeterminate).toBe(false);
     });
   });
 

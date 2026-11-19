@@ -14,14 +14,14 @@
                         <td class="header-cell">المنطقة :</td>
                         <td class="text-center">{{ area }}</td>
                         <td colspan="1" class="text-center number-bold" style="min-width: 40px;">{{ total_installments_count }}</td>
-                        <td class="text-center ">{{ company_settings.description|default:"" }}</td>
+                        <td class="text-center" style="font-size: 14px; line-height: 1.15;">{{ company_settings.description|default:"" }}</td>
                         <td class="header-cell">المقدم :</td>
                         <td class="text-center number-bold">{{ down_payment }}</td>
                     </tr>
                     <tr>
                         <td class="header-cell">اسم العميل:</td>
                         <td colspan="3" class="text-start font-weight-bold" style="padding-right: 10px !important;">{{ customer_name }}</td>
-                        <td class="header-cell" style="font-size: 15px; white-space: normal;">الباقي بعد <br>هذا
+                        <td class="header-cell" style="font-size: 14px; line-height: 1.1; white-space: normal;">الباقي بعد <br>هذا
                             الإيصال:</td>
                         <td class="text-center number-bold">{{ remaining_amount }}</td>
                     </tr>
@@ -42,7 +42,7 @@
                     </tr>
                     <tr>
                         <td rowspan="2" class="header-cell">الصنف:</td>
-                        <td colspan="3" rowspan="2" class="text-center" style="white-space: pre-wrap;">{{ products_text }}</td>
+                        <td colspan="3" rowspan="2" class="text-center" style="white-space: pre-wrap; font-size: 15px; line-height: 1.2; overflow: hidden;">{{ products_text }}</td>
                         <td class="header-cell">تاريخ البيع :</td>
                         <td class="text-center">{{ sale_date }}</td>
                     </tr>
@@ -53,7 +53,7 @@
                     <tr>
                         <td class="header-cell">المندوب :</td>
                         <td colspan="2" class="text-center">{{ salesperson_name }}</td>
-                        <td colspan="3" class="text-center small">
+                        <td colspan="3" class="text-center small" style="font-size: 13px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                             {{ company_settings.footer_text|default:"" }} للإستعلام : {{ company_settings.phone1 }}
                             {% if company_settings.phone2 %} - {{ company_settings.phone2 }} {% endif %}
                         </td>

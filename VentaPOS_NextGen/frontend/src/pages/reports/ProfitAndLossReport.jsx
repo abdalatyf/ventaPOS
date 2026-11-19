@@ -193,7 +193,7 @@ export default function ProfitAndLossReport() {
           }}
           onSelect={(prod) => {
             setSelectedProduct(prod);
-            if (prod) setProductQuery(prod.name || '');
+            setProductQuery(prod ? (prod.name || '') : '');
           }}
           placeholder="ابحث عن صنف..."
           displayKey="name"
@@ -254,6 +254,10 @@ export default function ProfitAndLossReport() {
           value={areaFilter}
           onChange={(val) => setAreaFilter(val)}
           onSelect={(item) => {
+            if (!item) {
+              setAreaFilter('');
+              return;
+            }
             const val = typeof item === 'object' ? (item.area || item.name || '') : String(item);
             setAreaFilter(val);
           }}
