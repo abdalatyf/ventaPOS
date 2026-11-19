@@ -81,6 +81,16 @@
 <a href="{% url 'licenses_list' %}" class="{% if request.resolver_match.url_name == 'licenses_list' %}active{% endif %}">📝
     إدارة التراخيص</a>
                 <hr>
+                {% if request.session.marketeer_full_name or request.session.marketeer_username %}
+                <div class="px-3 py-2 mb-2 rounded bg-light border small text-muted">
+                    <div class="fw-semibold text-dark">
+                        👤 {{ request.session.marketeer_full_name|default:request.session.marketeer_username }}
+                    </div>
+                    {% if request.session.marketeer_full_name and request.session.marketeer_username %}
+                    <div class="text-muted" style="font-size: 0.8rem;" dir="ltr">@{{ request.session.marketeer_username }}</div>
+                    {% endif %}
+                </div>
+                {% endif %}
                 <a href="{% url 'logout' %}" class="text-danger">تسجيل خروج</a>
             </div>
             {% endif %}

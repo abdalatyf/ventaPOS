@@ -262,36 +262,151 @@ class LicenseManagerViewTests(TestCase):
                 self.assertEqual(payload['product_id'], 4)
                 self.assertEqual(payload['license_code'], lic.generated_code)
 
-    def test_login_fails_closed_when_master_password_empty(self):
-        """Verify login fails closed when MASTER_PASSWORD is empty (never falls back to '123')."""
+    def test_login_rejects_empty_username_or_password(self):
+        """Verify login rejects empty username or password without contacting Supabase."""
+        from unittest.mock import patch
         from django.urls import reverse
         from django.test import override_settings
 
-        with override_settings(MASTER_PASSWORD=""):
-            res_default = self.client.post(reverse('login'), {'password': '123'})
-            self.assertEqual(res_default.status_code, 200)
-            self.assertContains(res_default, 'VENTA_LICENSE_MASTER_PASSWORD')
-            self.assertFalse(self.client.session.get('is_logged_in', False))
+        with override_settings(SUPABASE_KEY="valid-secret-key"):
+            with patch('requests.post') as mock_post:
+                res1 = self.client.post(reverse('login'), {'username': '', 'password': 'secret'})
+                self.assertEqual(res1.status_code, 200)
+                self.assertContains(res1, 'يرجى إدخال اسم المستخدم وكلمة المرور')
+                self.assertFalse(self.client.session.get('is_logged_in', False))
 
-            res_empty = self.client.post(reverse('login'), {'password': ''})
-            self.assertEqual(res_empty.status_code, 200)
-            self.assertFalse(self.client.session.get('is_logged_in', False))
+                res2 = self.client.post(reverse('login'), {'username': 'ahmed', 'password': ''})
+                self.assertEqual(res2.status_code, 200)
+                self.assertContains(res2, 'يرجى إدخال اسم المستخدم وكلمة المرور')
+                self.assertFalse(self.client.session.get('is_logged_in', False))
 
-    def test_login_succeeds_with_configured_master_password_and_rejects_wrong(self):
-        """Verify constant-time login succeeds only with the exact configured MASTER_PASSWORD."""
+                mock_post.assert_not_called()
+
+    def test_login_fails_closed_when_supabase_key_missing(self):
+        """Verify login fails closed when SUPABASE_KEY is empty."""
+        from unittest.mock import patch
         from django.urls import reverse
         from django.test import override_settings
 
-        with override_settings(MASTER_PASSWORD="StrongAdminPass!99"):
-            bad_res = self.client.post(reverse('login'), {'password': '123'})
-            self.assertEqual(bad_res.status_code, 200)
-            self.assertContains(bad_res, 'كلمة المرور غير صحيحة')
-            self.assertFalse(self.client.session.get('is_logged_in', False))
+        with override_settings(SUPABASE_KEY=""):
+            with patch('requests.post') as mock_post:
+                res = self.client.post(reverse('login'), {'username': 'ahmed', 'password': 'secret'})
+                self.assertEqual(res.status_code, 200)
+                self.assertContains(res, 'SUPABASE_KEY')
+                self.assertFalse(self.client.session.get('is_logged_in', False))
+                mock_post.assert_not_called()
 
-            ok_res = self.client.post(reverse('login'), {'password': 'StrongAdminPass!99'})
-            self.assertEqual(ok_res.status_code, 302)
-            self.assertEqual(ok_res.url, reverse('dashboard'))
-            self.assertTrue(self.client.session.get('is_logged_in', False))
+    def test_login_fails_closed_on_offline_network_error(self):
+        """Verify login fails closed when Supabase RPC raises RequestException."""
+        from unittest.mock import patch
+        import requests
+        from django.urls import reverse
+        from django.test import override_settings
+
+        with override_settings(SUPABASE_KEY="valid-secret-key"):
+            with patch('requests.post', side_effect=requests.RequestException("Network unreachable")):
+                res = self.client.post(reverse('login'), {'username': 'ahmed', 'password': 'secret'})
+                self.assertEqual(res.status_code, 200)
+                self.assertContains(res, 'فشل الاتصال بخادم Supabase')
+                self.assertFalse(self.client.session.get('is_logged_in', False))
+
+    def test_login_rejects_invalid_credentials_and_non_200_rpc(self):
+        """Verify invalid credentials ({ok: false}) and non-200 HTTP responses are blocked."""
+        from unittest.mock import patch, MagicMock
+        from django.urls import reverse
+        from django.test import override_settings
+
+        with override_settings(SUPABASE_KEY="valid-secret-key"):
+            # 1. Invalid credentials
+            mock_bad = MagicMock()
+            mock_bad.status_code = 200
+            mock_bad.json.return_value = {"ok": False}
+            with patch('requests.post', return_value=mock_bad):
+                res_bad = self.client.post(reverse('login'), {'username': 'ahmed', 'password': 'wrong'})
+                self.assertEqual(res_bad.status_code, 200)
+                self.assertContains(res_bad, 'اسم المستخدم أو كلمة المرور غير صحيحة')
+                self.assertFalse(self.client.session.get('is_logged_in', False))
+
+            # 2. Non-200 HTTP error
+            mock_err = MagicMock()
+            mock_err.status_code = 500
+            mock_err.text = 'Internal Server Error'
+            with patch('requests.post', return_value=mock_err):
+                res_err = self.client.post(reverse('login'), {'username': 'ahmed', 'password': 'secret'})
+                self.assertEqual(res_err.status_code, 200)
+                self.assertContains(res_err, 'رفض خادم Supabase التحقق من بيانات الدخول')
+                self.assertFalse(self.client.session.get('is_logged_in', False))
+
+    def test_login_success_sets_session_and_stamps_marketeer_id_on_license(self):
+        """
+        Verify valid Supabase RPC login sets marketeer_username & marketeer_full_name in session,
+        shows user badge in sidebar, stamps marketeer_id in public.licenses payload,
+        and logout clears session attributes.
+        """
+        from unittest.mock import patch, MagicMock
+        from django.urls import reverse
+        from django.test import override_settings
+
+        mock_login_resp = MagicMock()
+        mock_login_resp.status_code = 200
+        mock_login_resp.json.return_value = {
+            "ok": True,
+            "username": "ahmed_sales",
+            "full_name": "أحمد محمد",
+        }
+
+        mock_license_resp = MagicMock()
+        mock_license_resp.status_code = 201
+        mock_license_resp.text = ""
+
+        with override_settings(SUPABASE_KEY="valid-secret-key", SUPABASE_URL="https://example.supabase.co"):
+            with patch('requests.post', return_value=mock_login_resp) as mock_login_post:
+                res = self.client.post(reverse('login'), {
+                    'username': '  ahmed_sales ',
+                    'password': 'StrongPassword!123',
+                })
+                self.assertEqual(res.status_code, 302)
+                self.assertEqual(res.url, reverse('dashboard'))
+                self.assertTrue(self.client.session.get('is_logged_in', False))
+                self.assertEqual(self.client.session.get('marketeer_username'), 'ahmed_sales')
+                self.assertEqual(self.client.session.get('marketeer_full_name'), 'أحمد محمد')
+
+                mock_login_post.assert_called_once()
+                self.assertEqual(
+                    mock_login_post.call_args.args[0],
+                    "https://example.supabase.co/rest/v1/rpc/verify_marketeer_login",
+                )
+                self.assertEqual(
+                    mock_login_post.call_args.kwargs['json'],
+                    {"p_username": "ahmed_sales", "p_password": "StrongPassword!123"},
+                )
+
+            # Sidebar displays logged-in user badge
+            dash_res = self.client.get(reverse('dashboard'))
+            self.assertEqual(dash_res.status_code, 200)
+            self.assertContains(dash_res, 'أحمد محمد')
+            self.assertContains(dash_res, '@ahmed_sales')
+
+            # Issuing a license stamps marketeer_id with the logged-in username
+            with patch('requests.post', return_value=mock_license_resp) as mock_lic_post:
+                lic_res = self.client.post(reverse('add_license'), {
+                    'client': self.client_obj.id,
+                    'product_id': 4,
+                    'price': 2000,
+                    'start_date': '2026-01-01',
+                    'notes': 'test attribution',
+                })
+                self.assertEqual(lic_res.status_code, 302)
+                mock_lic_post.assert_called_once()
+                payload = mock_lic_post.call_args.kwargs['json']
+                self.assertEqual(payload['marketeer_id'], 'ahmed_sales')
+
+            # Logout clears session user info
+            out_res = self.client.get(reverse('logout'))
+            self.assertEqual(out_res.status_code, 302)
+            self.assertFalse(self.client.session.get('is_logged_in', False))
+            self.assertIsNone(self.client.session.get('marketeer_username'))
+            self.assertIsNone(self.client.session.get('marketeer_full_name'))
 
     def test_issue_product_15_topup_5000_vs_product_16_recovery_mocked_supabase(self):
         """

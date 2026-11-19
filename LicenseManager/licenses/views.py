@@ -1,6 +1,5 @@
-import hmac
 import requests
-from django.shortcuts import render, redirect , get_object_or_404
+from django.shortcuts import render, redirect, get_object_or_404
 from django.db.models import Sum, Q
 from django.conf import settings
 from django.utils import timezone
@@ -9,32 +8,88 @@ from .models import Client, License
 from .forms import ClientForm, LicenseForm
 from .utils.crypto import LicenseGenerator
 
-# 1. نظام الحماية البسيط (Check Session)
+
 def is_authenticated(request):
     return request.session.get('is_logged_in', False)
 
-# 2. صفحة الدخول (Login)
+
+def verify_marketeer_credentials_in_supabase(username, password):
+    """
+    Fail-closed online authentication against Supabase RPC `verify_marketeer_login`.
+    Returns (ok: bool, user_info: dict | None, error_message: str | None).
+    """
+    supabase_url = getattr(settings, 'SUPABASE_URL', '').rstrip('/')
+    supabase_key = getattr(settings, 'SUPABASE_KEY', '').strip()
+
+    if not supabase_key:
+        return False, None, "مفتاح الربط السحابي (SUPABASE_KEY) غير معين في الإعدادات."
+
+    endpoint = f"{supabase_url}/rest/v1/rpc/verify_marketeer_login"
+    headers = {
+        "apikey": supabase_key,
+        "Authorization": f"Bearer {supabase_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "p_username": username,
+        "p_password": password,
+    }
+
+    try:
+        res = requests.post(endpoint, json=payload, headers=headers, timeout=10)
+    except requests.RequestException:
+        return False, None, "فشل الاتصال بخادم Supabase للتحقق من بيانات الدخول. يرجى التأكد من اتصال الإنترنت."
+
+    if res.status_code != 200:
+        return False, None, f"رفض خادم Supabase التحقق من بيانات الدخول ({res.status_code}). يرجى مراجعة الإدارة."
+
+    try:
+        data = res.json()
+    except ValueError:
+        return False, None, "استجابة غير صالحة من خادم Supabase أثناء التحقق من بيانات الدخول."
+
+    if isinstance(data, dict) and data.get("ok") is True:
+        return True, {
+            "username": data.get("username", username),
+            "full_name": data.get("full_name", ""),
+        }, None
+
+    return False, None, "اسم المستخدم أو كلمة المرور غير صحيحة، أو الحساب غير نشط."
+
+
 def login_view(request):
     if request.method == 'POST':
-        password = request.POST.get('password') or ''
-        expected_password = getattr(settings, 'MASTER_PASSWORD', '') or ''
-        if not expected_password:
-            return render(request, 'login.html', {'error': 'كلمة مرور لوحة التحكم غير مهيأة (VENTA_LICENSE_MASTER_PASSWORD)'})
-        if hmac.compare_digest(password, expected_password):
+        username = request.POST.get('username', '').strip()
+        password = request.POST.get('password', '')
+
+        if not username or not password:
+            return render(request, 'login.html', {
+                'error': 'يرجى إدخال اسم المستخدم وكلمة المرور.',
+                'username': username,
+            })
+
+        ok, user_info, error_msg = verify_marketeer_credentials_in_supabase(username, password)
+        if ok:
             request.session['is_logged_in'] = True
+            request.session['marketeer_username'] = user_info['username']
+            request.session['marketeer_full_name'] = user_info.get('full_name', '')
             return redirect('dashboard')
-        else:
-            return render(request, 'login.html', {'error': 'كلمة المرور غير صحيحة'})
-    
-    # لو هو أصلاً مسجل دخول، حوله للداشبورد
+
+        return render(request, 'login.html', {
+            'error': error_msg,
+            'username': username,
+        })
+
     if is_authenticated(request):
         return redirect('dashboard')
-        
+
     return render(request, 'login.html')
 
-# 3. صفحة الخروج
+
 def logout_view(request):
     request.session['is_logged_in'] = False
+    request.session.pop('marketeer_username', None)
+    request.session.pop('marketeer_full_name', None)
     return redirect('login')
 
 def dashboard_view(request):
@@ -102,14 +157,14 @@ def add_client_view(request):
 
     return render(request, 'add_client.html', {'form': form})
 
-def register_license_in_supabase(client, product_id, start_date, price, generated_code, notes=""):
+def register_license_in_supabase(client, product_id, start_date, price, generated_code, notes="", marketeer_id=None):
     """
     Mandatory append-only cloud registration of generated licenses in Supabase.
     Enforces fail-closed rule: offline key generation is strictly blocked.
     """
     supabase_url = getattr(settings, 'SUPABASE_URL', '').rstrip('/')
     supabase_key = getattr(settings, 'SUPABASE_KEY', '').strip()
-    marketeer_id = getattr(settings, 'MARKETEER_ID', '').strip() or "default_marketeer"
+    resolved_marketeer_id = (marketeer_id or getattr(settings, 'MARKETEER_ID', '')).strip() or "default_marketeer"
 
     if not supabase_key:
         return False, "مفتاح الربط السحابي (SUPABASE_KEY) غير معين في الإعدادات. يمنع إصدار الرخص أوفلاين لحماية النظام."
@@ -137,7 +192,7 @@ def register_license_in_supabase(client, product_id, start_date, price, generate
             expiry_date_str = (start_date + timedelta(days=days)).isoformat()
 
     payload = {
-        "marketeer_id": marketeer_id,
+        "marketeer_id": resolved_marketeer_id,
         "client_name": client.name,
         "client_phone": client.phone,
         "store_name": client.store_name or "",
@@ -186,13 +241,15 @@ def add_license_view(request):
             )
 
             # 3. Mandatory Supabase cloud registration (Fail-Closed)
+            marketeer_id = request.session.get('marketeer_username') or getattr(settings, 'MARKETEER_ID', '')
             success, err_msg = register_license_in_supabase(
                 client=client,
                 product_id=product_id,
                 start_date=start_date,
                 price=price,
                 generated_code=generated_code,
-                notes=notes
+                notes=notes,
+                marketeer_id=marketeer_id
             )
 
             if not success:

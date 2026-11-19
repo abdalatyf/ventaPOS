@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="d-flex justify-content-center align-items-center" style="height: 80vh;">
-    <div class="card p-5" style="width: 400px;">
+    <div class="card p-5" style="width: 420px;">
         <h3 class="text-center mb-4">🔐 الدخول للنظام</h3>
 
         {% if error %}
@@ -11,8 +11,16 @@
         <form method="POST">
             {% csrf_token %}
             <div class="mb-3">
-                <input type="password" name="password" class="form-control form-control-lg text-center"
-                    placeholder="كلمة المرور" autofocus>
+                <label for="id_username" class="form-label fw-semibold">اسم المستخدم</label>
+                <input type="text" id="id_username" name="username" value="{{ username|default:'' }}"
+                    class="form-control form-control-lg text-center"
+                    placeholder="اسم المستخدم" autocomplete="username" autofocus required>
+            </div>
+            <div class="mb-4">
+                <label for="id_password" class="form-label fw-semibold">كلمة المرور</label>
+                <input type="password" id="id_password" name="password"
+                    class="form-control form-control-lg text-center"
+                    placeholder="كلمة المرور" autocomplete="current-password" required>
             </div>
             <button type="submit" class="btn btn-primary w-100 btn-lg">دخول</button>
         </form>
