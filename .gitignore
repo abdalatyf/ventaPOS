@@ -1,9 +1,11 @@
 # =====================================================================
 # VentaPOS Root .gitignore
-# Scope: Only VentaPOS_NextGen/, .agents/, and .gitignore are tracked
+# Scope: Tracked root items are APP_BIBLE.md, GEMINI.md, .gitignore,
+#        .agents/, VentaPOS_NextGen/, LicenseManager/, and root .bat launchers
 # =====================================================================
 
-# --- Ignore Root Subsystems & Legacy Folders ---
+# --- Ignore Root Subsystems, Archives & Legacy Folders ---
+/_archive/
 /Desktop/
 /Server/
 /Mobile/
@@ -26,9 +28,10 @@ ai_scripts/
 /*.diff
 VENTAPOS_CONTEXT.md
 
-# --- Ensure .gitignore & GEMINI.md are tracked ---
+# --- Ensure .gitignore, GEMINI.md & APP_BIBLE.md are tracked ---
 !.gitignore
 !GEMINI.md
+!APP_BIBLE.md
 
 # --- Python / Django ---
 __pycache__/

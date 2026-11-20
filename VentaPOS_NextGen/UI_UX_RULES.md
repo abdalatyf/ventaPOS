@@ -1,6 +1,7 @@
 # VentaPOS NextGen — Frontend & UI/UX Architecture Bible
 
-> **Scope**: Complete Frontend Visual Identity, Interaction Rules, Table Scroll Architecture, and Audited Report Specifications  
+> **Supreme SSoT**: [`../APP_BIBLE.md`](../APP_BIBLE.md) · **Governance Rules**: [`../.agents/rules/rules.md`](../.agents/rules/rules.md)  
+> **Scope**: Complete Frontend Visual Identity, Interaction Rules, 2-Scroll Table Architecture, and Audited Report Specifications  
 > **Typography**: 'Cairo' Font · **Layout**: Fluid RTL · **Theme**: High-Contrast Light Mode  
 
 ---
@@ -35,6 +36,10 @@ The user interface reflects a clean, high-contrast desktop aesthetic designed fo
 ### 2.2 High Data Density
 - Use compact padding (`p-2`, `py-1`, `table-sm`) and dense typography in data tables so the manager can inspect maximum rows at a single glance without scrolling.
 
+### 2.3 Application Zoom Controls (`70%`–`150%` in `5%` Steps)
+- **Bounds & Step**: `Navbar.jsx` enforces zoom clamping between `0.70` (`70%`) and `1.50` (`150%`), stepping by **`0.05` (`5%`)** increments via `window.zoomIn()`, `window.zoomOut()`, `window.resetZoom()` (`100%`), and keyboard shortcuts (`Ctrl + +`, `Ctrl + -`, `Ctrl + 0`).
+- **Persistence & Layout Sync**: Zoom changes update `document.body.style.zoom` and CSS variable `--app-zoom`, persist to `localStorage` (`appZoomLevel`) and backend `CompanySetting.zoom_level`, and dispatch `app-zoom-changed` so `useSmartScroll.js` recalculates `.report-table-container` height accurately.
+
 ---
 
 ## 3. Keyboard-First Data Entry Rules
@@ -60,39 +65,49 @@ Because the manager transcribes transactions from physical paper notebooks, data
 
 ---
 
-## 4. Standardized Table Architecture (`StandardTablePageLayout.jsx` & Unified Window-Level Sticky Header)
+## 4. Standardized Table Architecture (`StandardTablePageLayout.jsx` & 2-Scroll Architecture)
 
-All 5 table/listing pages (`SearchReceipts.jsx`, `SearchPurchases.jsx`, `Expenses.jsx`, `Dimensions.jsx`, and `ReportsLayout.jsx` / `ReportTable.jsx`) share a single parent layout template (`StandardTablePageLayout.jsx`) that enforces an identical top-section height and unified window-level sticky table headers:
+> [!NOTE]
+> **Reconciliation Flag (Window-Level Sticky $\rightarrow$ 2-Scroll Architecture)**: Earlier versions of this spec (and the legacy docstring inside `StandardTablePageLayout.jsx`) described `2 × 48px` top rows (`Y = 231px`) and pure window-level sticky `<thead>` with `overflow: visible !important` on `.report-table-container`. The live codebase (`index.css`, `ReportTable.css`, `useSmartScroll.js`) implements the **2-Scroll Architecture** below with `52px` `.standard-top-row` height and a bounded `.report-table-container` height.
+
+All 5 table/listing pages (`SearchReceipts.jsx`, `SearchPurchases.jsx`, `Expenses.jsx`, `Dimensions.jsx`, and `ReportsLayout.jsx` / `ReportTable.jsx`) share a single parent layout template (`StandardTablePageLayout.jsx`) that enforces a uniform top-section structure and the **2-Scroll Architecture**:
 
 ```
-Unified Table Page Architecture (StandardTablePageLayout.jsx)
+Unified 2-Scroll Table Architecture (StandardTablePageLayout.jsx + useSmartScroll.js)
 ┌────────────────────────────────────────────────────────┐
-│ 1. Fixed Navbar (top: 0, height: 56px, z-index: 1030)  │
+│ 1. Fixed Navbar (sticky-top, height: 56px, z: 1030)    │
 ├────────────────────────────────────────────────────────┤
 │ 2. Top Section (.standard-page-top-section, scrolls):  │
 │    - Header Banner (.standard-page-header: 48px)       │
-│    - 2-Row Controls Card (.standard-top-card: 2x48px)  │
+│    - 2-Row Controls Card (.standard-top-card: 2×52px)  │
 ├────────────────────────────────────────────────────────┤
-│ 3. Sticky Table Header (thead th: top: 56px, z: 1010)  │
+│ 3. Card Chrome (.sticky-toolbar: 48px, top: 56px)      │
+│    - KPI summaryCards / bulk actions / Print / Sort    │
 ├────────────────────────────────────────────────────────┤
-│ 4. Table Rows (Normal Window Document Flow, Y = 231px) │
+│ 4. Bounded Table Container (.report-table-container)   │
+│    - Sticky <thead> th (top: 0 inside container, z1010)│
+│    - Internal Y & X scroll (6px thin scrollbars)       │
 └────────────────────────────────────────────────────────┘
 ```
 
 ### 4.1 Locked Top Section Height ("Title + 2 Rows")
-- **Equal Vertical Table Start (`Y = 231px`)**: Every table page renders `.standard-page-top-section` containing:
-  1. **Header Banner (`.standard-page-header`, fixed `48px` height)**: Page Icon + Title on the right, and `headerActions` on the left.
-  2. **Unified 2-Row Controls Card (`.standard-top-card`, `2 × 48px` rows)**:
-     - **Row 1 (`.standard-top-row-1`, `48px`)**: Primary filters, tabs, and live search controls.
-     - **Row 2 (`.standard-top-row-2`, `48px`)**: Inline add forms (`Expenses`, `Dimensions`), bulk selection actions, status counts, KPI `summaryCards` pills (`ReportTable`), print button, and sort dropdown.
-- **React Portal Slots (`useStandardTableSlots`)**: Composite child components (`InventoryTab.jsx`, `SalespersonsTab.jsx`, `SuppliersTab.jsx`, and `ReportTable.jsx`) portal their `row1Extra` and `row2` controls directly into `.standard-top-card` without rendering extra accordions, filter cards, or `.card-header` bars above `<table>`.
+- **Unified Top Section**: Every table page renders `.standard-page-top-section` containing:
+  1. **Header Banner (`.standard-page-header`, fixed `48px` height)**: Page Icon + Title on the right, and `headerActions` on the left (`margin-bottom: 8px; padding-bottom: 6px`).
+  2. **Unified 2-Row Controls Card (`.standard-top-card`, `2 × 52px` `.standard-top-row` rows in `index.css`)**:
+     - **Row 1 (`.standard-top-row-1`, `52px`)**: Primary filters, tabs, and live search controls.
+     - **Row 2 (`.standard-top-row-2`, `52px`)**: Inline add forms (`Expenses`, `Dimensions`), secondary filters, and status/reset controls.
+- **React Portal Slots (`useStandardTableSlots`)**: Composite child components (`InventoryTab.jsx`, `SalespersonsTab.jsx`, `SuppliersTab.jsx`, and `ReportTable.jsx`) portal their `row1Extra` and `row2` controls directly into `.standard-top-card` without rendering extra accordions, filter cards, or `.card-header` bars above the table card.
 - **No Footer Wrapper**: Table pages use a top wrapper only and never render a sticky bottom footer wrapper.
-- **Scope Boundary**: Data-entry and specialized screens (`POS.jsx`, `PurchaseEntry.jsx`, `ReturnReceipt.jsx`, `ProductLedger.jsx`) retain their dedicated custom layouts.
+- **Scope Boundary**: Data-entry and specialized screens (`POS.jsx`, `PurchaseEntry.jsx`, `ReturnReceipt.jsx`, `ProductLedger.jsx`) retain their dedicated custom layouts (standalone sticky tables outside `.report-table-container`, e.g., `ProductLedger.jsx` and `SubscriptionTab.jsx`, use `:not(.report-table-container) > .table-sticky-header th` at `top: var(--navbar-height, 56px)`).
 
-### 4.2 Window-Level Sticky Table Headers (`top: var(--navbar-height, 56px)`)
-- **Natural Top Section Scroll**: When scrolling down the page, the entire `.standard-page-top-section` (Title + Row 1 + Row 2) scrolls away naturally with the window to maximize vertical screen space for table rows.
-- **Sticky `<thead><th>` Only**: Only the table header (`<thead><th>`) sticks directly beneath the 56px Navbar (`position: sticky !important; top: var(--navbar-height, 56px) !important; z-index: 1010;`). For 2-level grouped report headers (`SalespersonPerformanceReport.jsx`), `.report-sticky-header tr.level-2 th` sticks at `calc(var(--navbar-height, 56px) + 37px)`.
-- **CSS Overflow Rule (Crucial)**: `.standard-page-table-area .table-responsive` and `.report-table-container` enforce `overflow: visible !important; max-height: none !important;` so Bootstrap's `.table-responsive` (`overflow-x: auto`) never creates a nested scroll container that traps `position: sticky`.
+### 4.2 2-Scroll Architecture & Sticky Headers (`useSmartScroll.js`)
+- **Scroll #1 (Window Scroll)**: As the user scrolls down, `.standard-page-top-section` (Header + 2-row `.standard-top-card`) scrolls out of view naturally until `.sticky-toolbar` (`48px` height, `position: sticky !important; top: var(--navbar-height, 56px) !important; z-index: 1020;`) meets the bottom edge of the fixed `Navbar`.
+- **Scroll #2 (Bounded `.report-table-container` Internal Scroll)**:
+  - `useSmartScroll.js` observes `header.navbar`, `.card`, `.sticky-toolbar`, `.sticky-selection-strip`, `.report-table-container`, and `<table>` via `ResizeObserver` (plus `resize`, `app-zoom-changed`, and `scroll` events) to dynamically set:
+    `maxHeight = max(200px, calc((100vh / currentZoom) - offset))` (CSS fallback `calc((100vh / var(--app-zoom, 1)) - 114px)`).
+  - Horizontal scroll (`overflow-x: auto`) is **always enabled** for wide matrices. Vertical scroll (`overflow-y`) toggles cleanly between `hidden` and `auto` when `.sticky-toolbar` touches the Navbar (`triggerTop <= navbarBottom + 4`) or the window reaches bottom.
+- **Container-Relative Sticky `<thead>`**: Inside `.report-table-container`, `thead th` / `.report-sticky-header th` stick at `top: 0 !important` (`z-index: 1010`). For 2-level grouped headers (`SalespersonPerformanceReport.jsx`), `.report-sticky-header.level-2 th` sticks at `top: var(--header-row-1-height, 37px) !important` (`z-index: 1009`) measured dynamically via `ResizeObserver`.
+- **6px Thin Scrollbars**: `index.css` and `ReportTable.css` enforce `scrollbar-width: thin` and `6px` (`width: 6px; height: 6px;`) custom WebKit scrollbars (`#c1c1c1` thumb on `#f1f1f1` track, `#94a3b8` hover) across `.report-table-container`, `.table-responsive`, `.hide-vertical-scroll`, and modals.
 
 ### 4.3 Sorting, Column Summaries & Keyboard Interaction Rules
 1. **Direct Header Click-to-Sort**: Clicking any sortable column header (`<th>`) immediately toggles primary sorting (`asc` $\rightarrow$ `desc` $\rightarrow$ default) with visible directional indicator arrows (`↑` / `↓`). The multi-rule `"ترتيب حسب"` dropdown is retained for composite multi-column sorting and must dismiss automatically upon outside click or `Escape`.
@@ -107,14 +122,24 @@ Unified Table Page Architecture (StandardTablePageLayout.jsx)
 
 ---
 
-## 5. Audited Report Specifications (9 Reports)
+## 5. Audited Report Specifications (10 Reports)
 
-The following specifications are verified against the active source implementations in `VentaPOS_NextGen/frontend/src/pages/reports/*.jsx`. All Arabic headers, keys, subfilters, and KPIs are exact.
+The following specifications are verified against the active source implementations in `VentaPOS_NextGen/frontend/src/pages/reports/*.jsx` (10 reports hosted inside `ReportsLayout.jsx`, plus the standalone `ProductLedger.jsx` lifecycle view documented in §5.9). All Arabic headers, keys, subfilters, and KPIs are exact.
+
+> [!NOTE]
+> **Report Printing Behavior (`ReportsLayout` Top Bar vs `ReportTable` Toolbar)**:
+> - **Standard `ReportTable` Reports**: `ReportTable.jsx` renders a `"طباعة"` button inside `.sticky-toolbar` and registers a default handler with `ReportsLayout.jsx` (`registerPrintHandler`) so both the top-bar `"طباعة التقرير"` button and toolbar `"طباعة"` button open `PrintModal.jsx` (printer selection, immediate print, or PDF preview via `POST /api/v1/reports/desktop_print/`).
+> - **Direct PDF Preview Exception (`PurchasesReport.jsx` & `AreasReport.jsx`)**: Both register a custom `registerPrintHandler` that calls `POST /api/v1/reports/desktop_print/` directly with `action: 'view'` on the top-bar `"طباعة التقرير"` click (opening instant PDF preview without `PrintModal`), while their `.sticky-toolbar` `"طباعة"` button inside `ReportTable` still opens `PrintModal.jsx` for printer selection or PDF preview.
 
 ---
 
 ### 5.1 لوحة التحكم / الملخص (`DashboardReport.jsx`)
-Features a 2-card financial breakdown with drill-down links to detailed reports.
+Features a 2-card financial breakdown with drill-down links to detailed reports and live branch filters.
+
+#### Subfilters
+- **المندوب**: `ReportAutocomplete` searchable dropdown.
+- **المنطقة**: `ReportAutocomplete` backed by `/customer-suggestions/?field=area`.
+- **إلغاء الفلاتر**: Quick reset button (visible when salesperson or area filter is active).
 
 #### Card 1: تفاصيل المكسب (P&L Breakdown)
 - **إجمالي المبيعات** (`kpis.total_revenue`) $\rightarrow$ Click navigates to `/reports/receipts`
@@ -126,13 +151,15 @@ Features a 2-card financial breakdown with drill-down links to detailed reports.
 - **صافي المكسب** (`kpis.estimated_net_profit`)
 
 #### Card 2: تفاصيل السيولة (Cash Drawer Breakdown)
-- **(+) مبيعات كاش** (`cashSummary.cash_sales_inflow`)
-- **(+) المقدمات** (`cashSummary.down_payment_inflow`)
-- **(+) التحصيل** (`cashSummary.collection_inflow`)
+- **(+) مبيعات كاش** (`cashSummary.cash_sales_inflow`) $\rightarrow$ Click navigates to `/reports/receipts?${dateParams}&is_cash_sale=true`
+- **(+) المقدمات** (`cashSummary.down_payment_inflow`) $\rightarrow$ Click navigates to `/reports/receipts?${dateParams}&has_down_payment=true`
+- **(+) التحصيل** (`cashSummary.collection_inflow`) $\rightarrow$ Click navigates to `/reports/installments?${dateParams}`
+- **(+) مرتجع مشتريات** (`cashSummary.purchase_returns_total`) $\rightarrow$ Click navigates to `/reports/purchases?${dateParams}&invoice_type=RETURN`
 - **(=) إجمالي الوارد** (`cashSummary.total_cash_inflow`)
-- **(-) إجمالي المشتريات** (`cashSummary.total_purchases`) $\rightarrow$ Click navigates to `/reports/purchases`
-- **(-) إجمالي المرتبات** (`cashSummary.auto_salaries`) $\rightarrow$ Click navigates to `/reports/salesperson`
-- **(-) إجمالي المصروفات** (`cashSummary.operating_expenses`) $\rightarrow$ Click navigates to `/reports/expenses`
+- **(-) إجمالي المشتريات** (`cashSummary.total_purchases`) $\rightarrow$ Click navigates to `/reports/purchases?${dateParams}&invoice_type=PURCHASE`
+- **(-) مرتجع مبيعات** (`cashSummary.sales_returns_cash`) $\rightarrow$ Click navigates to `/reports/receipts?${dateParams}&receipt_type=RETURN`
+- **(-) إجمالي المرتبات** (`cashSummary.auto_salaries`) $\rightarrow$ Click navigates to `/reports/salesperson?${dateParams}`
+- **(-) إجمالي المصروفات** (`cashSummary.operating_expenses`) $\rightarrow$ Click navigates to `/reports/expenses?${dateParams}`
 - **(=) إجمالي الصادر** (`totalOutgoing`)
 - **صافي السيولة** (`cashSummary.net_cash_in_hand`)
 
@@ -150,12 +177,8 @@ Features a 2-card financial breakdown with drill-down links to detailed reports.
 7. **تاريخ البيع** (`sale_date`): Original sale date in `YYYY/MM` format.
 
 #### Subfilters
-- **المندوب**: Autocomplete searchable dropdown.
-- **من تاريخ بيع**: Dual numeric inputs (`month`, `year`).
-- **إلى تاريخ بيع**: Dual numeric inputs (`month`, `year`).
-- **اسم العميل**: Text input.
-- **رقم الموبايل**: Numeric text input.
-- **المنطقة**: Text input.
+- **Row 1**: **المندوب** (`ReportAutocomplete`), **العميل** (`DebouncedInput`), **المنطقة** (`ReportAutocomplete` backed by `/customer-suggestions/?field=area`).
+- **Row 2**: **الموبايل** (`DebouncedInput`), **إعادة ضبط** button. *(Reconciliation Note: Earlier spec listed `من تاريخ بيع` / `إلى تاريخ بيع` and plain-text `المنطقة`; current `InstallmentsReport.jsx` filters the selected payment month/year from `ReportsLayout` and uses `ReportAutocomplete` for `المنطقة`.)*
 
 #### Summary KPIs (3 Cards)
 - **تاريخ الدفع**: Active payment month/year.
@@ -200,6 +223,7 @@ Features a 2-card financial breakdown with drill-down links to detailed reports.
 - **الصنف**: Product autocomplete dropdown.
 - **نوع البيع**: Select (`الكل`, `كاش فقط`, `قسط فقط`).
 - **المندوب**: Salesperson autocomplete dropdown.
+- **المنطقة**: Area `ReportAutocomplete` (`/customer-suggestions/?field=area`).
 
 #### Summary KPIs (7 Cards)
 - **المبيعات**: Gross revenue sum.
@@ -227,6 +251,7 @@ Features a 2-card financial breakdown with drill-down links to detailed reports.
 - **الصنف**: Product autocomplete dropdown.
 - **نوع البيع**: Select (`الكل`, `كاش فقط`, `قسط فقط`).
 - **المندوب**: Salesperson autocomplete dropdown.
+- **المنطقة**: Area `ReportAutocomplete` (`/customer-suggestions/?field=area`).
 
 #### Summary KPIs
 - **None**: Strictly 0 summary cards by design.
@@ -250,6 +275,7 @@ Features a 2-card financial breakdown with drill-down links to detailed reports.
 #### Subfilters
 - **الصنف**: Product autocomplete dropdown.
 - **المندوب**: Salesperson autocomplete dropdown.
+- **المنطقة**: Area `ReportAutocomplete` (`/customer-suggestions/?field=area`).
 
 #### Summary KPIs (8 Cards)
 - **رصيد أول**: Total opening units across branch.
@@ -276,6 +302,7 @@ Features a 2-card financial breakdown with drill-down links to detailed reports.
 
 #### Subfilters
 - **المندوب**: Autocomplete searchable dropdown.
+- **المنطقة**: Area `ReportAutocomplete` (`/customer-suggestions/?field=area`).
 
 #### Summary KPIs (7 Cards)
 1. **إجمالي الفواتير**: Total receipts generated by sales force.
@@ -306,7 +333,7 @@ Features a 2-card financial breakdown with drill-down links to detailed reports.
 - **إلى**: Ending receipt number.
 - **الموبايل**: Customer phone search.
 - **العميل**: Customer name search.
-- **المنطقة**: Area text filter.
+- **المنطقة**: Area `ReportAutocomplete` (`/customer-suggestions/?field=area`).
 
 #### Summary KPIs (5 Cards)
 1. **التاريخ**: Active month/year in `YYYY/MM` format.
@@ -351,28 +378,67 @@ Features complete chronological lifecycle tracking from product creation (`INITI
 
 ---
 
-### 5.10 تقرير المشتريات (`PurchasesReport.jsx`)
+### 5.10 تقرير المشتريات والموردين (`PurchasesReport.jsx`, `/reports/purchases`)
 
-#### Columns (7 Columns)
-1. **رقم الفاتورة** (`invoice_number`): Sequential invoice ID with drilldown link to `/purchases/edit/{id}`.
-2. **النوع** (`invoice_type`): Badge (`فاتورة شراء` vs `مرتجع شراء`).
-3. **المورد** (`supplier_name`): Supplier name.
-4. **الأصناف** (`items_summary`): Summary string of purchased/returned items (`اسم الصنف × الكمية`).
-5. **إجمالي القطع** (`total_quantity`): Total units on invoice.
-6. **التاريخ** (`invoice_date`): Business period in `YYYY/MM` format.
-7. **الإجمالي** (`total_amount`): Total monetary value of the purchase/return invoice.
+> [!NOTE]
+> **Reconciliation Flag**: Earlier spec versions documented a 7-column invoice-level layout. The live implementation in `PurchasesReport.jsx` renders an **11-column `(Product, Supplier)` aggregated matrix** from `res.data.items` (`GET /api/v1/reports/purchases/`).
+
+#### Columns (11 Columns — `(Product, Supplier)` Matrix)
+1. **#** (`index`): Sequential row index.
+2. **اسم الصنف** (`item_name`): Product trade name.
+3. **اسم المورد** (`supplier_name`): Supplier name (`مورد عام` fallback).
+4. **الفواتير** (`invoices_count`): Distinct purchase/return invoice count for the `(Product, Supplier)` pair.
+5. **كمية الشراء** (`purchased_qty`): Purchased units (`PURCHASE`).
+6. **كمية المرتجع** (`returned_qty`): Returned units (`RETURN`).
+7. **صافي الكمية** (`net_qty`): Net purchased units (`purchased_qty - returned_qty`).
+8. **متوسط السعر (ج.م)** (`avg_unit_cost`): Weighted average unit purchase cost.
+9. **إجمالي الشراء (ج.م)** (`gross_purchases`): Gross purchase monetary amount.
+10. **إجمالي المرتجع (ج.م)** (`returns_amount`): Gross purchase return monetary amount.
+11. **صافي المشتريات (ج.م)** (`net_purchases`): Net purchase monetary amount (`gross_purchases - returns_amount`).
 
 #### Subfilters
-- **النوع**: Select (`الكل`, `فواتير شراء فقط`, `مرتجع مشتريات فقط`).
-- **المورد**: Supplier autocomplete dropdown.
-- **الصنف**: Product autocomplete dropdown.
-- **من فاتورة**: Starting invoice number.
-- **إلى**: Ending invoice number.
+- **Row 1**: **المورد** (`ReportAutocomplete`), **الصنف** (`ReportAutocomplete`), **النوع** (`Select`: `الكل`, `شراء فقط`, `مرتجع فقط`).
+- **Row 2**: Quick client-side search (`بحث سريع باسم الصنف أو المورد...` via `DebouncedInput`), **تحديث** button, **إعادة ضبط** button.
 
 #### Summary KPIs (6 Cards)
-1. **التاريخ**: Active month/year in `YYYY/MM` format.
-2. **عدد الفواتير**: Total purchase/return invoices matching filters.
-3. **إجمالي المشتريات**: Gross purchase amount (`PURCHASE`).
-4. **إجمالي مرتجع المشتريات**: Total purchase return amount (`RETURN`).
-5. **صافي المشتريات**: Net purchases (`PURCHASE - RETURN`).
-6. **إجمالي القطع**: Total net purchased units.
+1. **صافي المشتريات**: Net purchases (`summary.total_purchases_amount`, `PURCHASE - RETURN`).
+2. **إجمالي الشراء**: Gross purchase amount (`summary.gross_purchases_amount`).
+3. **إجمالي المرتجع**: Total purchase return amount (`summary.total_returns_amount`).
+4. **صافي القطع المشتراة**: Total net purchased units (`summary.total_items_quantity`).
+5. **عدد الأصناف**: Distinct purchased products count (`summary.distinct_products_count`).
+6. **عدد الموردين**: Distinct suppliers count (`summary.suppliers_count`).
+
+#### Printing
+- Top-bar `"طباعة التقرير"` button invokes `registerPrintHandler` $\rightarrow$ `POST /api/v1/reports/desktop_print/` directly with `action: 'view'` (instant PDF preview); `ReportTable` toolbar `"طباعة"` button opens `PrintModal.jsx`.
+
+---
+
+### 5.11 تقرير المناطق والتحصيل الجغرافي (`AreasReport.jsx`, `/reports/areas`)
+
+#### Columns (11 Columns)
+1. **#** (`index`): Sequential row index.
+2. **المنطقة** (`area`): Customer geographic zone (`غير محدد` fallback).
+3. **الفواتير** (`invoices_count`): Total sales invoice count.
+4. **مبيعات نقدي (ج.م)** (`cash_sales`): Cash sales volume.
+5. **مبيعات تقسيط (ج.م)** (`installment_sales`): Installment sales volume.
+6. **إجمالي المبيعات (ج.م)** (`gross_sales`): Gross sales volume.
+7. **المقدمات (ج.م)** (`down_payments`): Total down payments collected.
+8. **الأقساط المستحقة (ج.م)** (`due_installments_month`): Monthly installment dues in the active period.
+9. **المرتجعات (ج.م)** (`returns_amount`): Total sales returns amount.
+10. **صافي المبيعات (ج.م)** (`net_sales`): Net sales (`gross_sales - returns_amount`).
+11. **المناديب النشطين** (`salespersons_display`): Active salespersons operating in the area.
+
+#### Subfilters
+- **Row 1**: **المندوب** (`ReportAutocomplete`), **المنطقة** (`ReportAutocomplete` backed by `/customer-suggestions/?field=area`).
+- **Row 2**: Quick client-side search (`بحث سريع باسم المنطقة أو المندوب...` via `DebouncedInput`), **تحديث** button, **إعادة ضبط** button.
+
+#### Summary KPIs (6 Cards)
+1. **إجمالي المبيعات** (`summary.total_sales`)
+2. **صافي المبيعات** (`summary.net_sales`)
+3. **إجمالي المقدمات** (`summary.total_down_payments`)
+4. **الأقساط المستحقة بالشهر** (`summary.total_due_installments`)
+5. **إجمالي المرتجعات** (`summary.total_returns_amount`)
+6. **عدد المناطق النشطة** (`summary.areas_count`)
+
+#### Printing
+- Top-bar `"طباعة التقرير"` button invokes `registerPrintHandler` $\rightarrow$ `POST /api/v1/reports/desktop_print/` directly with `action: 'view'` (instant PDF preview); `ReportTable` toolbar `"طباعة"` button opens `PrintModal.jsx`.

@@ -1,5 +1,6 @@
 # VentaPOS NextGen — Requirements & Data Specifications
 
+> **Supreme SSoT**: [`../APP_BIBLE.md`](../APP_BIBLE.md) · **Governance Rules**: [`../.agents/rules/rules.md`](../.agents/rules/rules.md)  
 > **Scope**: VentaPOS NextGen Core Domain Specification  
 > **Target Audience**: Back-Office Desk Management for Business Owner (المدير / صاحب المحل)  
 > **Platform**: Django REST Framework + React 19 + PyWebView Standalone Windows Desktop  
@@ -21,19 +22,19 @@ VentaPOS NextGen is a specialized commercial desktop management system tailored 
 
 ## 2. Active SQLite Data Models (16 Models)
 
-All models are defined in `VentaPOS_NextGen/backend/api/models.py`. Standard integer primary keys (`AutoField`/`BigAutoField`) are used. All domain entities utilize soft-deletion via `is_deleted = models.BooleanField(default=False)` and an `ActiveManager`. Note: `MonthlyInventorySnapshot` was permanently retired in Pass 2 in favor of live composite-indexed queries, and `PendingExternalReceipt` was replaced by staging directly onto `Receipt(is_confirmed=False)`.
+All models are defined in `VentaPOS_NextGen/backend/api/models.py`. Standard integer primary keys (`AutoField`/`BigAutoField`) are used. All domain entities utilize soft-deletion via `is_deleted = models.BooleanField(default=False)` and an `ActiveManager`. Note: `MonthlyInventorySnapshot` was permanently retired in Pass 2 in favor of live composite-indexed queries, and `PendingExternalReceipt` was replaced by staging directly onto `Receipt(is_confirmed=False)` (`[Dormant / Excluded from Active UI & URLs]` — USB sync endpoints are deactivated in `api/urls.py`).
 
 | # | Model | Arabic Name | Purpose & Key Fields |
 |---|-------|-------------|----------------------|
-| 1 | **`Branch`** | الفرع / المخزن | Branch location. Fields: `name`, `is_deleted`, `created_at`. Related: `inventory_items`, `salespersons`, `receipts`. |
-| 2 | **`Salesperson`** | المندوب | Field salesperson. Fields: `name`, `branch` (FK), `device_token` (UUID), `is_device_active`, `is_deleted`. |
+| 1 | **`Branch`** | الفرع / المخزن | Branch location. Fields: `name`, `is_deleted`, `created_at`. Related: `inventory_items`, `salespersons`, `receipts`, `suppliers`. |
+| 2 | **`Salesperson`** | المندوب | Field salesperson. Fields: `name`, `branch` (FK), `device_token` (UUID, `[Dormant / Excluded from Active UI & URLs]`), `is_device_active` (`[Dormant / Excluded from Active UI & URLs]`), `is_deleted`. |
 | 3 | **`InventoryItem`** | الصنف / البضاعة | Branch-scoped product. Fields: `name`, `branch` (FK), `initial_quantity`, `initial_purchase_price`, `initial_commission_amount`, `initial_month`, `initial_year`. Methods: `get_stock_at_date(m, y)`, `get_safe_available_qty()`, `get_commission_at_date(m, y)`, `get_price_at_date(m, y)`. |
 | 4 | **`CommissionHistory`** | سجل عمولات المناديب | Historical sales commission changes. Fields: `item` (FK), `commission_amount`, `activation_month`, `activation_year`. |
 | 5 | **`InventoryAdjustment`** | التسويات والجرد | Physical inventory adjustments. Fields: `item` (FK), `adjustment_type` (`DEFICIT` / `SURPLUS`), `quantity`, `reason`, `month`, `year`. |
-| 6 | **`Supplier`** | المورد | Wholesale goods supplier. Fields: `name`, `is_deleted`. |
+| 6 | **`Supplier`** | المورد | Branch-scoped wholesale goods supplier. Fields: `name`, `branch` (FK to `Branch`, `on_delete=PROTECT`, `related_name="suppliers"`, `null=True, blank=True`; unique constraint `uq_supplier_name_branch` on `["name", "branch"]`), `is_deleted`, `created_at`. |
 | 7 | **`PurchaseInvoice`** | فاتورة مشتريات / مرتجع | Inbound supplier shipment or return. Fields: `branch` (FK), `supplier` (FK), `invoice_number`, `invoice_type` (`PURCHASE` / `RETURN`), `invoice_month`, `invoice_year`. |
 | 8 | **`PurchaseInvoiceItem`** | بنود فاتورة الشراء | Line item on purchase invoice. Fields: `invoice` (FK), `inventory_item` (FK), `quantity`, `purchase_price`. |
-| 9 | **`Receipt`** | فاتورة المبيعات / المرتجع | Customer sale or return. Fields: `branch` (FK), `salesperson` (FK), `receipt_number`, `client_uuid`, `receipt_hash`, `customer_name`, `phone_number`, `address`, `area`, `total_amount`, `down_payment`, `installment_system`, `sale_year`, `sale_month`, `is_cash_sale`, `receipt_type` (`SALE` / `RETURN`), `parent_receipt` (FK self), `products_text`, `is_confirmed` (USB mobile sync staging; `False` indicates pending approval before stock deduction). |
+| 9 | **`Receipt`** | فاتورة المبيعات / المرتجع | Customer sale or return. Fields: `branch` (FK), `salesperson` (FK), `receipt_number`, `client_uuid`, `receipt_hash`, `customer_name`, `phone_number`, `address`, `area`, `total_amount`, `down_payment`, `installment_system`, `sale_year`, `sale_month`, `is_cash_sale`, `receipt_type` (`SALE` / `RETURN`), `parent_receipt` (FK self), `products_text`, `is_confirmed` (default `True`; USB mobile sync staging where `False` indicates pending approval before stock deduction — `[Dormant / Excluded from Active UI & URLs]`). |
 | 10 | **`SaleItem`** | بنود الفاتورة | Line item on sale or return receipt. Fields: `receipt` (FK), `inventory_item` (FK), `quantity`, `unit_price`. |
 | 11 | **`InstallmentPayment`** | قسط الفاتورة | Scheduled installment payment. Fields: `receipt` (FK), `payment_date` (`YYYY-MM-25`), `amount`. |
 | 12 | **`Expense`** | المصروفات | Operating expenses. Fields: `branch` (FK), `category` (default `"مصروفات عامة"`), `description`, `amount`, `expense_month`, `expense_year`. |
@@ -106,7 +107,9 @@ stateDiagram-v2
 
 1. **Demo Mode**: First run without license starts in Demo Mode. Demonstrates all reports and POS functionality using temporary mock data.
 2. **License Activation**: Accepts an 80-bit encrypted cryptographic code bound to machine hardware hash. Once activated, demo data is wiped, creating an empty database for production setup.
-3. **Password Recovery**: Utilizes a specialized Recovery Code license (`product_id in (15, 16)`) to reset the administrative password without cloud intervention.
+3. **Invoice Top-Up (`product_id = 15`) & Emergency Password Recovery (`product_id = 16`)**:
+   - `product_id = 15` is strictly the **+5,000 invoice balance top-up package** (`TOPUP_MAP[15] = 5000` in `license_views.py`, activated via `POST /api/v1/license/activate/`).
+   - `product_id = 16` (`is_recovery=True`) is strictly the one-time **Emergency Admin Password Recovery** code (accepted exclusively by `POST /api/v1/auth/recover/`, and rejected by `LicenseActivateView`) to reset the administrative password without cloud intervention. *(Reconciliation note: Earlier specs grouped `product_id in (15, 16)` under Password Recovery; `15` and `16` are distinct as documented here.)*
 4. **Print-Only Basic Plan (`product_id in (2, 3)`)**: Restricts the application strictly to Receipt CRUD & Printing (`POS.jsx` using free-text `products_text` + manual total amount, `SearchReceipts.jsx`, printing installment schedules, basic branch/salesperson setup, Backup/Restore, and Settings). Blocks all inventory, purchases, expenses, and analytical reports.
 
 ---
@@ -154,12 +157,13 @@ stateDiagram-v2
 - `/api/v1/default-date/?branch_id={b}`: Returns highest chronological `(year, month)` active in branch.
 
 ### Analytics & Reports
-- `GET /api/v1/reports/dashboard/summary/?branch_id={b}&month={m}&year={y}`: Dashboard summary cards and Cash Drawer breakdown.
-- `GET /api/v1/reports/salesperson-performance/?branch_id={b}&month={m}&year={y}`: Salesperson commission, collections, and salaries.
+- `GET /api/v1/reports/dashboard/summary/?branch_id={b}&month={m}&year={y}` (alias `GET /api/v1/reports/dashboard/`): Dashboard summary cards and Cash Drawer breakdown.
+- `GET /api/v1/reports/salesperson-performance/?branch_id={b}&month={m}&year={y}` (alias `GET /api/v1/reports/salespersons/`): Salesperson commission, collections, and salaries.
 - `GET /api/v1/reports/inventory-movement/?branch_id={b}&month={m}&year={y}`: 10-column stock ledger and valuation summary.
-- `GET /api/v1/reports/profit-and-loss/?branch_id={b}&month={m}&year={y}`: Revenue, COGS, commissions, and net profit per item.
-- `GET /api/v1/reports/purchases/?branch_id={b}&month={m}&year={y}`: Supplier purchases and purchase returns report.
-- `GET /api/v1/reports/cash-drawer-details/?branch_id={b}&month={m}&year={y}`: Daily cash breakdown.
+- `GET /api/v1/reports/profit-and-loss/?branch_id={b}&month={m}&year={y}` (alias `GET /api/v1/reports/sales-pl/`): Revenue, COGS, commissions, and net profit per item.
+- `GET /api/v1/reports/purchases/?branch_id={b}&month={m}&year={y}`: Supplier purchases and purchase returns matrix & invoice summary report.
+- `GET /api/v1/reports/areas/?branch_id={b}&month={m}&year={y}`: Geographic zones & monthly due installments analytical report.
+- `GET /api/v1/reports/cash-drawer-details/?branch_id={b}&month={m}&year={y}` (alias `GET /api/v1/reports/cash-drawer/`): Daily cash breakdown.
 - `GET /api/v1/reports/installments/?branch_id={b}&month={m}&year={y}`: Monthly installment collections schedule and phone directory.
 - `POST /api/v1/reports/desktop_print/`: Desktop printing / PDF export of any report table and KPI summary cards (`pdf_report_content.html`).
 - `/api/v1/expenses/`: Operating branch expenditures (with `category` support).

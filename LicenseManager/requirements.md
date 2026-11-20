@@ -1,5 +1,6 @@
 # VentaPOS License Manager — Architecture & Functional Requirements Specification
 
+> **Supreme SSoT**: [`../APP_BIBLE.md`](../APP_BIBLE.md) · **Governance Rules**: [`../.agents/rules/rules.md`](../.agents/rules/rules.md)  
 > **Single Source of Truth (SSoT)** for the VentaPOS License Generation & Client Management Subsystem.  
 > **Target Version**: 1.0.0 (Synchronized with VentaPOS NextGen Core)  
 > **Compatibility**: Fully compatible with `VentaPOS_NextGen.api.utils.license_validator.LicenseValidator`
@@ -11,9 +12,9 @@
 `LicenseManager` is an internal, vendor-facing back-office Django application used exclusively by the software owner / administrator to issue, track, and manage cryptographic activation and password recovery keys for client installations of **VentaPOS NextGen**.
 
 ### Core Responsibilities
-1. **Client Registry**: Maintains a historical database of client stores, customer contact details, assigned hardware machine IDs, and blacklist status.
-2. **Offline Key Synthesis**: Generates cryptographically secure, compact 80-bit activation codes (`XXXX-XXXX-XXXX-XXXX`) without requiring an active internet connection on either the client machine or the license generator.
-3. **Emergency Password Recovery**: Generates one-time emergency master unlock codes (`product_id=15` / `16`) allowing clients locked out of their desktop installations to reset the admin password.
+1. **Client Registry & Fail-Closed Online Marketeer Auth**: Maintains a local SQLite registry (`%APPDATA%\VentaPOS_LicenseManager\db.sqlite3` when frozen) of client stores, customer contact details, assigned hardware machine IDs, and blacklist status. Operator login (`login_view`) enforces **fail-closed online authentication** via Supabase RPC `verify_marketeer_login` against `public.marketeer_users` (`SECURITY DEFINER`, `pgcrypto`); offline login is blocked.
+2. **80-Bit Key Synthesis & Mandatory Fail-Closed Cloud Audit**: Generates cryptographically verifiable 80-bit activation codes (`XXXX-XXXX-XXXX-XXXX`) that **client desktops (`VentaPOS_NextGen`) can validate offline**, while **`LicenseManager` itself enforces fail-closed online append-only cloud logging** (`POST /rest/v1/licenses` on Supabase `public.licenses`, protected by RLS + `trg_prevent_license_tamper` blocking `UPDATE`/`DELETE`) before committing any key to local SQLite. Offline key generation is strictly blocked. *(Reconciliation note: Prior specs claimed offline generation on both sides; `LicenseManager` requires active internet and valid `SUPABASE_URL`/`SUPABASE_KEY`.)*
+3. **Emergency Password Recovery**: Generates one-time emergency master unlock codes (`product_id = 16`, `is_recovery=True`) allowing clients locked out of their desktop installations to reset the admin password via `/api/v1/auth/recover/`.
 4. **WhatsApp Communication Dispatch**: Prepares instant, localized Arabic WhatsApp fulfillment messages containing customer credentials, package details, expiration dates, and activation keys.
 
 ---
@@ -85,32 +86,34 @@ $$\text{Bit 79} \dots \text{Bit 44} \quad (36 \text{ bits}) \quad \mid \quad \te
 
 ### 3.1 Business Quota Constants
 - **Standard Sales Volume Rate**: **400 invoices / month**
-- **Free Trial Package**: **800 invoices total (60 Days / 2 Months)**
-- **Annual Standard Package**: **5,000 invoices / year (allows 12 business months)**
+- **Free Trial Package (`product_id = 1`)**: **800 invoices total (60 Days / 2 Months)**
+- **Annual Standard Package (`product_id = 2` & `4`)**: **4,800 invoices / year** (`400/month × 12 months`; reconciled from earlier `5,000` draft estimate)
+- **Multi-Year Packages**: `product_id = 5` (3 Years) = **14,400** (`400 × 36`); `product_id = 6` (5 Years) = **24,000** (`400 × 60`)
+- **Lifetime Packages (`product_id = 3` & `7`)**: **999,999 invoices** (99 years)
 
 ### 3.2 Product ID Mapping Table
 
 | `product_id` | `prod_int` | Arabic Plan Name | Duration | Invoice Quota | Purpose in VentaPOS NextGen |
 | :---: | :---: | :--- | :---: | :---: | :--- |
 | **`1`** | `0` | تجربة مجانية (Trial 60 Days) | 60 Days (2 Months) | **800** | Initial customer trial before purchasing. |
-| **`2`** | `1` | طباعة فقط - سنة واحدة | 1 Year | 5,000 | Restricted mode (print & search only). |
-| **`3`** | `2` | طباعة فقط - مدى الحياة | Lifetime | Unlimited | Legacy perpetual print license. |
-| **`4`** | `3` | إدارة كاملة - سنة واحدة | 1 Year (12 Business Months) | **5,000** | **Flagship Standard Production License**. |
-| **`5`** | `4` | إدارة كاملة - 3 سنوات | 3 Years | 15,000 | Multi-year bundle. |
-| **`6`** | `5` | إدارة كاملة - 5 سنوات | 5 Years | 25,000 | Multi-year enterprise bundle. |
-| **`7`** | `6` | إدارة كاملة - مدى الحياة (VIP) | Lifetime | Unlimited | VIP unlimited license. |
-| **`8`** | `7` | إضافة الأونلاين - سنة | 1 Year | — | Cloud sync add-on (deprecated in offline SSoT). |
-| **`9`** | `8` | إضافة الأونلاين - 5 سنوات | 5 Years | — | Cloud sync add-on (deprecated in offline SSoT). |
-| **`10`** | `9` | كود شحن (100 فاتورة) | None (Balance Top-up) | 100 | Top-up invoice refill code. |
-| **`11`** | `10` | كود شحن (300 فاتورة) | None (Balance Top-up) | 300 | Top-up invoice refill code. |
-| **`12`** | `11` | كود شحن (500 فاتورة) | None (Balance Top-up) | 500 | Top-up invoice refill code. |
-| **`13`** | `12` | كود شحن (1,000 فاتورة) | None (Balance Top-up) | 1,000 | Top-up invoice refill code. |
-| **`14`** | `13` | كود شحن (3,000 فاتورة) | None (Balance Top-up) | 3,000 | Top-up invoice refill code. |
-| **`15`** | `14` | كود شحن (5,000 فاتورة) | None (Balance Top-up) | 5,000 | Top-up invoice refill code / High-capacity reload. |
-| **`16`** | `15` | كود الطوارئ (استعادة وضبط) | One-Time Use | — | **Emergency Admin Password Reset Code**. |
+| **`2`** | `1` | طباعة فقط - سنة واحدة | 1 Year (12 Months) | **4,800** | Print-Only Basic Mode (receipt CRUD & printing only). |
+| **`3`** | `2` | طباعة فقط - مدى الحياة | Lifetime (99 Years) | **999,999** | Print-Only Basic Mode lifetime license. |
+| **`4`** | `3` | إدارة كاملة - سنة واحدة | 1 Year (12 Months) | **4,800** | **Flagship Standard Production License**. |
+| **`5`** | `4` | إدارة كاملة - 3 سنوات | 3 Years (36 Months) | **14,400** | Multi-year full management bundle. |
+| **`6`** | `5` | إدارة كاملة - 5 سنوات | 5 Years (60 Months) | **24,000** | Multi-year enterprise full management bundle. |
+| **`7`** | `6` | إدارة كاملة - مدى الحياة (VIP) | Lifetime (99 Years) | **999,999** | VIP unlimited full management license. |
+| **`8`** | `7` | إضافة الأونلاين - سنة | 1 Year | — | Cloud sync add-on (deprecated; hidden in `LicenseForm`). |
+| **`9`** | `8` | إضافة الأونلاين - 5 سنوات | 5 Years | — | Cloud sync add-on (deprecated; hidden in `LicenseForm`). |
+| **`10`** | `9` | كود شحن (100 فاتورة) | None (Balance Top-up) | **100** | Top-up invoice refill code (`TOPUP_MAP[10]`). |
+| **`11`** | `10` | كود شحن (300 فاتورة) | None (Balance Top-up) | **300** | Top-up invoice refill code (`TOPUP_MAP[11]`). |
+| **`12`** | `11` | كود شحن (500 فاتورة) | None (Balance Top-up) | **500** | Top-up invoice refill code (`TOPUP_MAP[12]`). |
+| **`13`** | `12` | كود شحن (1,000 فاتورة) | None (Balance Top-up) | **1,000** | Top-up invoice refill code (`TOPUP_MAP[13]`). |
+| **`14`** | `13` | كود شحن (3,000 فاتورة) | None (Balance Top-up) | **3,000** | Top-up invoice refill code (`TOPUP_MAP[14]`). |
+| **`15`** | `14` | كود شحن (5,000 فاتورة) | None (Balance Top-up) | **5,000** | Top-up invoice refill code (`TOPUP_MAP[15]`, **not** recovery). |
+| **`16`** | `15` | كود استعادة كلمة المرور للمدير (طوارئ) | One-Time Use | — | **Emergency Admin Password Reset Code** (`is_recovery=True`). |
 
 > [!NOTE]
-> In `VentaPOS_NextGen/backend/api/views/auth_views.py` and `license_views.py`, codes with `product_id in (15, 16)` or `is_recovery=True` are recognized as Emergency Password Recovery codes. In `LicenseManager`, `product_id=16` is designated as the emergency reset package.
+> **Reconciliation Note (`product_id` 15 vs 16 & Quotas)**: In `VentaPOS_NextGen/backend/api/views/license_views.py` and `auth_views.py`, **`product_id = 15`** is strictly the `+5,000` invoice top-up package (`TOPUP_MAP[15] = 5000`), while **`product_id = 16`** (`is_recovery=True`) is strictly the one-time Emergency Admin Password Recovery code (rejected by `LicenseActivateView` and handled exclusively by `PasswordRecoveryView`). Earlier draft docs incorrectly wrote `product_id in (15, 16)` for recovery and rounded annual/multi-year quotas to `5,000` / `15,000` / `25,000` / `Unlimited`; actual `LicenseActivateView` grants `800`, `4,800`, `14,400`, `24,000`, and `999,999`.
 
 ---
 
