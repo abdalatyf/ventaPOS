@@ -1,101 +1,52 @@
 import os
-import sys
-import subprocess
 import shutil
-import PyInstaller.__main__
+import subprocess
+import sys
 from pathlib import Path
+import PyInstaller.__main__
 
-def build_frontend(base_dir):
-    frontend_dir = os.path.join(base_dir, 'frontend')
+
+def build_frontend(base_dir: Path):
+    frontend_dir = base_dir / 'frontend'
     print(f"Building frontend in {frontend_dir}...")
-    
+
     npm_cmd = 'npm.cmd' if os.name == 'nt' else 'npm'
-    
+
     try:
-        result = subprocess.run([npm_cmd, 'run', 'build'], cwd=frontend_dir, check=True, text=True)
+        subprocess.run([npm_cmd, 'run', 'build'], cwd=str(frontend_dir), check=True, text=True)
         print("Frontend build completed successfully.")
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         print("Error building frontend! Aborting executable build.")
         sys.exit(1)
 
+
 def build():
     base_dir = Path(__file__).resolve().parent
-    
+
     # Step 1: Build the frontend
     build_frontend(base_dir)
 
-    # Step 2: Clean old build
-    dist_dir = base_dir / 'dist'
-    if dist_dir.exists():
-        print("Cleaning old dist directory...")
-        shutil.rmtree(dist_dir, ignore_errors=True)
+    # Step 2: Clean old dist and build directories
+    for folder_name in ('dist', 'build'):
+        target_dir = base_dir / folder_name
+        if target_dir.exists():
+            print(f"Cleaning old {folder_name} directory...")
+            shutil.rmtree(target_dir, ignore_errors=True)
 
     backend_dir = base_dir / 'backend'
-    launcher_script = base_dir / 'launcher.py'
-    
-    # Expose settings to PyInstaller's Django hook
+    spec_file = base_dir / 'VentaPOS.spec'
+    if not spec_file.exists():
+        print(f"Error: Spec file not found at {spec_file}")
+        sys.exit(1)
+
+    # Expose settings to PyInstaller's Django hook without modifying VentaPOS.spec
     os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
     os.environ['PYTHONPATH'] = str(backend_dir)
     sys.path.insert(0, str(backend_dir))
-    
-    args = [
-        str(launcher_script),
-        '--name=VentaPOS',
-        '--windowed',
-        '--onedir',
-        '--uac-admin',
-        f'--paths={backend_dir}',
-        f'--add-data={backend_dir};backend',
-        f'--add-data={base_dir / "frontend" / "dist"};frontend/dist',
-    ]
 
-    bin_dir = backend_dir / 'bin'
-    if bin_dir.exists():
-        args.append(f'--add-data={bin_dir};bin')
+    print(f"Running PyInstaller against portable spec: {spec_file}")
+    PyInstaller.__main__.run([str(spec_file), '--noconfirm', '--clean'])
 
-    args.extend([
-        '--hidden-import=django',
-        '--hidden-import=django.contrib.admin',
-        '--hidden-import=django.contrib.auth',
-        '--hidden-import=django.contrib.contenttypes',
-        '--hidden-import=django.contrib.sessions',
-        '--hidden-import=django.contrib.messages',
-        '--hidden-import=django.contrib.staticfiles',
-        '--hidden-import=django.middleware.security.SecurityMiddleware',
-        '--hidden-import=django.contrib.sessions.middleware.SessionMiddleware',
-        '--hidden-import=django.middleware.common.CommonMiddleware',
-        '--hidden-import=django.middleware.csrf.CsrfViewMiddleware',
-        '--hidden-import=django.contrib.auth.middleware.AuthenticationMiddleware',
-        '--hidden-import=django.contrib.messages.middleware.MessageMiddleware',
-        '--hidden-import=django.middleware.clickjacking.XFrameOptionsMiddleware',
-        '--hidden-import=rest_framework',
-        '--hidden-import=rest_framework.authtoken',
-        '--hidden-import=rest_framework.authentication',
-        '--hidden-import=rest_framework.parsers',
-        '--hidden-import=rest_framework.renderers',
-        '--hidden-import=rest_framework.negotiation',
-        '--hidden-import=rest_framework.metadata',
-        '--hidden-import=corsheaders',
-        '--hidden-import=corsheaders.middleware',
-        '--hidden-import=whitenoise',
-        '--hidden-import=whitenoise.middleware',
-        '--hidden-import=api',
-        '--hidden-import=api.apps',
-        '--hidden-import=api.urls',
-        '--hidden-import=api.middleware',
-        '--hidden-import=backend.urls',
-        '--collect-submodules=django',
-        '--collect-submodules=rest_framework',
-        '--collect-submodules=corsheaders',
-        '--collect-submodules=whitenoise',
-        '--collect-submodules=api',
-        '--collect-submodules=api.views',
-        '--collect-submodules=api.services',
-        '--collect-submodules=api.utils',
-        '--noconfirm'
-    ])
-
-    PyInstaller.__main__.run(args)
 
 if __name__ == '__main__':
     build()

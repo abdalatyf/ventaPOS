@@ -65,7 +65,7 @@ Both `VentaPOS_NextGen` and `LicenseManager` package a Django backend (plus buil
     ```python
     if getattr(sys, 'frozen', False):
         BUNDLE_DIR = Path(sys._MEIPASS)
-        DB_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'VentaPOSTest'
+        DB_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'VentaPOS'
     else:
         BUNDLE_DIR = Path(__file__).resolve().parent.parent.parent
         DB_DIR = Path(__file__).resolve().parent.parent
@@ -293,9 +293,9 @@ Root **`APP_BIBLE.md`** is the living Single Source of Truth for the entire code
 1. **Read-Only Asset Resolution (`sys.frozen` / `sys._MEIPASS`)**:
    - Every read-only HTML print template, static bundle, executable helper, or asset path MUST resolve through `sys.frozen` / `sys._MEIPASS` (`BUNDLE_DIR` in `VentaPOS_NextGen`, `BASE_DIR` in `LicenseManager`) rather than assuming source-tree relative paths.
 2. **Strict Writable Path Separation (`DB_DIR` / `DATA_DIR`)**:
-   - Writable runtime artifacts — SQLite databases (`db.sqlite3`, `-wal`, `-shm`), hot/auto backups (`backups/`), generated PDFs, logs (`ventapos_system.log`), `restore_pending.bin`, and user config — MUST NEVER be written inside `sys._MEIPASS` or `frontend/dist`. Write exclusively under `%APPDATA%\VentaPOSTest` (`VentaPOS_NextGen`), `%APPDATA%\VentaPOS_LicenseManager` (`LicenseManager`), or OS `tempfile.gettempdir()` for transient scratch files.
-3. **Packaging Manifest Verification (`VentaPOS.spec` & `build_exe.py`)**:
-   - Whenever adding a new Django app, third-party Python package, dynamic import, static folder, template directory, or binary tool (`backend/bin`), inspect and update `hiddenimports` (`collect_submodules(...)`), `datas`, and `binaries` in `VentaPOS_NextGen/VentaPOS.spec`, `VentaPOS_NextGen/build_exe.py`, and `LicenseManager/build_exe.py`.
+   - Writable runtime artifacts — SQLite databases (`db.sqlite3`, `-wal`, `-shm`), hot/auto backups (`backups/`), generated PDFs, logs (`ventapos_system.log`), `restore_pending.bin`, and user config — MUST NEVER be written inside `sys._MEIPASS` or `frontend/dist`. Write exclusively under `%APPDATA%\VentaPOS` (`VentaPOS_NextGen`), `%APPDATA%\VentaPOS_LicenseManager` (`LicenseManager`), or OS `tempfile.gettempdir()` for transient scratch files.
+3. **Packaging Manifest Verification (`VentaPOS.spec`, `VentaPOS_LicenseManager.spec` & `build_exe.py`)**:
+   - Whenever adding a new Django app, third-party Python package, dynamic import, static folder, template directory, or binary tool (`backend/bin`), inspect and update `hiddenimports` (`collect_submodules(...)`), `datas`, and `binaries` in `VentaPOS_NextGen/VentaPOS.spec`, `VentaPOS_NextGen/build_exe.py`, `LicenseManager/VentaPOS_LicenseManager.spec`, and `LicenseManager/build_exe.py`.
    - **Never** package local developer `db.sqlite3`, `backups/`, `*.log`, `venv/`, or test folders into `dist/` or bundled `datas`.
 4. **Mandatory Build Order & Windowed Stubs**:
    - For `VentaPOS_NextGen`, `npm run build` inside `frontend/` (producing `frontend/dist` with Vite `base: '/static/'`) MUST complete and succeed **before** running PyInstaller (`build_exe.py` / `pyinstaller VentaPOS.spec`).

@@ -235,7 +235,7 @@ class Command(BaseCommand):
                     suppliers.append(s)
 
                 today = date.today()
-                start_date = today - relativedelta(months=25)
+                start_date = max(today - relativedelta(months=25), date(2025, 1, 1))
                 current_date = start_date.replace(day=15)
                 
                 inventory_items = []

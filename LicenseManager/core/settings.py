@@ -30,12 +30,9 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 SECRET_KEY = 'django-insecure-pmwa6)4dmwtcdykry@qts9ebq@huw1wzu-^#9o!wei809!b!gk'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = not getattr(sys, 'frozen', False)
 
 ALLOWED_HOSTS = ['*']
-
-# كلمة السر الموحدة لدخول لوحة التحكم (يُشترط ضبط VENTA_LICENSE_MASTER_PASSWORD)
-MASTER_PASSWORD = os.environ.get("VENTA_LICENSE_MASTER_PASSWORD", "")
 
 # Supabase Cloud Logging Configuration (Fail-Closed)
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://tgfhyyfwgcvotxfwbnhd.supabase.co")
@@ -120,7 +117,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Africa/Cairo'
 
 USE_I18N = True
 

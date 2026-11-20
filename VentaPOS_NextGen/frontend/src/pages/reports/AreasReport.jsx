@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
-import { IconMapPin, IconFilter, IconRefresh, IconUser } from '@tabler/icons-react';
+import { IconMapPin, IconFilter, IconRefresh } from '@tabler/icons-react';
 import api from '../../api';
 import { ReportsContext } from './ReportsLayout';
 import ReportTable from '../../components/ReportTable';
@@ -8,7 +8,7 @@ import ReportAutocomplete from '../../components/ReportAutocomplete';
 import { fmtNum } from '../../utils/formatUtils';
 
 export default function AreasReport() {
-  const { year, month, branchId, registerPrintHandler } = useContext(ReportsContext);
+  const { year, month, branchId } = useContext(ReportsContext);
 
   const [areas, setAreas] = useState([]);
   const [summary, setSummary] = useState({
@@ -93,56 +93,10 @@ export default function AreasReport() {
     setSearchQuery('');
   };
 
-  // Register print handler for ReportsLayout print button
-  useEffect(() => {
-    if (!registerPrintHandler) return;
-    registerPrintHandler(() => {
-      api.post('/reports/desktop_print/', {
-        title: 'تقرير المناطق والتحصيل الجغرافي',
-        branch_id: branchId,
-        period_label: year && month ? `${year}/${String(month).padStart(2, '0')}` : undefined,
-        action: 'view',
-        filters_summary: [
-          salespersonName ? { label: 'المندوب', value: salespersonName } : null,
-          areaFilter ? { label: 'المنطقة', value: areaFilter } : null,
-        ].filter(Boolean),
-        kpis: [
-          { label: 'إجمالي المبيعات', value: `${fmtNum(summary.total_sales || 0)} ج.م`, color: 'primary' },
-          { label: 'صافي المبيعات', value: `${fmtNum(summary.net_sales || 0)} ج.م`, color: 'primary' },
-          { label: 'المقدمات', value: `${fmtNum(summary.total_down_payments || 0)} ج.م`, color: 'success' },
-          { label: 'الأقساط المستحقة', value: `${fmtNum(summary.total_due_installments || 0)} ج.م`, color: 'warning' },
-          { label: 'المرتجعات', value: `${fmtNum(summary.total_returns_amount || 0)} ج.م`, color: 'danger' },
-          { label: 'عدد المناطق', value: fmtNum(summary.areas_count || 0), color: 'primary' },
-        ],
-        columns: [
-          { key: 'index', label: 'م', width: '40px', align: 'center' },
-          { key: 'area', label: 'المنطقة', align: 'start' },
-          { key: 'invoices_count', label: 'الفواتير', align: 'center' },
-          { key: 'cash_sales', label: 'مبيعات نقدي', align: 'center' },
-          { key: 'installment_sales', label: 'مبيعات تقسيط', align: 'center' },
-          { key: 'gross_sales', label: 'إجمالي المبيعات', align: 'center' },
-          { key: 'down_payments', label: 'المقدمات', align: 'center' },
-          { key: 'due_installments_month', label: 'الأقساط المستحقة', align: 'center' },
-          { key: 'returns_amount', label: 'المرتجعات', align: 'center' },
-          { key: 'net_sales', label: 'صافي المبيعات', align: 'center' },
-          { key: 'salespersons_display', label: 'المناديب النشطين', align: 'start' },
-        ],
-        rows: filteredAreas.map((r, idx) => ({
-          index: idx + 1,
-          area: r.area,
-          invoices_count: r.invoices_count,
-          cash_sales: fmtNum(r.cash_sales || 0),
-          installment_sales: fmtNum(r.installment_sales || 0),
-          gross_sales: fmtNum(r.gross_sales || 0),
-          down_payments: fmtNum(r.down_payments || 0),
-          due_installments_month: fmtNum(r.due_installments_month || 0),
-          returns_amount: fmtNum(r.returns_amount || 0),
-          net_sales: fmtNum(r.net_sales || 0),
-          salespersons_display: r.salespersons_display,
-        })),
-      }).catch(err => console.error('Error opening report print modal:', err));
-    });
-  }, [registerPrintHandler, branchId, year, month, salespersonName, areaFilter, summary, filteredAreas]);
+  const filtersSummary = useMemo(() => [
+    salespersonName ? { label: 'المندوب', value: salespersonName } : null,
+    areaFilter ? { label: 'المنطقة', value: areaFilter } : null,
+  ].filter(Boolean), [salespersonName, areaFilter]);
 
   const summaryCards = [
     { label: 'إجمالي المبيعات', value: `${fmtNum(summary.total_sales || 0)} ج.م`, color: 'primary' },
@@ -353,6 +307,7 @@ export default function AreasReport() {
       <ReportTable
         reportTitle="تقرير المناطق والتحصيل الجغرافي"
         periodLabel={year && month ? `${year}/${String(month).padStart(2, '0')}` : undefined}
+        filtersSummary={filtersSummary}
         columns={columns}
         data={filteredAreas}
         loading={loading}

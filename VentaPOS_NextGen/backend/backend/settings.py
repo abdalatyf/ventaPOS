@@ -12,7 +12,7 @@ import sys
 if getattr(sys, 'frozen', False):
     # Running in a PyInstaller bundle
     BUNDLE_DIR = Path(sys._MEIPASS)
-    DB_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'VentaPOSTest'
+    DB_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'VentaPOS'
 else:
     # Running in a normal Python environment
     BUNDLE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -96,11 +96,6 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-APPDATA_DIR = os.environ.get('APPDATA', os.path.join(os.path.expanduser('~'), 'AppData', 'Roaming'))
-import tempfile
-
-RUNTIME_DB = os.path.join(tempfile.gettempdir(), '~sys_runtime_cache_v1.tmp')
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -136,7 +131,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Africa/Cairo'
 
 USE_I18N = True
 

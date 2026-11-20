@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
-import { IconPackage, IconFilter, IconRefresh, IconArrowBackUp } from '@tabler/icons-react';
+import { IconPackage, IconFilter, IconRefresh } from '@tabler/icons-react';
 import api from '../../api';
 import { ReportsContext } from './ReportsLayout';
 import ReportTable from '../../components/ReportTable';
@@ -8,7 +8,7 @@ import ReportAutocomplete from '../../components/ReportAutocomplete';
 import { fmtNum } from '../../utils/formatUtils';
 
 export default function PurchasesReport() {
-  const { year, month, branchId, registerPrintHandler } = useContext(ReportsContext);
+  const { year, month, branchId } = useContext(ReportsContext);
 
   const [items, setItems] = useState([]);
   const [summary, setSummary] = useState({
@@ -98,57 +98,21 @@ export default function PurchasesReport() {
     setSearchQuery('');
   };
 
-  // Register print handler for ReportsLayout print button
-  useEffect(() => {
-    if (!registerPrintHandler) return;
-    registerPrintHandler(() => {
-      api.post('/reports/desktop_print/', {
-        title: 'تقرير المشتريات والموردين',
-        branch_id: branchId,
-        period_label: year && month ? `${year}/${String(month).padStart(2, '0')}` : undefined,
-        action: 'view',
-        filters_summary: [
-          selectedSupplier ? { label: 'المورد', value: selectedSupplierName || suppliers.find(s => s.id === Number(selectedSupplier))?.name || selectedSupplier } : null,
-          selectedProductName ? { label: 'الصنف', value: selectedProductName } : null,
-          invoiceType !== 'ALL' ? { label: 'نوع الفاتورة', value: invoiceType === 'PURCHASE' ? 'شراء' : 'مرتجع' } : null,
-        ].filter(Boolean),
-        kpis: [
-          { label: 'صافي المشتريات', value: `${fmtNum(summary.total_purchases_amount || 0)} ج.م`, color: 'primary' },
-          { label: 'إجمالي الشراء', value: `${fmtNum(summary.gross_purchases_amount || 0)} ج.م`, color: 'success' },
-          { label: 'إجمالي المرتجع', value: `${fmtNum(summary.total_returns_amount || 0)} ج.م`, color: 'danger' },
-          { label: 'صافي القطع', value: fmtNum(summary.total_items_quantity || 0), color: 'primary' },
-          { label: 'عدد الأصناف', value: fmtNum(summary.distinct_products_count || 0), color: 'primary' },
-          { label: 'عدد الموردين', value: fmtNum(summary.suppliers_count || 0), color: 'primary' },
-        ],
-        columns: [
-          { key: 'index', label: 'م', width: '40px', align: 'center' },
-          { key: 'item_name', label: 'اسم الصنف', align: 'start' },
-          { key: 'supplier_name', label: 'اسم المورد', align: 'start' },
-          { key: 'invoices_count', label: 'الفواتير', align: 'center' },
-          { key: 'purchased_qty', label: 'كمية الشراء', align: 'center' },
-          { key: 'returned_qty', label: 'كمية المرتجع', align: 'center' },
-          { key: 'net_qty', label: 'صافي الكمية', align: 'center' },
-          { key: 'avg_unit_cost', label: 'متوسط السعر', align: 'center' },
-          { key: 'gross_purchases', label: 'إجمالي الشراء', align: 'center' },
-          { key: 'returns_amount', label: 'إجمالي المرتجع', align: 'center' },
-          { key: 'net_purchases', label: 'صافي المشتريات', align: 'center' },
-        ],
-        rows: filteredItems.map((r, idx) => ({
-          index: idx + 1,
-          item_name: r.item_name,
-          supplier_name: r.supplier_name,
-          invoices_count: r.invoices_count,
-          purchased_qty: fmtNum(r.purchased_qty || 0),
-          returned_qty: fmtNum(r.returned_qty || 0),
-          net_qty: fmtNum(r.net_qty || 0),
-          avg_unit_cost: fmtNum(r.avg_unit_cost || 0),
-          gross_purchases: fmtNum(r.gross_purchases || 0),
-          returns_amount: fmtNum(r.returns_amount || 0),
-          net_purchases: fmtNum(r.net_purchases || 0),
-        })),
-      }).catch(err => console.error('Error opening report print modal:', err));
-    });
-  }, [registerPrintHandler, branchId, year, month, selectedSupplier, selectedProductName, invoiceType, summary, filteredItems, suppliers]);
+  const filtersSummary = useMemo(() => [
+    selectedSupplier
+      ? {
+          label: 'المورد',
+          value:
+            selectedSupplierName ||
+            suppliers.find((s) => s.id === Number(selectedSupplier))?.name ||
+            selectedSupplier,
+        }
+      : null,
+    selectedProductName ? { label: 'الصنف', value: selectedProductName } : null,
+    invoiceType !== 'ALL'
+      ? { label: 'نوع الفاتورة', value: invoiceType === 'PURCHASE' ? 'شراء' : 'مرتجع' }
+      : null,
+  ].filter(Boolean), [selectedSupplier, selectedSupplierName, suppliers, selectedProductName, invoiceType]);
 
   const summaryCards = [
     { label: 'صافي المشتريات', value: `${fmtNum(summary.total_purchases_amount || 0)} ج.م`, color: 'primary' },
@@ -384,6 +348,7 @@ export default function PurchasesReport() {
       <ReportTable
         reportTitle="تقرير المشتريات والموردين"
         periodLabel={year && month ? `${year}/${String(month).padStart(2, '0')}` : undefined}
+        filtersSummary={filtersSummary}
         columns={columns}
         data={filteredItems}
         loading={loading}

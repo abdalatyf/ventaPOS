@@ -161,12 +161,19 @@ class BatchV11Tests(TestCase):
         self.assertTrue(res_status.data.get("is_print_only"))
 
         # Restricted endpoints must return HTTP 403
-        res_purchases = self.client.get("/api/v1/purchase-invoices/")
-        self.assertEqual(res_purchases.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertIn("error", res_purchases.json())
-
-        res_report = self.client.get(f"/api/v1/reports/inventory-movement/?branch_id={self.branch.id}&year=2026&month=5")
-        self.assertEqual(res_report.status_code, status.HTTP_403_FORBIDDEN)
+        restricted_urls = [
+            "/api/v1/purchase-invoices/",
+            f"/api/v1/reports/inventory-movement/?branch_id={self.branch.id}&year=2026&month=5",
+            "/api/v1/commission-histories/",
+            "/api/v1/commission-history/",
+            f"/api/v1/product-suggestions/?term=a&month=5&year=2026&branch_id={self.branch.id}",
+            "/api/v1/sale-items/",
+            "/api/v1/installment-payments/",
+        ]
+        for url in restricted_urls:
+            res_blocked = self.client.get(url)
+            self.assertEqual(res_blocked.status_code, status.HTTP_403_FORBIDDEN, f"Expected 403 for {url}")
+            self.assertEqual(res_blocked.json().get("error"), "print_only_restricted")
 
         # Allowed endpoint: Receipts list
         res_receipts = self.client.get("/api/v1/receipts/")

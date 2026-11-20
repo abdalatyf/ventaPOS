@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { vi } from 'vitest';
 
@@ -45,9 +45,32 @@ vi.mock('../api', () => ({
           }
         });
       }
+      if (url.includes('/receipts/printers/')) {
+        return Promise.resolve({
+          data: {
+            printers: [{ name: 'HP LaserJet', status: 'ready', is_default: true }]
+          }
+        });
+      }
       if (url.includes('/reports/purchases/')) {
         return Promise.resolve({
           data: {
+            items: [
+              {
+                item_id: 1,
+                item_name: 'طقم لحاف',
+                supplier_id: 1,
+                supplier_name: 'مورد تجريبي',
+                invoices_count: 1,
+                purchased_qty: 10,
+                returned_qty: 0,
+                net_qty: 10,
+                avg_unit_cost: 500,
+                gross_purchases: 5000,
+                returns_amount: 0,
+                net_purchases: 5000
+              }
+            ],
             invoices: [
               {
                 id: 1,
@@ -60,7 +83,7 @@ vi.mock('../api', () => ({
                 net_qty: 10
               }
             ],
-            summary: { total_purchases: 5000, total_returns: 0, net_purchases: 5000 }
+            summary: { total_purchases_amount: 5000, gross_purchases_amount: 5000, total_returns_amount: 0, total_items_quantity: 10, distinct_products_count: 1, suppliers_count: 1 }
           }
         });
       }
@@ -253,5 +276,55 @@ describe('All 10 Reports & UI/UX Audit Suite', () => {
       const text = table.textContent;
       expect(text).not.toContain('.00');
     });
+  });
+
+  it('opens PrintModal instead of calling desktop_print directly when clicking header print on AreasReport', async () => {
+    const { default: api } = await import('../api');
+    render(
+      <MemoryRouter initialEntries={['/reports/areas?year=2026&month=8']}>
+        <Routes>
+          <Route path="/reports" element={<ReportsLayout />}>
+            <Route path="areas" element={<AreasReport />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('الدقي')).toBeInTheDocument();
+    });
+
+    const headerPrintBtn = screen.getByRole('button', { name: /طباعة التقرير/ });
+    fireEvent.click(headerPrintBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('طباعة تقرير المناطق والتحصيل الجغرافي')).toBeInTheDocument();
+    });
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('opens PrintModal instead of calling desktop_print directly when clicking header print on PurchasesReport', async () => {
+    const { default: api } = await import('../api');
+    render(
+      <MemoryRouter initialEntries={['/reports/purchases?year=2026&month=8']}>
+        <Routes>
+          <Route path="/reports" element={<ReportsLayout />}>
+            <Route path="purchases" element={<PurchasesReport />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('طقم لحاف')).toBeInTheDocument();
+    });
+
+    const headerPrintBtn = screen.getByRole('button', { name: /طباعة التقرير/ });
+    fireEvent.click(headerPrintBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('طباعة تقرير المشتريات والموردين')).toBeInTheDocument();
+    });
+    expect(api.post).not.toHaveBeenCalled();
   });
 });

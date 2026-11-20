@@ -143,7 +143,11 @@ class LicenseEnforcementMiddleware:
                     '/api/v1/expenses/',
                     '/api/v1/suppliers/',
                     '/api/v1/commission-histories/',
+                    '/api/v1/commission-history/',
                     '/api/v1/inventory-adjustments/',
+                    '/api/v1/product-suggestions/',
+                    '/api/v1/sale-items/',
+                    '/api/v1/installment-payments/',
                 ]
                 if any(request.path.startswith(prefix) for prefix in RESTRICTED_PREFIXES):
                     return JsonResponse({

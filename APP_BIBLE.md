@@ -22,7 +22,7 @@ flowchart TB
         NG_DJANGO["Django 6.0.6 + DRF 3.17.1 + WhiteNoise"]
         NG_REACT["Built React 19 SPA (frontend/dist via WhiteNoise)"]
         NG_MW["Middleware: ConsoleRequestLogging -> LicenseEnforcement"]
-        NG_DB["SQLite WAL DB (%APPDATA%/VentaPOSTest/db.sqlite3 in frozen | backend/db.sqlite3 in dev)"]
+        NG_DB["SQLite WAL DB (%APPDATA%/VentaPOS/db.sqlite3 in frozen | backend/db.sqlite3 in dev)"]
         NG_PRINT["Print Engine: wkhtmltopdf.exe + SumatraPDF.exe -> الفواتير المطبوعة / media/Invoices"]
         NG_GH["GitHub Auto-Updater (venta-pos/releases/main/version.json + SHA-256 verify)"]
 
@@ -84,12 +84,12 @@ Post-cleanup active workspace structure under `d:\Projects\VentaPOS\`:
 | `d:\Projects\VentaPOS\Run_VentaPOS_Launcher.bat` | Root desktop launcher: runs `npm.cmd run build` in `VentaPOS_NextGen/frontend/`, then starts `VentaPOS_NextGen/venv/Scripts/python.exe -u launcher.py` (fallback `dist/VentaPOS/VentaPOS.exe`) with live UTF-8 console. |
 | `d:\Projects\VentaPOS\Run_LicenseManager_Launcher.bat` | Root desktop launcher: starts `LicenseManager/launcher.py` via `..\VentaPOS_NextGen\venv\Scripts\python.exe` (falls back to `LicenseManager\venv` then `dist\VentaPOS_LicenseManager\VentaPOS_LicenseManager.exe`). |
 | `d:\Projects\VentaPOS\_archive\` `[gitignored]` | Retired prototypes (`Desktop/`, `Server/`, `Mobile/`, `django_hybrid_poc/`, `Agents/`, `old_docs/`, `Promo/`, `scratch/`, `legacy_agents_docs/`, `PROJECT.md`, `VENTAPOS_CONTEXT.md`). Strictly off-limits to active runtime/docs. |
-| `VentaPOS_NextGen/` | Main desktop POS/Back-Office application root (`launcher.py`, `build_exe.py`, `VentaPOS.spec`, `requirements.md`, `UI_UX_RULES.md`, `TODO.md`, `USER_MANUAL_AR.md`). |
+| `VentaPOS_NextGen/` | Main desktop POS/Back-Office application root (`launcher.py`, `build_exe.py`, `VentaPOS.spec`, `assets/venta.ico`, `installer/VentaPOS_Setup.iss`, `requirements.md`, `UI_UX_RULES.md`, `TODO.md`, `USER_MANUAL_AR.md`). |
 | `VentaPOS_NextGen/backend/` | Django 6.0.6 + DRF backend: `backend/` project config (`settings.py`, `urls.py`, `wsgi.py`, `asgi.py`), `api/` app (`models.py`, `serializers.py`, `urls.py`, `middleware.py`, `print_utils.py`, `tools_views.py`, `logger_views.py`, `views/*.py`, `services/*.py`, `utils/*.py`, `management/commands/init_demo_db.py`, `templates/api/*.html`, `tests/*.py`), plus bundled `bin/` (`wkhtmltox/bin/wkhtmltopdf.exe` + `SumatraPDF.exe`). |
-| `VentaPOS_NextGen/frontend/` | React 19 + Vite 8 + Tabler RTL SPA (`package.json`, `vite.config.js`, `index.html`, `public/favicon.svg`, `src/` pages, components, hooks, utils, Vitest `__tests__/`). |
+| `VentaPOS_NextGen/frontend/` | React 19 + Vite 8 + Tabler RTL SPA (`package.json`, `vite.config.js`, `index.html`, `public/favicon.ico`, `src/assets/fonts/` local Cairo WOFF2, `src/` pages, components, hooks, utils, Vitest `__tests__/`). |
 | `VentaPOS_NextGen/e2e/` | Playwright live Chromium end-to-end test suite (`package.json`, `playwright.config.js`, `tests/*.spec.js`). |
 | `VentaPOS_NextGen/scripts/` | Automation utilities: `generate_codebase_map.py` (AST parser) and `publish_release.py` (GitHub release + `version.json` uploader). |
-| `LicenseManager/` | Vendor licensing portal (`launcher.py`, `build_exe.py`, `manage.py`, `requirements.txt`, `requirements.md`, `TODO.md`, `supabase_schema.sql`, `obfuscate_key.py`, `VALIDATOR.py`, `test_license_manager.py`, `core/`, `licenses/`). |
+| `LicenseManager/` | Vendor licensing portal (`launcher.py`, `build_exe.py`, `VentaPOS_LicenseManager.spec`, `assets/venta.ico`, `manage.py`, `requirements.txt`, `requirements.md`, `TODO.md`, `supabase_schema.sql`, `obfuscate_key.py`, `VALIDATOR.py`, `test_license_manager.py`, `core/`, `licenses/`). |
 
 ---
 
@@ -101,14 +101,14 @@ Post-cleanup active workspace structure under `d:\Projects\VentaPOS\`:
 | :--- | :--- | :--- | :--- | :--- |
 | **`sys.frozen`** | `False` | `True` (PyInstaller `--onedir`) | `False` | `True` (PyInstaller `--onedir`) |
 | **Bundle Root (`BUNDLE_DIR` / `BASE_DIR`)** | `settings.py`: `BUNDLE_DIR` = `VentaPOS_NextGen/`, `BASE_DIR` = `VentaPOS_NextGen/backend/` | `BUNDLE_DIR = Path(sys._MEIPASS)` (`dist/VentaPOS/_internal/`) | `BASE_DIR` = `LicenseManager/` | `BASE_DIR = Path(sys._MEIPASS)` (`dist/VentaPOS_LicenseManager/_internal/`) |
-| **Writable Data Dir (`DB_DIR` / `DATA_DIR`)** | `DB_DIR` = `VentaPOS_NextGen/backend/` | `DB_DIR = %APPDATA%\VentaPOSTest` *(Note: placeholder folder name)* | `DATA_DIR` = `LicenseManager/` | `DATA_DIR = %APPDATA%\VentaPOS_LicenseManager` |
-| **SQLite Database Path** | `VentaPOS_NextGen/backend/db.sqlite3` | `%APPDATA%\VentaPOSTest\db.sqlite3` | `LicenseManager/db.sqlite3` | `%APPDATA%\VentaPOS_LicenseManager\db.sqlite3` |
-| **Django `DEBUG`** | `True` (`not getattr(sys, 'frozen', False)`) | `False` | `True` *(hardcoded)* | `True` *(hardcoded bug — see Section 9)* |
+| **Writable Data Dir (`DB_DIR` / `DATA_DIR`)** | `DB_DIR` = `VentaPOS_NextGen/backend/` | `DB_DIR = %APPDATA%\VentaPOS` | `DATA_DIR` = `LicenseManager/` | `DATA_DIR = %APPDATA%\VentaPOS_LicenseManager` |
+| **SQLite Database Path** | `VentaPOS_NextGen/backend/db.sqlite3` | `%APPDATA%\VentaPOS\db.sqlite3` | `LicenseManager/db.sqlite3` | `%APPDATA%\VentaPOS_LicenseManager\db.sqlite3` |
+| **Django `DEBUG`** | `True` (`not getattr(sys, 'frozen', False)`) | `False` | `True` (`not getattr(sys, 'frozen', False)`) | `False` |
 | **Frontend / Static Delivery** | Vite (`:5173`) proxies `/api` -> `:8000`, OR Django + WhiteNoise serves `frontend/dist/` | `WhiteNoiseMiddleware` (`WHITENOISE_USE_FINDERS=True`) serves `sys._MEIPASS/frontend/dist/` via `/static/` & SPA catch-all `index.html` | Django `DIRS=[]`, `APP_DIRS=True`, `STATIC_URL='static/'` (no WhiteNoise; HTML CDN assets) | Django `APP_DIRS=True` templates from `sys._MEIPASS/licenses/templates/` (CDN Bootstrap & Cairo) |
-| **Saved PDFs (`get_save_directory`)** | `MEDIA_ROOT/Invoices` or `backend/media/Invoices` | `%APPDATA%\VentaPOSTest\الفواتير المطبوعة` | N/A | N/A |
+| **Saved PDFs (`get_save_directory`)** | `MEDIA_ROOT/Invoices` or `backend/media/Invoices` | `%APPDATA%\VentaPOS\الفواتير المطبوعة` | N/A | N/A |
 | **Print Binaries (`print_utils.py`)** | `backend/bin/wkhtmltox/bin/wkhtmltopdf.exe` & `backend/bin/SumatraPDF.exe` | `sys._MEIPASS/bin/wkhtmltox/bin/wkhtmltopdf.exe` & `sys._MEIPASS/bin/SumatraPDF.exe` | N/A | N/A |
-| **Backups & Pre-Boot Restore** | `backend/backups/` & `backend/restore_pending.bin` | `%APPDATA%\VentaPOSTest\backups\` & `%APPDATA%\VentaPOSTest\restore_pending.bin` | None | None |
-| **Logs & Streams** | `backend/ventapos_system.log` + `backend/logs/frontend_console.log` + real console `stdout/stderr` | `%APPDATA%\VentaPOSTest\ventapos_system.log` + `logs/frontend_console.log` + `DummyWriter` stubbing `None` streams | Real console `stdout/stderr` (`[BACKEND]` middleware) | `DummyWriter` stubbing `None` streams (no log file configured) |
+| **Backups & Pre-Boot Restore** | `backend/backups/` & `backend/restore_pending.bin` | `%APPDATA%\VentaPOS\backups\` & `%APPDATA%\VentaPOS\restore_pending.bin` | None | None |
+| **Logs & Streams** | `backend/ventapos_system.log` + `backend/logs/frontend_console.log` + real console `stdout/stderr` | `%APPDATA%\VentaPOS\ventapos_system.log` + `logs/frontend_console.log` + `DummyWriter` stubbing `None` streams | Real console `stdout/stderr` (`[BACKEND]` middleware) | `DummyWriter` stubbing `None` streams (no log file configured) |
 | **Webview Debug Mode** | `webview.start(debug=True)` (DevTools enabled) | `webview.start(debug=False)` | `webview.start(debug=True)` | `webview.start(debug=False)` |
 
 ### 3.2 Boot Sequence (`launcher.py` in Both Apps)
@@ -131,7 +131,7 @@ Post-cleanup active workspace structure under `d:\Projects\VentaPOS\`:
 
 ### 3.3 Application Lifecycle (`Demo -> Activation -> Production`) & Auto-Updater
 
-- **Demo Mode (`init_demo_db.py`)**: Runs on every launch **unless** a non-demo `ClientLicense` (`exclude(machine_id="DEMO_MACHINE")`) exists. When in Demo mode, wipes all tables inside `transaction.atomic()`, creates superuser `admin` (empty password `""`), company settings (`شركة الأمل للتجارة والأجهزة`), 2 branches (`الفرع الرئيسي`, `فرع المعادي`), 4 salespersons per branch, 10 suppliers per branch, `74` household/furniture/electronics products per branch, `DEMO_MACHINE` `product_id=7` license (`invoices_balance=999999`), and generates **25 months** of sales/purchases/installments/expenses/deficits (`120` receipts per month per branch, ~1% cash, ~99% installment).
+- **Demo Mode (`init_demo_db.py`)**: Runs on every launch **unless** a non-demo `ClientLicense` (`exclude(machine_id="DEMO_MACHINE")`) exists. When in Demo mode, wipes all tables inside `transaction.atomic()`, creates superuser `admin` (empty password `""`), company settings (`شركة النور للتجارة`), 1 default branch (`الفرع الرئيسي`), 4 salespersons, 10 suppliers, `74` household/furniture/electronics products, `DEMO_MACHINE` `product_id=7` license (`invoices_balance=999999`), and generates sales/purchases/installments from `max(today - 25 months, 2025-01-01)` (`120` receipts per month, ~1% cash, ~99% installment).
 - **Activation (`LicenseActivateView`)**: Accepting any valid production base plan (`product_id` 1–7) while `is_demo` is true **hard-deletes** all Demo rows (`Expense`, `InventoryAdjustment`, `LicenseHistory`, `InstallmentPayment`, `SaleItem`, `Receipt`, `PurchaseInvoiceItem`, `PurchaseInvoice`, `CommissionHistory`, `InventoryItem`, `Supplier`, `Salesperson`, `Branch`, `CompanySetting`, `ClientLicense`, `UsedLicense`), inserts the production `ClientLicense` with HMAC `license_code_hash`, logs `UsedLicense` + `LicenseHistory`, and prompts the React UI to redirect to `/activation-setup`.
 - **Auto-Updater (`SystemCheckUpdateView` & `SystemApplyUpdateView`)**:
   - `GET /api/v1/system/check-update/` fetches `RELEASES_MANIFEST_URL` (`https://raw.githubusercontent.com/venta-pos/releases/main/version.json`, 5s timeout) and compares semantic version against `settings.APP_VERSION` (`"1.0.0"`). Gracefully returns `offline: True` if unreachable.
@@ -161,16 +161,16 @@ Post-cleanup active workspace structure under `d:\Projects\VentaPOS\`:
 - **DRF**: `DEFAULT_AUTHENTICATION_CLASSES = ['rest_framework.authentication.TokenAuthentication', 'rest_framework.authentication.SessionAuthentication']`; `DEFAULT_PERMISSION_CLASSES = ['rest_framework.permissions.IsAuthenticated']`.
 - **CORS**: `CORS_ALLOW_ALL_ORIGINS = True`; `CORS_ALLOW_HEADERS` adds `x-machine-id` and `x-branch-id`.
 - **Release & Logging Constants**: `APP_VERSION = "1.0.0"`, `RELEASES_REPO = "venta-pos/releases"`, `RELEASES_MANIFEST_URL = "https://raw.githubusercontent.com/venta-pos/releases/main/version.json"`; `LOGGING` routes `django` and `api` (`INFO`) to `DB_DIR / 'ventapos_system.log'` (`FileHandler`) and `StreamHandler`. Frontend logs rotate separately in `DB_DIR / 'logs/frontend_console.log'` (`5 MB x 2` backups via `logger_views.py`).
-- **Time Zone**: `TIME_ZONE = 'UTC'`, `USE_I18N = True`, `USE_TZ = True`.
+- **Time Zone**: `TIME_ZONE = 'Africa/Cairo'`, `USE_I18N = True`, `USE_TZ = True`.
 - **Secret Handling**: `settings.SECRET_KEY` has a hardcoded development fallback literal in `settings.py`; cryptographic license & receipt HMAC keys are loaded at runtime via `LicenseValidator._get_key()` byte obfuscation (`api/utils/license_validator.py`).
 
 #### `LicenseManager/core/settings.py`
 - **`INSTALLED_APPS`**: `django.contrib.admin`, `django.contrib.auth`, `django.contrib.contenttypes`, `django.contrib.sessions`, `django.contrib.messages`, `django.contrib.staticfiles`, `licenses`.
 - **`MIDDLEWARE`**: Django defaults + `licenses.middleware.ConsoleRequestLoggingMiddleware` right after `SecurityMiddleware`.
+- **Runtime & Time Zone**: `DEBUG = not getattr(sys, 'frozen', False)`, `TIME_ZONE = 'Africa/Cairo'`, `USE_TZ = True`.
 - **Environment Variables & Settings**:
   - `APPDATA`: resolves frozen `DATA_DIR` (`%APPDATA%\VentaPOS_LicenseManager`).
   - `SUPABASE_URL`, `SUPABASE_KEY`, `MARKETEER_ID`: read from `os.environ` with **hardcoded fallback defaults present in `core/settings.py`** (`SUPABASE_URL`, `SUPABASE_KEY`, and `MARKETEER_ID="default_marketeer"`). Never store or print raw `SUPABASE_KEY` or `SECRET_KEY` literals in documentation.
-  - `VENTA_LICENSE_MASTER_PASSWORD` (`settings.MASTER_PASSWORD`): **dead/unused legacy env var** left in `core/settings.py` after migrating login to Supabase `verify_marketeer_login`.
   - `LicenseGenerator.SECRET_KEY` (`licenses/utils/crypto.py`): hardcoded raw byte secret matching `VentaPOS_NextGen`'s `LicenseValidator._get_key()`.
   - `GITHUB_TOKEN`: read from env in `VentaPOS_NextGen/scripts/publish_release.py`.
 
@@ -241,7 +241,7 @@ All 16 models inherit soft-delete filtering via `objects = ActiveManager()` (`is
   2. **Demo Bypass**: If no production `ClientLicense` (`exclude(machine_id="DEMO_MACHINE")`) exists, skips enforcement.
   3. **Clock-Rollback Guard**: Rejects (`403 clock_rollback`) if `timezone.now()` precedes latest production `ClientLicense.created_at - 5 min` or latest `Receipt.created_at - 5 min`.
   4. **HMAC Integrity Check**: Reads 24h-cached `machine_id` (Windows Registry `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid` SHA-256[:32]), recomputes `generate_record_signature(...)` for every active `ClientLicense`, and immediately sets `is_active=False` on mismatch.
-  5. **Print-Only Restriction (`product_id in (2, 3)`)**: Blocks (`403 print_only_restricted`) paths starting with `/api/v1/reports/`, `/api/v1/inventory-items/`, `/api/v1/purchase-invoices/`, `/api/v1/purchase-invoice-items/`, `/api/v1/expenses/`, `/api/v1/suppliers/`, `/api/v1/commission-histories/`, `/api/v1/inventory-adjustments/`.
+  5. **Print-Only Restriction (`product_id in (2, 3)`)**: Blocks (`403 print_only_restricted`) paths starting with `/api/v1/reports/`, `/api/v1/inventory-items/`, `/api/v1/purchase-invoices/`, `/api/v1/purchase-invoice-items/`, `/api/v1/expenses/`, `/api/v1/suppliers/`, `/api/v1/commission-histories/`, `/api/v1/commission-history/`, `/api/v1/inventory-adjustments/`, `/api/v1/product-suggestions/`, `/api/v1/sale-items/`, `/api/v1/installment-payments/`.
   6. **Expiry Lock**: Computes `(start_date, last_allowed_month, grace_end)` via `get_license_date_bounds` (day-1 expiry sets `last_allowed_month = expiry - 1 month`, `grace_end = expiry.replace(day=25)`). Beyond `grace_end`, blocks all `POST`/`PUT`/`DELETE`/`PATCH` (`403 license_expired`).
   7. **Quota Exhaustion**: On `POST /api/v1/receipts/`, if `total_invoices_balance <= 0`, blocks (`403 license_expired`) **unless** `(sale_year, sale_month)` precedes `get_first_production_license_start_date()` (pre-license exemption).
 - **`LicenseManager` Auth**: Session keys (`request.session['is_logged_in']`, `marketeer_username`, `marketeer_full_name`) checked by `is_authenticated(request)`; login fails closed against Supabase RPC. `add_license_view` also rejects `client.is_banned` and fails closed if Supabase `POST /rest/v1/licenses` fails.
@@ -261,7 +261,7 @@ All 16 models inherit soft-delete filtering via `objects = ActiveManager()` (`is
 - **`api/services/compensation_service.py`**: `calculate_branch_salespersons_performance(...)` calculates per-salesperson `receipts_count`, cash/credit sales net of returns (anchored to parent receipt month when `parent_receipt` exists), `comm_sales` (`مندبة`), `comm_coll` (`collected * coll_rate`, covering pre-license installment collections too), and `due_salary = comm_sales + comm_coll`.
 - **`api/services/receipt_service.py`**: `create_receipt`, `update_receipt`, `process_return_receipt`, `get_next_receipt_number(branch, select_for_update)`, license bound helpers (`get_active_license`, `get_first_production_license_start_date`, `is_pre_license_month`, `get_license_date_bounds`, `get_subscription_date_bounds`). Enforces payment balance tolerance `abs(total - (down + installments)) <= 0.01`, future-bottleneck stock validation, FIFO-ordered `ClientLicense` quota deduction (`order_by('expiry_date', 'id')`), deterministic HMAC-SHA256 `receipt_hash`, and atomic return creation (`receipt_type='RETURN'`, parent receipt link, proportional installment/refund adjustments).
 - **`api/services/purchase_service.py`**: `validate_items_stock_integrity`, `create_purchase_invoice`, `update_purchase_invoice` (validates purchase updates/returns against future stock bottlenecks, auto-assigns `invoice_number` per branch/supplier, syncs line items atomically).
-- **`api/print_utils.py`**: `to_arabic_numerals` / `ed2ad` (`ROUND_HALF_UP` whole integer rounding + `0-9 -> ٠-٩`), `to_english_numerals`, `get_num_to_words_ar` (via `num2words(..., lang='ar')` with fallback `str(amount)`), `get_wkhtmltopdf_config()`, `get_save_directory()`, `generate_and_open_pdf(...)` (`A4` 10mm margins Portrait/Landscape vs `DL` `220mm x 110mm` 0mm margins; `time.sleep(1)`; opens via `os.startfile` when `action="view"`, or spawns `SumatraPDF.exe -print-to <printer>|-print-to-default -silent` with `CREATE_NO_WINDOW` when `action="print"`). *(Note: `clean_invoices_directory()` is defined at L10–18 but never called).*
+- **`api/print_utils.py`**: `to_arabic_numerals` / `ed2ad` (`ROUND_HALF_UP` whole integer rounding + `0-9 -> ٠-٩`), `to_english_numerals`, `get_num_to_words_ar` (via `num2words(..., lang='ar')` with fallback `str(amount)`), `get_wkhtmltopdf_config()`, `get_save_directory()`, `MAX_STORED_PDFS = 50`, `prune_old_pdfs(save_dir, max_files=50)` (called automatically inside `generate_and_open_pdf`; `clean_invoices_directory()` delegates to `prune_old_pdfs`), and `generate_and_open_pdf(...)` (`A4` 10mm margins Portrait/Landscape vs `DL` `220mm x 110mm` 0mm margins; `timezone.localtime()` timestamps; `time.sleep(1)`; opens via `os.startfile` when `action="view"`, or spawns `SumatraPDF.exe -print-to <printer>|-print-to-default -silent` with `CREATE_NO_WINDOW` when `action="print"`).
 - **Management Commands / Signals / Threads**:
   - Single custom management command: `python manage.py init_demo_db` (`api/management/commands/init_demo_db.py`).
   - Django Signals: **None** (`apps.py` registers no signals; all side effects live in serializers/services).
@@ -287,7 +287,7 @@ All endpoints below require `Token` or `Session` auth and pass `LicenseEnforceme
 | `GET, POST, DELETE` | `commission-histories/` & `commission-history/` | `CommissionHistoryViewSet` / `CommissionHistorySerializer` | `?item_id=`; `{item, commission_amount, activation_month, activation_year}` *(year >= 2025; upserts existing month)* | `CommissionHistory` JSON (`200` on upsert, `201` on new) | `ProductLedger.jsx` (`commission-histories/`) |
 | `GET, POST, DELETE` | `inventory-adjustments/` (`{id}/`) | `InventoryAdjustmentViewSet` / `InventoryAdjustmentSerializer` | `?item_id=`; `{item|inventory_item, adjustment_type:"DEFICIT", quantity, reason, month|adjustment_month, year|adjustment_year}` | Validates `qty <= safe_limit`; Print-Only blocked | `ProductLedger.jsx` |
 | `GET, POST, PUT, DELETE` | `suppliers/` (`{id}/`) | `SupplierViewSet` / `SupplierSerializer` | `?branch_id=`, `?search=`, `?limit=`; `{name, branch?}` | Supplier list/object (`branch_name`); Print-Only blocked | `SuppliersTab.jsx`, `SearchPurchases.jsx`, `PurchasesReport.jsx`, `purchaseUtils.js` |
-| `GET, POST, PUT, PATCH, DELETE` | `purchase-invoices/` (`{id}/`) | `PurchaseInvoiceViewSet` (`PurchaseInvoicePagination`) / `PurchaseInvoiceSerializer` | `?supplier=`, `?invoice_number=`, `?month=`, `?year=`, `?invoice_type=ALL\|PURCHASE\|RETURN`; `{branch, supplier, invoice_number?, invoice_type, invoice_month, invoice_year, items[]}` | Paginated `{count, next, previous, aggregate:{total_purchases}, all_ids[], results[]}`; `DELETE` checks future stock safety | `SearchPurchases.jsx`, `PurchaseEntry.jsx`, `purchaseUtils.js` |
+| `GET, POST, PUT, PATCH, DELETE` | `purchase-invoices/` (`{id}/`) | `PurchaseInvoiceViewSet` (`PurchaseInvoicePagination`) / `PurchaseInvoiceSerializer` | `?supplier=`, `?invoice_number=`, `?month=`, `?year=`, `?invoice_type=ALL\|PURCHASE\|RETURN`; `{branch, supplier, invoice_number?, invoice_type, invoice_month, invoice_year, items[]}` | Paginated `{count, next, previous, aggregate:{total_purchases}, all_ids[], results[]}` (`total_purchases` excludes `RETURN` unless `?invoice_type=RETURN`); `DELETE` checks future stock safety | `SearchPurchases.jsx`, `PurchaseEntry.jsx`, `purchaseUtils.js` |
 | `POST` | `purchase-invoices/desktop_print/` | `PurchaseInvoiceViewSet.desktop_print` | `{invoice_ids[], action:"view"\|"print", target_printer?}` | `{status, message}` — renders `pdf_purchase_content.html` on **DL** paper | `SearchPurchases.jsx` |
 | `GET, POST, PUT, DELETE` | `purchase-invoice-items/` (`{id}/`) | `PurchaseInvoiceItemViewSet` / `PurchaseInvoiceItemSerializer` | Direct CRUD | `PurchaseInvoiceItem` JSON; Print-Only blocked | *(No active frontend caller)* |
 | `GET, POST, PUT, DELETE` | `expenses/` (`{id}/`) | `ExpenseViewSet` / `ExpenseSerializer` | `?year=`, `?month=`, `?description=`, `?category=`, `?amount_min=\|amount_from=`, `?amount_max=\|amount_to=`; `{branch, category, amount, description, expense_year, expense_month}` | Expense JSON; Print-Only blocked | `Expenses.jsx`, `ExpensesReport.jsx` |
@@ -313,7 +313,7 @@ All endpoints below require `Token` or `Session` auth and pass `LicenseEnforceme
 | `GET` | `license/status/` | `LicenseStatusView` | `AllowAny` / Whitelisted | None | `{status, total_invoices_balance, expiry_date, machine_id, is_last_month, is_expired, needs_support, is_demo, has_password, company_name, product_id, is_print_only, start_date, lic_start_date}` | `api.js` (`getLicenseStatus`), `Login.jsx`, `SubscriptionTab.jsx`, `CompanyTab.jsx` |
 | `POST` | `license/activate/` | `LicenseActivateView` | `AllowAny` / Whitelisted | `{license_code}` (base plan `1..7` wipes Demo DB; top-up `10..15` adds balance; rejects `16`) | `{status, message, wiped_demo}` or top-up balance payload | `SubscriptionTab.jsx` |
 | `GET` | `customer-suggestions/` | `CustomerSuggestionsView` | `IsAuthenticated` | `?term=`, `?field=name\|phone\|address\|area`, `?salesperson_id=`, `?current_area=`, `?current_name=`, `?branch_id=` | `[{value}]` (max `15` items from top `500` receipts) | `usePOSSuggestions.js`, `ReceiptsFilterToolbar.jsx`, report filters |
-| `GET` | `product-suggestions/` | `ProductSuggestionsView` | `IsAuthenticated` | `?term=`, `?month=`, `?year=`, `?branch_id=` | `[{id, value, max}]` (`safe_available_qty`, max `50` items) | `POSItemsTable.jsx`, `usePOSSuggestions.js`, `posUtils.js` |
+| `GET` | `product-suggestions/` | `ProductSuggestionsView` | `IsAuthenticated` / No Print-Only | `?term=`, `?month=`, `?year=`, `?branch_id=` | `[{id, value, max}]` (`safe_available_qty`, max `50` items) | `POSItemsTable.jsx`, `usePOSSuggestions.js`, `posUtils.js` |
 | `GET` | `default-date/` | `DefaultDateView` | `IsAuthenticated` | `?branch_id=\|branch=` | `{year, month}` | `useDefaultDate.js` (`ReportsLayout.jsx`) |
 | `GET` | `reports/dashboard/` & `reports/dashboard/summary/` | `DashboardReportView` | `IsAuthenticated` / No Print-Only | `?branch_id=`, `?month=`, `?year=`, `?salesperson_id=`, `?area=` | `{period, kpis:{...}, cash_drawer_summary, top_products[], top_areas[]}` | `DashboardReport.jsx` (`reports/dashboard/`) |
 | `GET` | `reports/salesperson-performance/` & `reports/salespersons/` | `SalespersonPerformanceReportView` | `IsAuthenticated` / No Print-Only | `?branch_id=`, `?month=`, `?year=`, `?salesperson_id=`, `?area=` | `{totals, salespersons[], results[]}` | `SalespersonPerformanceReport.jsx` (`reports/salesperson-performance/`) |
@@ -323,8 +323,8 @@ All endpoints below require `Token` or `Session` auth and pass `LicenseEnforceme
 | `GET` | `reports/installments/` | `InstallmentsReportView` | `IsAuthenticated` / No Print-Only | `?branch_id=`, `?month=`, `?year=`, `?salesperson_id=`, `?sale_from_year/month=`, `?sale_to_year/month=`, `?customer_name=`, `?phone=`, `?area=` | `{total_installments_amount, installments_count, installments[]}` | `InstallmentsReport.jsx` |
 | `GET` | `reports/purchases/` | `PurchasesReportView` | `IsAuthenticated` / No Print-Only | `?branch_id=`, `?month=`, `?year=`, `?supplier_id=`, `?item_id=`, `?invoice_type=` | `{summary, kpis, items[], invoices[]}` | `PurchasesReport.jsx` |
 | `GET` | `reports/areas/` | `AreasReportView` | `IsAuthenticated` / No Print-Only | `?branch_id=`, `?month=`, `?year=`, `?salesperson_id=`, `?area=` | `{summary, kpis, areas[]}` | `AreasReport.jsx` |
-| `POST` | `reports/desktop_print/` | `ReportDesktopPrintView` | `IsAuthenticated` / No Print-Only | `{title, columns[], rows[], kpis[], filters_summary[], footer_row?, period_label?, branch_id?, orientation?, report_type?, action, target_printer?}` | `{status, message}` — renders **A4** `pdf_report_content.html` | `ReportTable.jsx`, `AreasReport.jsx`, `PurchasesReport.jsx` |
-| `GET` | `tools/backup/download/` | `BackupDownloadView` | `IsAuthenticated` / Whitelisted | `?branch_id=` (optional) | Binary `.sqlite3` download (`WAL TRUNCATE` + `sqlite3.backup`) | `BackupTab.jsx` |
+| `POST` | `reports/desktop_print/` | `ReportDesktopPrintView` | `IsAuthenticated` / No Print-Only | `{title, columns[], rows[], kpis[], filters_summary[], footer_row?, period_label?, branch_id?, orientation?, report_type?, action, target_printer?}` | `{status, message}` — renders **A4** `pdf_report_content.html` | `ReportTable.jsx` (all `ReportTable` reports incl. `AreasReport.jsx`, `PurchasesReport.jsx`) |
+| `GET` | `tools/backup/download/` | `BackupDownloadView` | `IsAuthenticated` / Whitelisted | `?branch_id=` (optional) | Binary `.sqlite3` download (`WAL TRUNCATE` + `sqlite3.backup`; clean `Backup_VentaPOS_YYYY-MM-DD_HH-MM.sqlite3` attachment via second+6-char UUID temp path) | `BackupTab.jsx` |
 | `POST` | `tools/backup/upload/` | `BackupUploadView` | `AllowAny` + `is_authorized_for_maintenance` / Whitelisted | `multipart/form-data` `backup_file` (`.sqlite3`/`.db`) | `{status:"success"\|"pending_restart", message}` (runs `integrity_check`, 8-table check, pre-restore snapshot, `migrate`) | `BackupTab.jsx`, `QuickRestoreModal.jsx` |
 | `GET` | `receipts-history-cursor/` | `ReceiptHistoryCursorView` | `IsAuthenticated` | `?direction=prev\|next`, `?current_receipt_number=`, `?branch_id=` | `{receipt_number, customer_name, phone_number, area, address}` or `null` | `usePOSHistory.js` |
 | `GET` | `receipts-next-number/` | `ReceiptNextNumberView` | `IsAuthenticated` | `?branch_id=` | `{next_receipt_number}` | `POS.jsx` |
@@ -378,7 +378,7 @@ The backend logic (`tools_views.py`) and UI component (`SyncTab.jsx`) are retain
 ### 6.1 Stack & Build Configuration
 - **Packages (`frontend/package.json`)**: `react` `^19.2.7`, `react-dom` `^19.2.7`, `react-router-dom` `^7.18.0`, `@tabler/core` `^1.4.0`, `@tabler/icons-react` `^3.44.0`, `axios` `^1.18.1`, `react-hot-toast` `^2.6.0`, `sweetalert2` `^11.26.25`. Dev dependencies: `vite` `^8.1.0`, `vitest` `^4.1.10`, `oxlint` `^1.69.0`, `@playwright/test` `^1.61.1`, `@testing-library/react` `^16.3.2`, `@testing-library/jest-dom` `^7.0.0`, `jsdom` `^29.1.1`.
 - **Vite / Vitest (`frontend/vite.config.js`)**: `base: command === 'serve' ? '/' : '/static/'`; dev server proxies `/api` -> `http://127.0.0.1:8000` (`changeOrigin: true`); outputs production bundle to `frontend/dist/`; Vitest configured with `environment: 'jsdom'`, `globals: true`, `setupFiles: './src/setupTests.js'`.
-- **Entry (`index.html`, `src/main.jsx`)**: `<html lang="ar" dir="rtl">`, loads `@tabler/core/dist/css/tabler.rtl.min.css`, `@tabler/core/dist/js/tabler.min.js`, `./index.css`, initializes `setupFileLogger()`, and wraps `<App />` in `<GlobalErrorBoundary>`.
+- **Entry (`index.html`, `src/main.jsx`, `src/index.css`)**: `<html lang="ar" dir="rtl">`, `<title>VentaPOS NextGen</title>`, `/favicon.ico` (`public/favicon.ico`), loads `@tabler/core/dist/css/tabler.rtl.min.css`, `@tabler/core/dist/js/tabler.min.js`, `./index.css` (local `@font-face` Cairo weights `400..800` bundled from `src/assets/fonts/cairo-v31-arabic_latin-*.woff2`, zero external Google Fonts CDN), initializes `setupFileLogger()`, and wraps `<App />` in `<GlobalErrorBoundary>`.
 
 ### 6.2 Complete Routing Map (`src/App.jsx`)
 
@@ -459,42 +459,46 @@ The backend logic (`tools_views.py`) and UI component (`SyncTab.jsx`) are retain
 
 ### 7.1 Ordered Build & Release Pipeline
 
-#### Building `VentaPOS_NextGen` (Production Desktop Executable)
-1. **Build Frontend**: `cd d:\Projects\VentaPOS\VentaPOS_NextGen\frontend && npm run build` (emits `frontend/dist/` with `base: '/static/'`).
-2. **Compile Binary (`build_exe.py` or `VentaPOS.spec`)**:
-   - Portable spec build: `..\VentaPOS_NextGen\venv\Scripts\pyinstaller.exe VentaPOS.spec --noconfirm`
-   - Combined frontend + PyInstaller wrapper: `python build_exe.py` (Note: `build_exe.py` builds frontend then invokes `PyInstaller.__main__.run(args)`).
-   - Output: `VentaPOS_NextGen/dist/VentaPOS/VentaPOS.exe` + `_internal/` (`4,754` files, `474,347,095` bytes / ~452 MB measured on disk).
-3. **Installer / Release Publishing (`scripts/publish_release.py`)**:
+#### Building `VentaPOS_NextGen` (Production Desktop Executable + Installer)
+1. **Build Frontend**: `cd d:\Projects\VentaPOS\VentaPOS_NextGen\frontend && npm run build` (emits `frontend/dist/` with `base: '/static/'`, bundled offline Cairo `.woff2`, and `favicon.ico`).
+2. **Compile Portable Binary (`build_exe.py` or `VentaPOS.spec`)**:
+   - Combined frontend + clean spec build: `.\venv\Scripts\python.exe build_exe.py` (cleans `dist/` & `build/`, runs `npm run build`, and invokes `PyInstaller` directly against `VentaPOS.spec` without modifying or overwriting the `.spec` file).
+   - Direct spec invocation (after `npm run build`): `.\venv\Scripts\pyinstaller.exe VentaPOS.spec --noconfirm --clean`
+   - Clean output: `VentaPOS_NextGen/dist/VentaPOS/VentaPOS.exe` + `_internal/` (`4,540` files, `214,003,195` bytes / ~204.09 MB measured on disk; zero dev `db.sqlite3`, `backups/`, `logs/`, `media/`, `api/tests/`, duplicate `backend/bin/`, or `numpy`/`tkinter` bloat).
+3. **Compile Windows Setup Installer (`Inno Setup 6`)**:
+   - Script: `VentaPOS_NextGen/installer/VentaPOS_Setup.iss` (`AppId={{7D4A9C1E-8B2F-4F61-A3C5-9E12B7F8D401}}`, targets `{autopf}\VentaPOS`, embeds `assets/venta.ico`, preserves `%APPDATA%\VentaPOS\`, supports silent upgrade cleanup).
+   - Command: `"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\VentaPOS_Setup.iss`
+   - Output: `VentaPOS_NextGen/dist/VentaPOS_Setup_v1.0.0.exe` (`47,902,795` bytes / ~45.68 MB, SHA-256 `8471a21b0d04a253cb26c32c602774be84568dc1697c4b155a43152062453148`).
+4. **Release Publishing (`scripts/publish_release.py`)**:
    - `publish_release.py` reads `APP_VERSION` from `backend/backend/settings.py`, locates `dist/VentaPOS_Setup_v{version}.exe` (or falls back to `dist/VentaPOS/VentaPOS.exe` / `dist/VentaPOS.exe`), computes SHA-256, writes `dist/version.json`, and when `GITHUB_TOKEN` is set, creates GitHub Release `v{version}` on `venta-pos/releases` and uploads `version.json` + binary asset.
 
 #### Building `LicenseManager`
-1. Invoke PyInstaller from **`VentaPOS_NextGen/venv`** (see Gotcha §9.2.3 — `LicenseManager/venv` lacks PyInstaller/Waitress/pywebview):
-   `..\VentaPOS_NextGen\venv\Scripts\python.exe build_exe.py` inside `LicenseManager/`.
-2. Output: `LicenseManager/dist/VentaPOS_LicenseManager/VentaPOS_LicenseManager.exe` + `_internal/` (`4,565` files, `86,328,870` bytes / ~82 MB measured on disk).
+1. Invoke `build_exe.py` (or `VentaPOS_LicenseManager.spec`) from **`VentaPOS_NextGen/venv`** (see Gotcha §9.2.2 — `LicenseManager/venv` lacks PyInstaller/Waitress/pywebview):
+   `..\VentaPOS_NextGen\venv\Scripts\python.exe build_exe.py` inside `LicenseManager/` (runs `PyInstaller` against portable `VentaPOS_LicenseManager.spec`).
+2. Clean output: `LicenseManager/dist/VentaPOS_LicenseManager/VentaPOS_LicenseManager.exe` + `_internal/` (`4,488` files, `67,750,753` bytes / ~64.61 MB measured on disk; zero `db.sqlite3`, `tests.py`, or `numpy`/`tkinter` bloat).
 
 ### 7.2 PyInstaller Build Configuration Breakdown
 
-| Parameter | `VentaPOS_NextGen` (`build_exe.py` / `VentaPOS.spec`) | `LicenseManager` (`build_exe.py`) |
+| Parameter | `VentaPOS_NextGen` (`VentaPOS.spec` via `build_exe.py`) | `LicenseManager` (`VentaPOS_LicenseManager.spec` via `build_exe.py`) |
 | :--- | :--- | :--- |
 | **Entry Point** | `launcher.py` | `launcher.py` |
-| **Mode Flags** | `--onedir`, `--windowed` (`console=False`), `--uac-admin`, `upx=True` (`VentaPOS.spec`) | `--onedir`, `--windowed`, `--uac-admin` |
-| **App Icon (`--icon`)** | None specified | None specified |
+| **Mode Flags** | `--onedir`, `--windowed` (`console=False`), `--uac-admin`, `upx=True` | `--onedir`, `--windowed` (`console=False`), `--uac-admin`, `upx=True` |
+| **App Icon (`icon`)** | `assets/venta.ico` | `assets/venta.ico` |
 | **Pathex** | `backend/` | `LicenseManager/` |
-| **Bundled `datas`** | `(backend/, 'backend')`, `(frontend/dist/, 'frontend/dist')`, `(backend/bin/, 'bin')` | `(core/, 'core')`, `(licenses/, 'licenses')` |
-| **`binaries` / `excludes`** | `binaries=[]`, `excludes=[]` | No `--exclude-module` flags |
-| **`hiddenimports`** | Django contrib apps + middlewares, DRF subpackages, `corsheaders`, `whitenoise`, `api.*`, `backend.urls` | Django contrib apps + middlewares, `waitress`, `webview`, `requests`, `licenses.*`, `core.urls`, `core.wsgi` |
-| **`collect-submodules`** | `django`, `rest_framework`, `corsheaders`, `whitenoise`, `api`, `api.views`, `api.services`, `api.utils` | `django`, `waitress`, `licenses`, `core` |
+| **Bundled `datas`** | Clean `collect_backend_datas(backend/)` (excludes `bin/`, `backups/`, `logs/`, `media/`, `db/`, `staticfiles/`, `__pycache__/`, `tests/`, `*.sqlite3*`, `*.log`), `(frontend/dist/, 'frontend/dist')`, `(backend/bin/, 'bin')`, `collect_data_files('tzdata')`, `collect_data_files('certifi')`, plus `a.datas` filter stripping `hook-django` `db.*`/`*.sqlite3*`/`*.db`/`*.log` | Clean `collect_app_datas` for `core/` & `licenses/` (excludes `__pycache__/`, `tests.py`, `*.sqlite3*`, `*.log`), `collect_data_files('tzdata')`, `collect_data_files('certifi')`, plus `a.datas` filter stripping `hook-django` `db.*`/`*.sqlite3*`/`*.db`/`*.log` |
+| **`excludes`** | `['numpy', 'scipy', 'pandas', 'matplotlib', 'tkinter', '_tkinter', 'pytest']` | `['numpy', 'scipy', 'pandas', 'matplotlib', 'tkinter', '_tkinter', 'pytest']` |
+| **`hiddenimports`** | Django contrib apps + middlewares, DRF subpackages, `corsheaders`, `whitenoise`, `api.*`, `backend.urls`, `tzdata`, `zoneinfo`, `certifi`, `num2words`, `pdfkit`, `waitress`, `webview`, `dateutil` | Django contrib apps + middlewares, `waitress`, `webview`, `requests`, `certifi`, `tzdata`, `zoneinfo`, `licenses.*`, `core.urls`, `core.wsgi` |
+| **`collect-submodules`** | `django`, `rest_framework`, `corsheaders`, `whitenoise`, `api` *(excluding `api.tests`)*, `api.views`, `api.services`, `api.utils` | `django`, `waitress`, `licenses` *(excluding `licenses.tests`)*, `core` |
 
 ### 7.3 Frozen `.exe` Debugging Playbook
 
 1. **Console & Traceback Visibility**: In `--windowed` mode `sys.stdout`/`sys.stderr` are `DummyWriter` no-ops; to inspect startup crashes live, launch via `Run_VentaPOS_Launcher.bat` (runs unbuffered Python console with `[BACKEND]` and `[FRONTEND]` live output) or temporarily rebuild with `console=True` in `VentaPOS.spec`.
 2. **Persistent AppData Logs & DB**:
-   - Backend log: `%APPDATA%\VentaPOSTest\ventapos_system.log`
-   - Rotating frontend console/error bridge: `%APPDATA%\VentaPOSTest\logs\frontend_console.log` (`5 MB x 2`)
-   - Auto-backups: `%APPDATA%\VentaPOSTest\backups\auto_backup_*.sqlite3` and `pre_restore_*.sqlite3`
-3. **Recovery from Stuck Pending Restore**: If startup loops restoring a bad DB, delete `%APPDATA%\VentaPOSTest\restore_pending.bin` (or manually copy a clean snapshot from `backups/` over `db.sqlite3` and delete `db.sqlite3-wal` / `db.sqlite3-shm`).
-4. **Build Warnings & Missing Assets**: Inspect `VentaPOS_NextGen/build/VentaPOS/warn-VentaPOS.txt`; verify `dist/VentaPOS/_internal/bin/wkhtmltox/bin/wkhtmltopdf.exe`, `SumatraPDF.exe`, `frontend/dist/index.html`, and `certifi/cacert.pem` (required for GitHub updater HTTPS). For `LicenseManager`, verify `certifi` / `requests` HTTPS calls to Supabase.
+   - Backend log: `%APPDATA%\VentaPOS\ventapos_system.log`
+   - Rotating frontend console/error bridge: `%APPDATA%\VentaPOS\logs\frontend_console.log` (`5 MB x 2`)
+   - Auto-backups: `%APPDATA%\VentaPOS\backups\auto_backup_*.sqlite3` and `pre_restore_*.sqlite3`
+3. **Recovery from Stuck Pending Restore**: If startup loops restoring a bad DB, delete `%APPDATA%\VentaPOS\restore_pending.bin` (or manually copy a clean snapshot from `backups/` over `db.sqlite3` and delete `db.sqlite3-wal` / `db.sqlite3-shm`).
+4. **Build Warnings & Missing Assets**: Inspect `VentaPOS_NextGen/build/VentaPOS/warn-VentaPOS.txt`; verify `dist/VentaPOS/_internal/bin/wkhtmltox/bin/wkhtmltopdf.exe`, `SumatraPDF.exe`, `frontend/dist/index.html`, `frontend/dist/favicon.ico`, `tzdata/zoneinfo/Africa/Cairo`, and `certifi/cacert.pem` (required for GitHub updater HTTPS). For `LicenseManager`, verify `tzdata/zoneinfo/Africa/Cairo`, `certifi/cacert.pem`, and `requests` HTTPS calls to Supabase.
 
 ---
 
@@ -562,16 +566,19 @@ Set-Location d:\Projects\VentaPOS\LicenseManager
 .\venv\Scripts\python.exe manage.py test licenses -v 2
 ```
 
-### PyInstaller Builds & Release / Helper Scripts
+### PyInstaller Builds, Inno Setup Installer & Release Scripts
 ```powershell
-# Build VentaPOS_NextGen EXE via build_exe.py (rebuilds frontend first)
+# Build VentaPOS_NextGen EXE via build_exe.py (rebuilds frontend and runs VentaPOS.spec)
 Set-Location d:\Projects\VentaPOS\VentaPOS_NextGen
 .\venv\Scripts\python.exe build_exe.py
 
 # Or rebuild directly from portable VentaPOS.spec (after npm run build)
-.\venv\Scripts\pyinstaller.exe VentaPOS.spec --noconfirm
+.\venv\Scripts\pyinstaller.exe VentaPOS.spec --noconfirm --clean
 
-# Build LicenseManager EXE (uses VentaPOS_NextGen venv because LicenseManager/venv lacks PyInstaller)
+# Compile Inno Setup 6 Windows Installer (outputs dist\VentaPOS_Setup_v1.0.0.exe)
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" d:\Projects\VentaPOS\VentaPOS_NextGen\installer\VentaPOS_Setup.iss
+
+# Build LicenseManager EXE via VentaPOS_LicenseManager.spec (uses VentaPOS_NextGen venv because LicenseManager/venv lacks PyInstaller)
 Set-Location d:\Projects\VentaPOS\LicenseManager
 ..\VentaPOS_NextGen\venv\Scripts\python.exe build_exe.py
 
@@ -594,47 +601,29 @@ $env:GITHUB_TOKEN = "<your-github-token>"
 - **Pre-License Anchor Across Renewals**: `get_first_production_license_start_date()` takes `min(start_date)` across **both** active non-demo `ClientLicense` rows and `LicenseHistory`, ensuring multi-year renewals never retroactively reclassify earlier production months as pre-license.
 - **Fail-Closed Vendor Licensing**: `LicenseManager` blocks both login and key issuance unless Supabase (`verify_marketeer_login` RPC + `public.licenses` append-only `INSERT`) responds `200/201/204`, guaranteeing an immutable vendor sales audit trail even though target customer apps validate keys 100% offline.
 
-### 9.2 Verified Audit Gotchas & Technical Debt Backlog
+### 9.2 Verified Audit Gotchas & Remaining Technical Debt Backlog
 
-The following 10 issue groups were directly verified in the current source tree and dist bundles:
+The following remaining non-blocking items were verified in the current codebase (12 critical packaging, runtime, offline-asset, and bug items were resolved in `v1.0.0` Pre-Production Hardening):
 
-1. **PyInstaller Data Bloat, Duplication & Build Leakage (`VentaPOS_NextGen/build_exe.py`, `VentaPOS.spec`, `LicenseManager/build_exe.py`)**:
-   - Bundling `(backend/, 'backend')` alongside `(backend/bin/, 'bin')` duplicates the `142,824,056`-byte `bin/` directory (`_internal/bin` **and** `_internal/backend/bin`), and leaks live dev artifacts into `_internal/backend/`: dev `db.sqlite3` (`8,122,368` bytes), `24` files in `backups/` (`83,001,344` bytes), `24` PDFs in `media/Invoices/` (`6,561,086` bytes), `logs/`, `api/tests/`, and `__pycache__/`.
-   - `excludes=[]` pulls `numpy` + `OpenBLAS` (`~20.4 MB` DLL) into `_internal/` even though the runtime app does not execute `pandas`/`numpy`.
-   - `build_exe.py` passes `--specpath` default (`CWD`), overwriting the portable `Path(SPECPATH)` `VentaPOS.spec` with absolute machine paths whenever `build_exe.py` runs.
-   - `LicenseManager/build_exe.py` lacks `.spec` isolation and bundles `LicenseManager/db.sqlite3` (`155,648` bytes) inside `_internal/`.
-2. **Placeholder `DB_DIR` & Dead Settings (`VentaPOS_NextGen/backend/backend/settings.py`)**:
-   - Frozen `DB_DIR` still resolves to `%APPDATA%\VentaPOSTest` (`settings.py:15`, `print_utils.py:73`) instead of a clean production folder name.
-   - `APPDATA_DIR` and `RUNTIME_DB = tempfile.gettempdir() / '~sys_runtime_cache_v1.tmp'` (`settings.py:99-102`) are unused dead code.
-3. **`LicenseManager` Security, Environment & Expiry Drift**:
-   - `LicenseManager/core/settings.py:33` leaves `DEBUG = True` unconditionally even in frozen builds.
-   - `core/settings.py` embeds fallback `SECRET_KEY` and `SUPABASE_KEY`, `licenses/utils/crypto.py` hardcodes the raw `SECRET_KEY` bytes, and `MASTER_PASSWORD` (`VENTA_LICENSE_MASTER_PASSWORD`) is unused dead config.
+1. **`LicenseManager` Packaging Env, CDN Assets, Secret Fallbacks & Expiry Drift**:
+   - `LicenseManager/core/settings.py` embeds fallback `SECRET_KEY` and `SUPABASE_KEY`, and `licenses/utils/crypto.py` hardcodes raw `SECRET_KEY` bytes.
+   - `LicenseManager/licenses/templates/base.html:8-9` still loads Bootstrap 5.3 + Google Fonts from CDNs (`cdn.jsdelivr.net` / `fonts.googleapis.com`), degrading styling when offline (`VentaPOS_NextGen` frontend and `pdf_base.html` are 100% offline).
    - `LicenseManager/venv` (Python `3.13.5`) lacks `pyinstaller`, `pywebview`, and `waitress`; builds and desktop launcher rely on `VentaPOS_NextGen/venv` (Python `3.12.9`).
    - `License.get_duration_days()` (`LicenseManager`) uses `timedelta(days=365)` and returns `None` for lifetime, whereas `VentaPOS_NextGen` uses calendar-year alignment (`start_year + N`) and `+99` years for lifetime. Also `LicenseManager/requirements.md` cites `5,000`/`15,000`/`25,000` quotas while NextGen grants `4,800`/`14,400`/`24,000`.
-4. **Offline Asset Dependencies, Missing Icons & Updater Packaging Mismatch**:
-   - `frontend/src/index.css:1` imports Google Fonts (`fonts.googleapis.com`), and `LicenseManager/licenses/templates/base.html:8-9` loads Bootstrap 5.3 + Google Fonts from CDNs (`cdn.jsdelivr.net`), degrading typography/styling on air-gapped PCs (`pdf_base.html` is the only template with fully inline Bootstrap 5.3.8).
-   - Neither `build_exe.py` nor `VentaPOS.spec` passes an `.ico` app icon.
-   - `SystemApplyUpdateView` (`system_views.py:144,187`) downloads and runs `VentaPOS_Setup_v{version}.exe` (expecting a Windows setup installer like Inno Setup), whereas no Inno Setup `.iss` script exists in the repository to package `--onedir` into an installer.
-5. **`LicenseEnforcementMiddleware` Print-Only Coverage Gaps (`api/middleware.py:138-147`)**:
-   - Blocks `/api/v1/commission-histories/` for `product_id in (2, 3)`, but **omits** the `/api/v1/commission-history/` URL alias (`api/urls.py:31`), `/api/v1/product-suggestions/`, `/api/v1/sale-items/`, and `/api/v1/installment-payments/`.
-6. **`PurchaseInvoicePagination` Includes `RETURN` Invoices (`purchase_views.py:35-39`)**:
-   - Sums `F('quantity') * F('purchase_price')` across all `PurchaseInvoiceItem` rows in the paginated queryset without subtracting or excluding `invoice_type='RETURN'`, differing from `PurchasesReportView` (`gross_purchases - gross_returns`).
-7. **`init_demo_db.py` 2024 Date vs. `2025` Serializer Floor**:
-   - `init_demo_db.py:238` sets `start_date = today - relativedelta(months=25)` (yielding `initial_year=2024` in late `2026`), which violates `InventoryItemSerializer`'s `min_year=2025` validation (`serializers.py:183`) if a seeded demo item is edited via API/UI.
-8. **Reporting Aggregation Differences (`report_views.py`)**:
+2. **PDF Report Font Note (`pdf_report_content.html`)**:
+   - `pdf_report_content.html` declares `font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif;` with zero external CDNs; only `.woff2` Cairo fonts exist in the workspace (QtWebKit in `wkhtmltopdf.exe` does not load `.woff2`), so A4 PDFs fall back cleanly offline to `Segoe UI` / `Tahoma` / `Arial`.
+3. **Reporting Aggregation Differences (`report_views.py`)**:
    - `DashboardReportView` applies `?salesperson_id=` and `?area=` filters to Card 1 revenue/COGS/commissions/reserve, whereas `operating_expenses`, `auto_salaries`, `cash_drawer`, `total_deficit_loss`, `top_products`, and `top_areas` remain branch-wide.
    - `ProfitAndLossReportView` looks up COGS and sales commission at the queried `(month, year)` rather than the original sale month for returns (`parent_receipt`), skips orphan credit returns if the item was not also sold that month (`if item_id in group`), and deducts `ret_rev * coll_rate` linearly — differing slightly from `InventoryItemViewSet.ledger`'s proportional `(receipt_total - down_payment) / receipt_total` calculation and `DashboardReportView`.
-9. **ViewSet Branch Scoping & Runtime `test` Import**:
+4. **ViewSet Branch Scoping & Runtime `test` Import**:
    - `SoftDeleteModelViewSet.create` (`base.py:121-142`) reads `X-Branch-ID` only (ignoring `?branch_id=`), falls back to `Branch.objects.first()`, and injects `'branch'` even on branchless models.
    - `SaleItemViewSet`, `InstallmentPaymentViewSet`, and `PurchaseInvoiceItemViewSet` do not filter `get_queryset()` by `X-Branch-ID`/`?branch_id=`.
    - `ReportDesktopPrintView` (`report_views.py:1343,1391`) imports `rest_framework.test.APIRequestFactory` inside production request handlers (`areas` and `purchases` report print fallback).
-10. **Backup Concurrency, PDF Cleanup, Timezone, Printer Latency & Frontend Quirks**:
-    - `BackupDownloadView` (`tools_views.py:44`) uses minute-resolution temp names (`%Y-%m-%d_%H-%M`), risking filename collisions within the same minute; `clean_invoices_directory()` (`print_utils.py:10`) is dead code, causing generated PDFs to accumulate unboundedly in `الفواتير المطبوعة` / `media/Invoices`.
-    - `BackupUploadView` calls `connections.close_all()` inside a 4-thread Waitress server during live swap, relying on `restore_pending.bin` fallback if Windows file locks trigger `PermissionError`.
-    - `TIME_ZONE = 'UTC'` causes `printed_at_ar` (`report_views.py:1510`) and `created_at` timestamps to display UTC instead of Egypt local time (`+02:00`/`+03:00`).
-    - `ReceiptViewSet.printers` executes uncached synchronous PowerShell (`timeout=10s`) every time `PrintModal` opens.
-    - `DashboardReport.jsx:12` destructures `registerPrintHandler` without calling it (leaving the `ReportsLayout` header print button disabled on Dashboard), while `AreasReport.jsx:99` and `PurchasesReport.jsx:104` bypass `PrintModal` by calling `/reports/desktop_print/` (`action: 'view'`) directly on header click.
-    - `useSmartScroll.js:117` still queries `.sticky-selection-strip` (removed in UI refactor); `useSalespersons.js` and `App.jsx` `PlaceholderPage` are unused; `App.jsx` lacks a `*` 404 fallback route.
+5. **Backup Live-Swap, Printer Latency & Frontend Minor Quirks**:
+   - `BackupUploadView` calls `connections.close_all()` inside a 4-thread Waitress server during live swap, relying on `restore_pending.bin` fallback if Windows file locks trigger `PermissionError`.
+   - `ReceiptViewSet.printers` executes uncached synchronous PowerShell (`timeout=10s`) every time `PrintModal` opens.
+   - `DashboardReport.jsx:12` destructures `registerPrintHandler` without calling it (leaving the `ReportsLayout` header print button disabled on Dashboard).
+   - `useSmartScroll.js:117` still queries `.sticky-selection-strip` (removed in UI refactor); `useSalespersons.js` and `App.jsx` `PlaceholderPage` are unused; `App.jsx` lacks a `*` 404 fallback route.
 
 ---
 
@@ -644,6 +633,7 @@ Reverse-chronological record of significant repository milestones (verified from
 
 | Date | Area / Commit | Summary of Change |
 | :--- | :--- | :--- |
+| **2026-11-20** | Pre-Production Hardening (`v1.0.0`) *(Current)* | Localized Cairo `.woff2` `@font-face` + `venta.ico` branding + `"VentaPOS NextGen"` title; hardened `VentaPOS.spec` / `LicenseManager/VentaPOS_LicenseManager.spec` / `build_exe.py` (clean source collection, single `bin/`, `tzdata`+`certifi`, `hook-django` SQLite stripping, `excludes` removing `numpy`/`tkinter`); migrated `DB_DIR` to `%APPDATA%\VentaPOS`, `TIME_ZONE = 'Africa/Cairo'`, frozen `LicenseManager` `DEBUG = False`, removed dead `MASTER_PASSWORD`/`APPDATA_DIR`/`RUNTIME_DB`; fixed 6 verified functional bugs (Print-Only middleware gaps, `PurchaseInvoicePagination` `RETURN` exclusion, `init_demo_db` `>= 2025-01-01` floor, `prune_old_pdfs` 50-PDF limit, `BackupDownloadView` second+UUID temp paths, `AreasReport`/`PurchasesReport` printing via `PrintModal`); added `installer/VentaPOS_Setup.iss` compiling `VentaPOS_Setup_v1.0.0.exe`. |
 | **2026-11-20** | Root Documentation & Repo Hygiene *(Current)* | Authored unified `APP_BIBLE.md` SSoT manual; retired stale `.agents/{CODEBASE_MAP,PROMPT_TEMPLATES,REJECTED_APPROACHES}.md` to `_archive/legacy_agents_docs/`; purged tracked legacy/junk artifacts (`ss.html`, `test_license.py`, `App.css`, starter SVGs/PNGs, `verify_docs.py`, duplicate sub-dir helpers) and archived root prototypes under `_archive/`. |
 | **2026-11-20** | `LicenseManager` Cloud Auth (`1c13676`) | Replaced `VENTA_LICENSE_MASTER_PASSWORD` auth with fail-closed Supabase `pgcrypto` RPC (`public.verify_marketeer_login` + RLS-locked `public.marketeer_users`), added marketeer attribution (`marketeer_username` -> `public.licenses`), updated `supabase_schema.sql`. |
 | **2026-11-19** | Repo Hygiene (`029958e`) | Removed stray tracked file `VentaPOS_NextGen/backend/file`. |

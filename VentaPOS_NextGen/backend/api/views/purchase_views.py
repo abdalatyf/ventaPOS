@@ -32,12 +32,17 @@ class PurchaseInvoicePagination(PageNumberPagination):
     max_page_size = 1000
 
     def get_paginated_response(self, data):
+        qs = self.page.paginator.object_list
+        req_type = ""
+        if hasattr(self, "request") and self.request is not None:
+            req_type = str(self.request.query_params.get("invoice_type", "")).strip().upper()
+        agg_qs = qs if req_type == "RETURN" else qs.exclude(invoice_type="RETURN")
         total_purchases = PurchaseInvoiceItem.objects.filter(
-            invoice__in=self.page.paginator.object_list
+            invoice__in=agg_qs
         ).aggregate(
             total=Sum(F('quantity') * F('purchase_price'))
         )["total"] or 0
-        all_ids = list(self.page.paginator.object_list.values_list('id', flat=True))
+        all_ids = list(qs.values_list('id', flat=True))
         return Response({
             "count": self.page.paginator.count,
             "next": self.get_next_link(),

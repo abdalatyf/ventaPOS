@@ -994,3 +994,63 @@ class PrintEngineHardeningTests(TestCase):
         self.assertEqual(cs.phone1, "01012345678")
         self.assertEqual(cs.phone2, "01112345678")
 
+    def test_init_demo_db_clamps_start_date_to_2025(self):
+        from django.core.management import call_command
+        from api.models import InventoryItem, CommissionHistory
+
+        ClientLicense.all_objects.all().delete()
+
+        class Early2025Date(date):
+            @classmethod
+            def today(cls):
+                return date(2025, 1, 20)
+
+        with unittest.mock.patch("api.management.commands.init_demo_db.date", Early2025Date):
+            call_command("init_demo_db")
+
+        items = InventoryItem.objects.all()
+        self.assertGreater(items.count(), 0)
+        self.assertTrue(all(it.initial_year >= 2025 for it in items))
+        self.assertTrue(all(ch.activation_year >= 2025 for ch in CommissionHistory.objects.all()))
+
+        first_item = items.first()
+        res_patch = self.client.patch(
+            f"/api/v1/inventory-items/{first_item.id}/",
+            {"initial_quantity": first_item.initial_quantity + 1},
+            format="json",
+        )
+        self.assertEqual(res_patch.status_code, status.HTTP_200_OK)
+
+    def test_generate_and_open_pdf_prunes_old_pdfs_to_50(self):
+        import os
+        import tempfile
+        from pathlib import Path
+        from api.print_utils import generate_and_open_pdf, MAX_STORED_PDFS
+
+        self.assertEqual(MAX_STORED_PDFS, 50)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base_ts = 1700000000
+            for idx in range(55):
+                p = Path(tmp_dir) / f"old_{idx:03d}.pdf"
+                p.write_bytes(b"%PDF-1.4\n")
+                os.utime(p, (base_ts + idx * 10, base_ts + idx * 10))
+
+            def fake_from_string(html, output_path, configuration=None, options=None):
+                Path(output_path).write_bytes(b"%PDF-1.4\nnew")
+
+            with unittest.mock.patch("api.print_utils.get_save_directory", return_value=tmp_dir), \
+                 unittest.mock.patch("api.print_utils.get_wkhtmltopdf_config", return_value=None), \
+                 unittest.mock.patch("api.print_utils.pdfkit.from_string", side_effect=fake_from_string), \
+                 unittest.mock.patch("time.sleep"), \
+                 unittest.mock.patch("platform.system", return_value="Windows"), \
+                 unittest.mock.patch("os.startfile", create=True):
+                ok, msg = generate_and_open_pdf("<html></html>", filename_prefix="RetentionTest", action="view")
+
+            self.assertTrue(ok, msg)
+            remaining = sorted(p.name for p in Path(tmp_dir).glob("*.pdf"))
+            self.assertEqual(len(remaining), 50)
+            for deleted_idx in range(6):
+                self.assertNotIn(f"old_{deleted_idx:03d}.pdf", remaining)
+            self.assertIn("old_006.pdf", remaining)
+            self.assertTrue(any(name.startswith("RetentionTest_") for name in remaining))
+

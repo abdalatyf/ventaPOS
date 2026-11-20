@@ -402,3 +402,54 @@ class AreasAndPurchasesReportsTests(TestCase):
             for header in expected_purch_headers:
                 self.assertIn(header, html_purch, f"Missing purchases header: {header}")
 
+    def test_purchase_invoice_pagination_excludes_returns_unless_filtered(self):
+        """
+        Verify PurchaseInvoicePagination excludes invoice_type='RETURN' from aggregate.total_purchases
+        when listing all/purchase invoices, and includes RETURN totals when invoice_type='RETURN'.
+        """
+        inv_p = PurchaseInvoice.objects.create(
+            branch=self.branch,
+            supplier=self.supp1,
+            invoice_number=10,
+            invoice_year=2026,
+            invoice_month=8,
+            invoice_type="PURCHASE",
+        )
+        PurchaseInvoiceItem.objects.create(
+            invoice=inv_p, inventory_item=self.item1, quantity=5, purchase_price=4000
+        )
+
+        inv_r = PurchaseInvoice.objects.create(
+            branch=self.branch,
+            supplier=self.supp1,
+            invoice_number=11,
+            invoice_year=2026,
+            invoice_month=8,
+            invoice_type="RETURN",
+        )
+        PurchaseInvoiceItem.objects.create(
+            invoice=inv_r, inventory_item=self.item1, quantity=2, purchase_price=4000
+        )
+
+        # Unfiltered (default ALL) -> total_purchases excludes RETURN (20000 only)
+        res_all = self.client.get(f"/api/v1/purchase-invoices/?branch_id={self.branch.id}")
+        self.assertEqual(res_all.status_code, 200)
+        self.assertEqual(res_all.json()["count"], 2)
+        self.assertEqual(float(res_all.json()["aggregate"]["total_purchases"]), 20000.0)
+
+        # Explicit ALL -> total_purchases excludes RETURN
+        res_explicit_all = self.client.get(f"/api/v1/purchase-invoices/?branch_id={self.branch.id}&invoice_type=ALL")
+        self.assertEqual(res_explicit_all.status_code, 200)
+        self.assertEqual(float(res_explicit_all.json()["aggregate"]["total_purchases"]), 20000.0)
+
+        # PURCHASE filter -> 20000
+        res_purchase = self.client.get(f"/api/v1/purchase-invoices/?branch_id={self.branch.id}&invoice_type=PURCHASE")
+        self.assertEqual(res_purchase.status_code, 200)
+        self.assertEqual(float(res_purchase.json()["aggregate"]["total_purchases"]), 20000.0)
+
+        # RETURN filter -> 8000
+        res_return = self.client.get(f"/api/v1/purchase-invoices/?branch_id={self.branch.id}&invoice_type=RETURN")
+        self.assertEqual(res_return.status_code, 200)
+        self.assertEqual(res_return.json()["count"], 1)
+        self.assertEqual(float(res_return.json()["aggregate"]["total_purchases"]), 8000.0)
+

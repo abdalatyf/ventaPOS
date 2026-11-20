@@ -39,13 +39,17 @@ class BackupDownloadView(ToolsBaseView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        import uuid
+        from django.utils import timezone
         db_path = settings.DATABASES['default']['NAME']
+        temp_backup_path = None
         try:
-            timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M')
-            filename = f"Backup_VentaPOS_{timestamp}.sqlite3"
+            now = timezone.localtime()
+            filename = f"Backup_VentaPOS_{now.strftime('%Y-%m-%d_%H-%M')}.sqlite3"
+            temp_filename = f"Backup_VentaPOS_{now.strftime('%Y-%m-%d_%H-%M-%S')}_{uuid.uuid4().hex[:6]}.sqlite3"
             
             temp_dir = tempfile.gettempdir()
-            temp_backup_path = os.path.join(temp_dir, filename)
+            temp_backup_path = os.path.join(temp_dir, temp_filename)
 
             # Flush WAL changes to main database before backup
             try:
@@ -76,6 +80,11 @@ class BackupDownloadView(ToolsBaseView):
             response.close = _cleanup
             return response
         except Exception as e:
+            if temp_backup_path and os.path.exists(temp_backup_path):
+                try:
+                    os.unlink(temp_backup_path)
+                except OSError:
+                    pass
             return Response({"error": f"فشل النسخ الاحتياطي: {str(e)}"}, status=500)
 
 class BackupUploadView(ToolsBaseView):

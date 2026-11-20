@@ -1507,7 +1507,7 @@ class ReportDesktopPrintView(views.APIView):
                     'colspan': fcell.get('colspan', None)
                 })
 
-        now_str = timezone.now().strftime("%Y/%m/%d %H:%M")
+        now_str = timezone.localtime().strftime("%Y/%m/%d %H:%M")
 
         ctx = {
             'title': title,

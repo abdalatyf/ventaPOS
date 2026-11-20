@@ -110,6 +110,43 @@ class BackupsAndSyncTests(TestCase):
                 # First 16 bytes of any valid SQLite database must be 'SQLite format 3\x00'
                 self.assertTrue(content.startswith(b"SQLite format 3\x00"))
 
+    def test_backup_download_uses_unique_temp_paths_and_clean_filename(self):
+        """
+        Verify two consecutive BackupDownloadView calls in the same minute keep the clean
+        Backup_VentaPOS_YYYY-MM-DD_HH-MM.sqlite3 attachment filename while using distinct
+        second+uuid temp paths and cleaning them up when streamed/closed.
+        """
+        from datetime import datetime as dt
+        from zoneinfo import ZoneInfo
+
+        fixed_now = dt(2026, 11, 20, 14, 30, 15, tzinfo=ZoneInfo("Africa/Cairo"))
+        with tempfile.TemporaryDirectory() as db_dir, tempfile.TemporaryDirectory() as tmp_dir:
+            temp_db = Path(db_dir) / "test_active.sqlite3"
+            self._create_sqlite_db_file(temp_db, include_schema=True)
+
+            with unittest.mock.patch.dict(settings.DATABASES["default"], {"NAME": str(temp_db)}), \
+                 unittest.mock.patch("tempfile.gettempdir", return_value=tmp_dir), \
+                 unittest.mock.patch("django.utils.timezone.localtime", return_value=fixed_now):
+                res1 = self.client.get("/api/v1/tools/backup/download/")
+                res2 = self.client.get("/api/v1/tools/backup/download/")
+
+                self.assertEqual(res1.status_code, status.HTTP_200_OK)
+                self.assertEqual(res2.status_code, status.HTTP_200_OK)
+                self.assertIn('filename="Backup_VentaPOS_2026-11-20_14-30.sqlite3"', res1["Content-Disposition"])
+                self.assertIn('filename="Backup_VentaPOS_2026-11-20_14-30.sqlite3"', res2["Content-Disposition"])
+
+                temp_files = list(Path(tmp_dir).glob("Backup_VentaPOS_*.sqlite3"))
+                self.assertEqual(len(temp_files), 2)
+                self.assertNotEqual(temp_files[0].name, temp_files[1].name)
+                for tf in temp_files:
+                    self.assertRegex(tf.name, r"^Backup_VentaPOS_2026-11-20_14-30-15_[0-9a-f]{6}\.sqlite3$")
+
+                c1 = b"".join(res1.streaming_content) if res1.streaming else res1.content
+                c2 = b"".join(res2.streaming_content) if res2.streaming else res2.content
+                self.assertTrue(c1.startswith(b"SQLite format 3\x00"))
+                self.assertTrue(c2.startswith(b"SQLite format 3\x00"))
+                self.assertEqual(list(Path(tmp_dir).glob("Backup_VentaPOS_*.sqlite3")), [])
+
     def test_backup_upload_validation_and_isolated_restore(self):
         """
         Verify that BackupUploadView:

@@ -7,15 +7,40 @@ from django.utils import timezone
 import sys
 import glob
 
-def clean_invoices_directory():
+MAX_STORED_PDFS = 50
+
+
+def _safe_mtime(path):
     try:
-        save_dir = get_save_directory()
-        files = glob.glob(os.path.join(save_dir, '*'))
-        for f in files:
-            if os.path.isfile(f):
-                os.remove(f)
+        return os.path.getmtime(path)
+    except OSError:
+        return 0.0
+
+
+def prune_old_pdfs(save_dir=None, max_files=MAX_STORED_PDFS):
+    """Retain only the newest max_files PDFs in save_dir, ignoring locked files."""
+    if max_files <= 0:
+        return
+    try:
+        target_dir = save_dir or get_save_directory()
+        pdf_files = [
+            p for p in glob.glob(os.path.join(str(target_dir), '*.pdf'))
+            if os.path.isfile(p)
+        ]
+        if len(pdf_files) <= max_files:
+            return
+        pdf_files.sort(key=lambda p: (_safe_mtime(p), p))
+        for old_path in pdf_files[:-max_files]:
+            try:
+                os.remove(old_path)
+            except OSError:
+                pass
     except Exception:
         pass
+
+
+def clean_invoices_directory(max_files=MAX_STORED_PDFS):
+    prune_old_pdfs(max_files=max_files)
 
 import re
 from decimal import Decimal, ROUND_HALF_UP
@@ -70,7 +95,7 @@ def get_wkhtmltopdf_config():
 
 def get_save_directory():
     if getattr(sys, 'frozen', False):
-        base_path = getattr(settings, 'DB_DIR', Path(os.environ.get('APPDATA', Path.home())) / 'VentaPOSTest')
+        base_path = getattr(settings, 'DB_DIR', Path(os.environ.get('APPDATA', Path.home())) / 'VentaPOS')
         invoices_dir = os.path.join(str(base_path), 'الفواتير المطبوعة')
     else:
         media_root = getattr(settings, 'MEDIA_ROOT', None)
@@ -132,11 +157,12 @@ def generate_and_open_pdf(html_content, filename_prefix="document", target_print
 
         import uuid
         save_dir = get_save_directory()
-        timestamp = timezone.now().strftime("%Y-%m-%d_%H-%M-%S")
+        timestamp = timezone.localtime().strftime("%Y-%m-%d_%H-%M-%S")
         filename = f"{filename_prefix}_{timestamp}_{uuid.uuid4().hex[:6]}.pdf"
         full_path = os.path.join(save_dir, filename)
 
         pdfkit.from_string(html_content, full_path, configuration=config, options=options)
+        prune_old_pdfs(save_dir, max_files=MAX_STORED_PDFS)
         import time
         time.sleep(1) 
 
